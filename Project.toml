@@ -1,0 +1,4 @@
+name = "TensorKrylov"
+uuid = "66cb0a97-5196-4e79-b8c9-659326106622"
+authors = ["thbake <thomas.bake@hotmail.com>"]
+version = "0.1.0"
