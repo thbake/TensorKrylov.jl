@@ -1,7 +1,4 @@
-#abstract type OrthogonalizationAlgorithm
-#struct ArnoldiClassical <: OrthogonalizationAlgorithm end
-#struct ArnoldiModified  <: OrthogonalizationAlgorithm end
-#struct Lanczos          <: OrthogonalizationAlgorithm end
+export arnoldi_modified!, arnoldi_classical!
 
 function arnoldi_classical!(A::AbstractMatrix, b::AbstractVector, k::Int, arnoldi::Arnoldi)
 

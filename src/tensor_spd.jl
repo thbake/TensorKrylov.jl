@@ -1,3 +1,5 @@
+export KroneckerMatrix
+
 abstract type KroneckerProduct{T<:AbstractArray} end
 # We want to generate an abstract notion of structures that can be represented as Kronecker products
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
@@ -37,21 +39,21 @@ function Base.getindex(KP::KroneckerProduct, i::Int)
 
 end
 
-function Base.getindex(KP::KroneckerProduct, ℑ::Matrix{Int})
+function Base.getindex(KP::KroneckerProduct, IMult::Matrix{Int})
 
-    # Implement multiindexing of KroneckerProduct structures
-    #@info "I am being called"
-    d = size(ℑ, 1)
+    # Implement multiindexing of KroneckerProduct structures. To be precise
+    # index a KroneckerProduct structure with a pair of multiindices ℑ₁, ℑ₂.
+    d = size(IMult, 1)
 
-    length(KP) == d || throw(BoundsError(KP, ℑ))
+    length(KP) == d || throw(BoundsError(KP, IMult))
     
     entries = zeros(d)
 
-    for i = 1:length(KP)
+    for s = 1:length(KP)
 
-        k, l = ℑ[i, :]
+        k, l = IMult[s, :]
         
-        entries[i] = KP[i][k, l]  
+        entries[s] = KP[s][k, l]  
 
     end
 
@@ -63,11 +65,9 @@ function Base.size(KP::KroneckerProduct)
     
     factor_sizes = Array{Tuple{Int, Int}}(undef, length(KP))
 
-    #factor_sizes = Array{Int}(undef, length(KP))
-    
-    for i = 1:length(KP)
+    for s = 1:length(KP)
         
-        factor_sizes[i] = size(KP[i])
+        factor_sizes[s] = size(KP[s])
 
     end
 
@@ -78,9 +78,9 @@ function dimensions(KP::KroneckerProduct)
     
     factor_dimensions = Array{Int}(undef, length(KP))
 
-    for i = 1:length(KP)
+    for s = 1:length(KP)
         
-        factor_dimensions[i] = size(KP[i], 1)
+        factor_dimensions[s] = size(KP[s], 1)
 
     end
 
@@ -98,23 +98,129 @@ struct KroneckerMatrix{T<:AbstractMatrix} <: KroneckerProduct{T}
 
 end
 
-mutable struct Arnoldi{T} # Stores Krylov basis and upper Hessenberg matrix
-    const A::Matrix{T}    # Original matrix
-    V::Matrix{T}          # Matrix representing basis of Krylov subspace
-    H::Matrix{T}          # Upper Hessenberg matrix
+function solve_compressed_system(
+    H::KroneckerMatrix, 
+    b::AbstractVector, 
+    ω::AbstractArray,
+    α::AbstractArray,
+    t::Int)
 
-    function Arnoldi(A::Matrix{T}, order::Int) where T<:AbstractFloat
-        new{T}(
+    λ = smallest_eigenvalue(H) # This might be different depending on the system
 
-            A, 
-            zeros(T, size(A, 1), order + 1), # Initialize Krylov basis
-            UpperHessenberg(
+    reciprocal = inv(λ)
 
-                zeros(T, order + 1, order)
+    # Since we are considering a canonical decomposition the tensor rank of yₜ
+    # is equal to 
+    yₜ  = TensorStruct{Float64}(undef, (t, dimensions))
+    
+    for j = 1:t
 
-            )::UpperHessenberg       # Initialize upper Hessenberg matrix
-        )  
+        lhs_coeff = ω[j] * reciprocal
+
+        rhs = Matrix{Float64}(undef, size(H[s])) 
+
+        for s = 1:length(H)
+            
+            rhs_coeff = -α[j] * reciprocal
+            
+            rhs = kron(rhs, exp(coeff .* H[s]) * b[s])
+        end
+
+        yₜ += lhs_coeff * rhs
     end
+end
+
+function hessenberg_subdiagonals(H::AbstractMatrix, 𝔎::Vector{Int})
+
+    # Extract subdiagonal entries (kₛ₊₁, kₛ) of matrix H⁽ˢ⁾ of ℋ     
+
+    d = length(𝔎)
+
+    entries = Array{Float64}(undef, d)
+
+    for s = 1:d
+
+        entries[s] = H[𝔎[s] + 1, 𝔎[s]]
+
+    end
+
+    return entries
+
+end
+
+function approximate_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
+
+    # Approximate Σ |y_𝔏|² with formula in paper, when y is given in CP format.
+    
+    d = length(y.fmat)
+
+    # Create mask 
+    mask = trues(d)
+
+    mask[s] = false
+
+    yʲ = @view y.fmat[mask]
+
+
+    result = 0
+
+    for i = 1:t
+
+        λᵢ = y.lambda[i]
+
+        α = λᵢ * @view(y.fmat[s][:, i])[𝔎[s]] 
+
+        kronecker_vector = 1
+
+        for j = 1:d-1
+
+            kronecker_vector = kron(kronecker_vector, λᵢ *  @view(yʲ[j][:, i]))
+
+        end
+
+        result += α * kronecker_vector
+    end
+
+    # Take the square norm
+
+    result = dot(result, result)
+    
+end
+
+
+function compressed_residual(H::KroneckerMatrix, y::ktensor, b::AbstractVector)
+
+    # TODO: Figure out how to perform multiplication between Kronecker matrices
+    # and Kruskal Tensors.
+    
+end
+
+    
+function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
+    
+    # Compute norm of the residual according to Lemma 3.4 of paper.
+    
+    # Σ |hˢₖ₊₁ₖ|² * Σ |y\_𝔏|² + ||ℋy - b̃||²
+    
+    # Get entries at indices (kₛ+1, kₛ) for each dimension with pair of 
+    # multiindices 𝔎+1, 𝔎
+
+    squared_subdiagonal = map(abs, hessenberg_subdiagonals(H, 𝔎)).^2
+
+    tmp = 0
+
+    for s = 1:length(H)
+
+        squared_y = approximate_coefficients(y, t, 𝔎, s)
+
+        tmp = squared_subdiagonal[s] * squared_y
+
+    end
+
+    compressed_residual(H, y, b)
+
+    
+    
 end
 
 function tensor_krylov(A::KroneckerMatrix, b::AbstractVector, tol) 

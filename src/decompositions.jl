@@ -1,6 +1,8 @@
 export Arnoldi
 
-mutable struct Arnoldi{T<:AbstractFloat} # Stores Krylov basis and upper Hessenberg matrix
+abstract type Decomposition end 
+
+mutable struct Arnoldi{T<:AbstractFloat} <: Decomposition # Stores Krylov basis and upper Hessenberg matrix
     const A::Matrix{T} # Original matrix
     V::Matrix{T} # Matrix representing basis of Krylov subspace
     H::Matrix{T} # Upper Hessenberg matrix

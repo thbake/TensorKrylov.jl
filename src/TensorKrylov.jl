@@ -1,6 +1,9 @@
 module TensorKrylov
     
-    using LinearAlgebra
+    using LinearAlgebra, TensorToolbox
+
+    # Matrix decompositions
+    include("decompositions.jl")
 
     include("orthogonal_bases.jl")
 
@@ -12,8 +15,6 @@ module TensorKrylov
     # Eigenvalue solvers
     include("eigenvalues.jl")
 
-    # Matrix decompositions
-    include("decompositions.jl")
 
 
 end # module TensorKrylov
