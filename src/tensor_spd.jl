@@ -4,27 +4,9 @@ abstract type KroneckerProduct{T<:AbstractArray} end
 # We want to generate an abstract notion of structures that can be represented as Kronecker products
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
 # or matrices
-struct TensorStruct{T<:AbstractArray} <: KroneckerProduct{T}
 
-    𝖳::Vector{T} #\sansT
-    rank::Int
-    
-    function TensorStruct(𝖳ₛ::Vector{T}, t::Int) where T<:AbstractArray
-        new{T}(𝖳ₛ, t)
-    end
-
-    function TensorStruct(dimensions::Array{Int}, t::Int)
-        
-        # Allocate memory for different arrays in decomposition
-        # by giving dimensions of each vector/matrix and tensor rank
-        
-        𝖳ₛ = [ Array(undef, dimensions[i]) for i = 1:length(dimensions) ]
-
-        new{𝖳}(𝖳ₛ, t)
-    end
-
-end
-
+# Basic functions for KroneckerProduct types
+# ==========================================
 function Base.length(KP::KroneckerProduct)
 
     return length(KP.𝖳)
@@ -61,18 +43,6 @@ function Base.getindex(KP::KroneckerProduct, IMult::Matrix{Int})
 
 end
 
-function Base.size(KP::KroneckerProduct)
-    
-    factor_sizes = Array{Tuple{Int, Int}}(undef, length(KP))
-
-    for s = 1:length(KP)
-        
-        factor_sizes[s] = size(KP[s])
-
-    end
-
-    return factor_sizes
-end
 
 function dimensions(KP::KroneckerProduct)
     
@@ -87,15 +57,132 @@ function dimensions(KP::KroneckerProduct)
     return factor_dimensions
 
 end
+
+function nentries(KP::KroneckerProduct)
+    
+    return prod(dimensions(KP))
+    
+end
 			
+struct TensorStruct{T<:AbstractArray} <: KroneckerProduct{T}
+
+    𝖳::Vector{T} #\sansT
+    rank::Int
+    
+    function TensorStruct(𝖳ₛ::Vector{T}, t::Int) where T<:AbstractArray
+        new{T}(𝖳ₛ, t)
+    end
+
+    function TensorStruct(dimensions::Array{Int}, t::Int)
+        
+        # Allocate memory for different arrays in decomposition
+        # by giving dimensions of each vector/matrix and tensor rank
+        
+        𝖳ₛ = [ Array(undef, dimensions[i]) for i = 1:length(dimensions) ]
+
+        new{𝖳}(𝖳ₛ, t)
+    end
+
+    function TensorStruct(sizes::Array{Tuple{Int}}, t::Int)
+
+        𝖳ₛ = [ Matrix(undef, shape) for shape in sizes ]
+
+        new{T}(𝖳ₛ, t)
+    end
+
+end
+
 struct KroneckerMatrix{T<:AbstractMatrix} <: KroneckerProduct{T} 
     
     𝖳::Vector{T} # We only store the d matrices explicitly in a vector.
 
     function KroneckerMatrix(Aₛ::Vector{T}) where T<:AbstractMatrix # Constructor with vector of matrix coefficients
+
         new{T}(Aₛ)
+
     end
 
+end
+
+function Base.size(KM::KroneckerMatrix)
+
+    # Return size of each KroneckerMatrix element
+    
+    factor_sizes = Array{Tuple{Int, Int}}(undef, length(KM))
+
+    for s = 1:length(KM)
+        
+        factor_sizes[s] = size(KM[s])
+
+    end
+
+    return factor_sizes
+end
+
+# Additional functionality for Kruskal tensors
+# ============================================
+function Base.getindex(CP::ktensor, i::Int)
+
+    return [ @view(CP.fmat[s][:, i]) for s = 1:ndims(CP) ]
+end
+
+function kron_permutation!(
+        b::AbstractVector,
+        Xₛ::T,
+        Y::AbstractVector{T},
+        s::Int,
+        dimensions::AbstractVector) where T<:AbstractArray
+
+    # Given an index i compute the following Kronecker product.
+    #
+    #   CP.fmat[1] ⨂ ⋯ ⨂ CP.fmat[i-1] ⨂ Xᵢ ⨂ CP.fmat[i+1] ⨂ ⋯ ⨂ CP.fmat[d]
+    
+    d = length(Y) 
+
+    for j = 1:s-2
+
+        kron!( @view(b[1:dimensions[j]]), Y[j], Y[j+1] )
+
+    end
+
+    for j = s+1:d
+
+        kron!( @view(b[1:dimensions[j]]), Xₛ, Y[j])
+
+    end
+
+end
+
+# KroneckerMatrix algebra
+# =======================
+function mul(A::KroneckerMatrix{T}, x::ktensor)::ktensor where T<:AbstractFloat
+
+    # Allocate memory for resulting matrices B⁽ˢ⁾ resulting from the d matrix-
+    # multiplications (or equivalent d * t matrix-vector multiplications) of
+    # Aₛ * X⁽ˢ⁾, where X⁽ˢ⁾ are the factor matrices of the CP decomposition of x.
+    
+    B = TensorStruct(size(A), ndims(x))
+
+    # Allocate memory for large vector of order n_1 ⋯ n_d
+    b = Vector{AbstractFloat}(undef, nentries(A))
+
+    n = dimensions(A)
+
+    for s = 1:length(A)
+
+        # Perform multiplication of matrices Aₛ and each factor matrix
+        mul!(B[s], A[s], x.fmat[s])
+
+        # Iterate over rank columns
+        for i = 1:ncomponents(x)
+
+            # Add resulting vectors over tensor rank
+            b += kron_permutation!(b, B[s], x[i], s, n)
+        end
+
+    end
+
+    return cp_als(b, ncomponents(x)) # build the result to CP format.
 end
 
 function solve_compressed_system(
@@ -192,6 +279,8 @@ function compressed_residual(H::KroneckerMatrix, y::ktensor, b::AbstractVector)
 
     # TODO: Figure out how to perform multiplication between Kronecker matrices
     # and Kruskal Tensors.
+    
+
     
 end
 
