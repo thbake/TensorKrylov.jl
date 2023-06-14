@@ -334,6 +334,8 @@ function compressed_residual(
 
     # TODO: 
     #
+    # (1) Multiply scalars λ with respective columns of Y/SymY
+    #
     # We know that 
     #
     # ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
@@ -425,9 +427,22 @@ function compressed_residual(
 
     end
 
+    # Now we compute 2⋅<Hy, b> 
+
+    Hy_b = 0
+
+    for s = 1:d, i = 1:t
+
+        Hy_b *= dot( @view(Y[s][:, i]), @view(b[s]) )
+
+    end
+
+    Hy_b *= 2
 
 
     b_norm = norm(b)
+
+    return Hy_norm - Hy_b + b_norm
     
     
 end
