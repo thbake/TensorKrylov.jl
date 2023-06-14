@@ -43,6 +43,12 @@ function Base.getindex(KP::KroneckerProduct, IMult::Matrix{Int})
 
 end
 
+function Base.eachindex(KP::KroneckerProduct)
+
+    return eachindex(KP.𝖳)
+
+end
+
 
 function dimensions(KP::KroneckerProduct)
     
@@ -63,6 +69,11 @@ function nentries(KP::KroneckerProduct)
     return prod(dimensions(KP))
     
 end
+
+function norm(KP::KroneckerProduct)
+
+    return prod( map(norm, KP) )
+end 
 			
 struct TensorStruct{T<:AbstractArray} <: KroneckerProduct{T}
 
@@ -73,14 +84,14 @@ struct TensorStruct{T<:AbstractArray} <: KroneckerProduct{T}
         new{T}(𝖳ₛ, t)
     end
 
-    function TensorStruct(dimensions::Array{Int}, t::Int)
+    function TensorStruct(dimensions::Array{Int}, t::Int) where T<:AbstractFloat
         
         # Allocate memory for different arrays in decomposition
         # by giving dimensions of each vector/matrix and tensor rank
         
-        𝖳ₛ = [ Array(undef, dimensions[i]) for i = 1:length(dimensions) ]
+        𝖳ₛ = [ Array{T}(undef, dimensions[i]) for i = 1:length(dimensions) ]
 
-        new{𝖳}(𝖳ₛ, t)
+        new{T}(𝖳ₛ, t)
     end
 
     function TensorStruct(sizes::Array{Tuple{Int}}, t::Int)
@@ -119,6 +130,14 @@ function Base.size(KM::KroneckerMatrix)
     return factor_sizes
 end
 
+# Linear algebra for KroneckerMatrix
+function norm(KM::KroneckerMatrix)
+
+    # This is the best I can think of right now.
+    A = kroneckersum(KM)
+
+    return norm(A)
+
 # Additional functionality for Kruskal tensors
 # ============================================
 function Base.getindex(CP::ktensor, i::Int)
@@ -126,64 +145,38 @@ function Base.getindex(CP::ktensor, i::Int)
     return [ @view(CP.fmat[s][:, i]) for s = 1:ndims(CP) ]
 end
 
-function kron_permutation!(
-        b::AbstractVector,
-        Xₛ::T,
-        Y::AbstractVector{T},
-        s::Int,
-        dimensions::AbstractVector) where T<:AbstractArray
-
-    # Given an index i compute the following Kronecker product.
-    #
-    #   CP.fmat[1] ⨂ ⋯ ⨂ CP.fmat[i-1] ⨂ Xᵢ ⨂ CP.fmat[i+1] ⨂ ⋯ ⨂ CP.fmat[d]
-    
-    d = length(Y) 
-
-    for j = 1:s-2
-
-        kron!( @view(b[1:dimensions[j]]), Y[j], Y[j+1] )
-
-    end
-
-    for j = s+1:d
-
-        kron!( @view(b[1:dimensions[j]]), Xₛ, Y[j])
-
-    end
-
-end
 
 # KroneckerMatrix algebra
 # =======================
-function mul(A::KroneckerMatrix{T}, x::ktensor)::ktensor where T<:AbstractFloat
-
-    # Allocate memory for resulting matrices B⁽ˢ⁾ resulting from the d matrix-
-    # multiplications (or equivalent d * t matrix-vector multiplications) of
-    # Aₛ * X⁽ˢ⁾, where X⁽ˢ⁾ are the factor matrices of the CP decomposition of x.
-    
-    B = TensorStruct(size(A), ndims(x))
-
-    # Allocate memory for large vector of order n_1 ⋯ n_d
-    b = Vector{AbstractFloat}(undef, nentries(A))
-
-    n = dimensions(A)
-
-    for s = 1:length(A)
-
-        # Perform multiplication of matrices Aₛ and each factor matrix
-        mul!(B[s], A[s], x.fmat[s])
-
-        # Iterate over rank columns
-        for i = 1:ncomponents(x)
-
-            # Add resulting vectors over tensor rank
-            b += kron_permutation!(b, B[s], x[i], s, n)
-        end
-
-    end
-
-    return cp_als(b, ncomponents(x)) # build the result to CP format.
-end
+#function mul(A::KroneckerMatrix{T}, x::ktensor)::ktensor where T<:AbstractFloat
+#
+#    # Allocate memory for resulting matrices B⁽ˢ⁾ resulting from the d matrix-
+#    # multiplications (or equivalent d * t matrix-vector multiplications) of
+#    # Aₛ * X⁽ˢ⁾, where X⁽ˢ⁾ are the factor matrices of the CP decomposition of x.
+#    
+#    B = TensorStruct(size(A), ndims(x))
+#
+#    # Allocate memory for large vector of order n_1 ⋯ n_d
+#    b = Vector{AbstractFloat}(undef, nentries(A))
+#
+#    n = dimensions(A)
+#
+#    for s = 1:length(A)
+#
+#        # Perform multiplication of matrices Aₛ and each factor matrix
+#        mul!(B[s], A[s], x.fmat[s])
+#
+#        # Iterate over rank columns
+#        for i = 1:ncomponents(x)
+#
+#            # Add resulting vectors over tensor rank
+#            b += kron_permutation!(b, B[s], x[i], s, n)
+#        end
+#
+#    end
+#
+#    return cp_als(b, ncomponents(x)) # build the result to CP format.
+#end
 
 function solve_compressed_system(
     H::KroneckerMatrix, 
@@ -235,9 +228,35 @@ function hessenberg_subdiagonals(H::AbstractMatrix, 𝔎::Vector{Int})
 
 end
 
-function approximate_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
+function inner_products(Y::Vector{AbstractMatrix}, s::Int, i::Int, k::Int)
 
-    # Approximate Σ |y_𝔏|² with formula in paper, when y is given in CP format.
+    product = 1
+
+    for j = 1:s-1
+
+        product *=  dot(@view(Y[j][:, i]), @view(Y[j][:, k]))
+
+    end
+
+    for j = s+1:length(Y)
+
+        product *=  dot(@view(Y[j][:, i]), @view(Y[j][:, k]))
+
+    end
+
+    return product
+
+end
+
+function compute_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
+
+    # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
+    #
+    # Σ |y_𝔏|² = ||Σᵢ eₖₛᵀ yᵢ⁽ˢ⁾ ⨂ⱼ\_≠ ₛ yᵢ⁽ʲ⁾||².
+    #
+    # TODO: Multiply lambdas with the corresponding columns of each factor 
+    # matrix.
+    
     
     d = length(y.fmat)
 
@@ -246,41 +265,170 @@ function approximate_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
 
     mask[s] = false
 
-    yʲ = @view y.fmat[mask]
-
+    # Create a view of factor matrices that are not indexed by s.
+    # This is a Vector of AbstractMatrix.
+    Y = @view y.fmat[mask]
 
     result = 0
 
-    for i = 1:t
+    for i = 1:t, k = 1:t
 
         λᵢ = y.lambda[i]
 
-        α = λᵢ * @view(y.fmat[s][:, i])[𝔎[s]] 
+        λₖ = y.lambda[k]
 
-        kronecker_vector = 1
+        αᵢ = λᵢ * @view(y.fmat[s][:, i])[𝔎[s]] 
 
-        for j = 1:d-1
+        αₖ = λₖ * @view(y.fmat[s][:, k])[𝔎[s]] 
 
-            kronecker_vector = kron(kronecker_vector, λᵢ *  @view(yʲ[j][:, i]))
+        product = inner_products(Y, s, i, k)
+
+        result += (αᵢ * αₖ) * product
+        
+    end
+
+    return result
+
+end
+
+function matrix_vector(H::KroneckerMatrix{T}, y::ktensor{T})::AbstractVector where T<:AbstractFloat
+
+    # Compute the matrix vector products 
+    #   
+    #   x⁽ˢ⁾ᵢ = Hₛ⋅ y⁽ˢ⁾ᵢ for s = 1,…,d, i = 1,…,t
+    #
+    # This is equivalent as computing the product X⁽ˢ⁾ = Hₛ⋅Y⁽ˢ⁾, where Y⁽ˢ⁾
+    # are the factor matrices of the CP-tensor y.
+
+    orders = dimensions(H)
+    rank   = ncomponents(y)
+
+    # Return vector of matrices as described above
+    X = [ AbstractMatrix{T}(undef, (orders[s], rank)) for s in eachindex(H) ]
+
+    for s = 1:length(H)
+
+        mul!(X[s], H[s], y.fmat[s])
+
+    end
+
+    return X
+
+end
+
+function multiple_hadamard!(
+        matrices::Vector{Matrix{T}},
+        product::Matrix{T}) where T<:AbstractFloat
+
+    for matrix ∈ matrices
+
+        product .*= matrix
+
+    end
+
+end
+function compressed_residual(
+        H::KroneckerMatrix{T},
+        y::ktensor{T},
+        b::AbstractVector{T}) where T <:AbstractFloat
+
+    # TODO: 
+    #
+    # We know that 
+    #
+    # ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
+    
+    # First we evaluate all X⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝⁿₛˣᵗ
+    X = matrix_vector(H, y)
+
+    # ||Hy||²
+    d = length(H)
+    t = ncomponents(y)
+
+    # Now compute the squared 2-norms of x⁽ˢ⁾ᵢ for i = 1,…,t
+    # For this, we need to compute the inner products x⁽ˢ⁾ᵢ of X⁽ˢ⁾, which is 
+    # the same as computing X⁽ˢ⁾ᵀ X⁽ˢ⁾, for s = 1,…,d
+
+    Y = @view(y.fmat)
+
+    # Allocate memory for the matrices X⁽ˢ⁾ᵀ X⁽ˢ⁾, Y⁽ˢ⁾ᵀ Y⁽ˢ⁾
+    lowerX = repeat( [LowerTriangular( zeros(t, t) )], d )
+    lowerY = repeat( [LowerTriangular( ones(t, t)  )], d )
+    
+    # Allocate memory for the matrices X⁽ˢ⁾ᵀ Y⁽ˢ⁾
+    XY = repeat([ zeros(t,t) ], d)
+
+
+    for s = 1:d
+
+        mul!(XY[s], @view(transpose(X[s])), Y[s])
+
+        # Since X⁽ˢ⁾ᵀ X⁽ˢ⁾ is symmetric, we only compute the lower triangle.
+        # Maybe I don't need to perform this step.
+        for j = 1:t, i = j:t
+
+            lowerX[s][i, j] = dot(@view( X[s][:, j] ), @view( X[s][i, :] ))
+
 
         end
 
-        result += α * kronecker_vector
+        # Since Y⁽ˢ⁾ᵀ Y⁽ˢ⁾ is symmetric and yᵢᵀyᵢ = 1, we only compute the lower
+        # triangle starting at the subdiagonal.
+        for j = 1:t-1, i = j+1:t
+
+            lowerY[s][i, j] = dot(@view( Y[s][:, j] ), @view( Y[s][i, :] ))
+
+        end
     end
 
-    # Take the square norm
+    # Sum over all traces of X (Σₛ tr( X⁽ˢ⁾ ))
+    # Maybe don't need to perform this step either.
+    traces_X = sum( map(tr, X) )
 
-    result = dot(result, result)
+    # Allocate memory for products: Want to 
+    # (1) Compute the Hadamard product of d² matrices 
+    # (2) Take the sum over each matrix
+    # (3) Take the sum over all summands
+
+
+    mask = trues(d)
+
+    # Symmetrize lower triangular part of Y
+    SymY = Symmetric(lowerY, :L)
+
+    Hy_norm = 0
+
+    for s = 1:d
+
+        mask[s] = false
+
+        for r = 1:d
+
+            products = ones(t,t) 
+
+            mask[r] = false
+
+            tmp = sum( @view(XY[s]) .* @view(XY[r]) )
+
+            remaining_matrices = @view(SymY[mask])
+
+            # Perform Hadamard product of all matrices not indexed by s.
+            multiple_hadamard!(remaining_matrices, products)
+
+            Hy_norm += sum(products) + tmp
+
+            mask[r] = true
+
+        end
+
+        mask[s] = true
+
+    end
+
+
+
+    b_norm = norm(b)
     
-end
-
-
-function compressed_residual(H::KroneckerMatrix, y::ktensor, b::AbstractVector)
-
-    # TODO: Figure out how to perform multiplication between Kronecker matrices
-    # and Kruskal Tensors.
-    
-
     
 end
 

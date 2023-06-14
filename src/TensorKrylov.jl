@@ -1,6 +1,6 @@
 module TensorKrylov
     
-    using LinearAlgebra, TensorToolbox
+    using LinearAlgebra, TensorToolbox, Kronecker
 
     # Matrix decompositions
     include("decompositions.jl")
@@ -14,6 +14,9 @@ module TensorKrylov
 
     # Eigenvalue solvers
     include("eigenvalues.jl")
+
+    # Convergence bounds
+    include("convergence.jl")
 
 
 
