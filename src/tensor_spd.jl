@@ -327,6 +327,7 @@ function multiple_hadamard!(
     end
 
 end
+
 function compressed_residual(
         H::KroneckerMatrix{T},
         y::ktensor{T},
@@ -427,7 +428,7 @@ function compressed_residual(
 
     end
 
-    # Now we compute 2⋅<Hy, b> 
+    # Now we compute 2⋅<Hy, b>₂
 
     Hy_b = 0
 
@@ -437,12 +438,10 @@ function compressed_residual(
 
     end
 
-    Hy_b *= 2
-
-
+    # Finally we compute the 2-norm of b
     b_norm = norm(b)
 
-    return Hy_norm - Hy_b + b_norm
+    return Hy_norm - 2 * Hy_b + b_norm
     
     
 end
@@ -456,6 +455,9 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
     
     # Get entries at indices (kₛ+1, kₛ) for each dimension with pair of 
     # multiindices 𝔎+1, 𝔎
+
+    # Tensor rank
+    t = ncomponents(y)
 
     squared_subdiagonal = map(abs, hessenberg_subdiagonals(H, 𝔎)).^2
 
@@ -471,8 +473,6 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
 
     compressed_residual(H, y, b)
 
-    
-    
 end
 
 function tensor_krylov(A::KroneckerMatrix, b::AbstractVector, tol) 

@@ -11,4 +11,6 @@ function spd_error_bound(
 
     b_norm = prod( map(norm, b) )
 
+
+
 end
