@@ -228,94 +228,64 @@ function hessenberg_subdiagonals(H::AbstractMatrix, 𝔎::Vector{Int})
 
 end
 
+function inner_products(
+        s::Int, d::Int,
+        col_i::AbstractArray,
+        col_j::AbstractArray)::T where T<:AbstractFloat
+
+    product = 1.0
+
+    t = size(col_i, 1)
+
+    iterator = Iterators.filter(r -> r != s, 1:d)
+
+    for s = iterator
+
+        product *= dot(col_i, col_j)
+
+    return product
+
+end
+
 function compute_lower_triangle(
         A::Matrix{T},
-        k::Int)::Matrix{T} where T <: AbstractFloat
+        γ::Array{T},
+        k::Int,
+        s::Int)::Matrix{T} where T <: AbstractFloat
 
     # Given a matrix A and an index k, compute the lower triangular part of 
     # the matrix AᵀA, where k denotes the k-th subdiagonal.
 
     # If k = 0, then it just computes the usual lower triangular part.
 
-       LA = ones(A)
+    d = size(A, 1)
+    t = length(γ)
 
-       t = size(A, 2)
+    result = 0
 
-       for j = 1:t-k, i = j+k:t
+    for j = 1:t-k, i = j+k:t
 
-           LA[i, j] = dot(@view( A[:, j] ), @view( A[i, :] ))
-
-       end
-
-   return LA
-
-end
-
-function inner_products(Y::Vector{AbstractMatrix}, s::Int, i::Int, k::Int)
-
-    product = 1
-
-    for j = 1:s-1
-
-        product *=  dot(@view(Y[j][:, i]), @view(Y[j][:, k]))
+        result += (γ[i]*γ[j])inner_products(s, d, @view(A[:, j]), @view(A[i, :]))
 
     end
 
-    for j = s+1:length(Y)
-
-        product *=  dot(@view(Y[j][:, i]), @view(Y[j][:, k]))
-
-    end
-
-    return product
+    return 2 * result
 
 end
+
 
 function compute_coefficients(y::ktensor, 𝔎::Vector{Int}, s::Int)
 
     # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
     #
     # Σ |y_𝔏|² = ||Σᵢ eₖₛᵀ yᵢ⁽ˢ⁾ ⨂ⱼ\_≠ ₛ yᵢ⁽ʲ⁾||².
-    #
-    # TODO: Multiply lambdas with the corresponding columns of each factor 
-    # matrix.
     
-    
-    d = length(y.fmat)
+    # Get the kₛ-th entry of each column of the s-th factor matrix of y.
+    α = y.fmat[s][𝔎[s], :]
 
-    # Tensor rank
-    t = ncomponents(y)
+    γ = y.lambda .* α
 
-    # Create mask 
-    mask = trues(d)
-
-    mask[s] = false
-
-    # Create a view of factor matrices that are not indexed by s.
-    # This is a Vector of AbstractMatrix.
-    Y = @view y.fmat[mask]
-
-    lowerYY = compute_lower_triangle(Y, 1)
-
-    # Dot products over all i, k can be expressed as a single matrix multiplication
-
-    result = 0
-
-    for i = 1:t, k = 1:t
-
-        λᵢ = y.lambda[i]
-
-        λₖ = y.lambda[k]
-
-        αᵢ = λᵢ * @view(y.fmat[s][:, i])[𝔎[s]] 
-
-        αₖ = λₖ * @view(y.fmat[s][:, k])[𝔎[s]] 
-
-        product = inner_products(Y, s, i, k)
-
-        result += (αᵢ * αₖ) * product
-        
-    end
+    result = compute_lower_triangle(y.fmat[s], γ, 0, s)
 
     return result
 
@@ -424,7 +394,7 @@ function compressed_residual(
     # Symmetrize lower triangular part of Y
     SymY = Symmetric(lowerY, :L)
 
-    Hy_norm = 0
+    Hy_norm = 0.0
 
     for s = 1:d
 
