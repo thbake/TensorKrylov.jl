@@ -228,6 +228,29 @@ function hessenberg_subdiagonals(H::AbstractMatrix, 𝔎::Vector{Int})
 
 end
 
+function compute_lower_triangle(
+        A::Matrix{T},
+        k::Int)::Matrix{T} where T <: AbstractFloat
+
+    # Given a matrix A and an index k, compute the lower triangular part of 
+    # the matrix AᵀA, where k denotes the k-th subdiagonal.
+
+    # If k = 0, then it just computes the usual lower triangular part.
+
+       LA = ones(A)
+
+       t = size(A, 2)
+
+       for j = 1:t-k, i = j+k:t
+
+           LA[i, j] = dot(@view( A[:, j] ), @view( A[i, :] ))
+
+       end
+
+   return LA
+
+end
+
 function inner_products(Y::Vector{AbstractMatrix}, s::Int, i::Int, k::Int)
 
     product = 1
@@ -248,7 +271,7 @@ function inner_products(Y::Vector{AbstractMatrix}, s::Int, i::Int, k::Int)
 
 end
 
-function compute_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
+function compute_coefficients(y::ktensor, 𝔎::Vector{Int}, s::Int)
 
     # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
     #
@@ -260,6 +283,9 @@ function compute_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
     
     d = length(y.fmat)
 
+    # Tensor rank
+    t = ncomponents(y)
+
     # Create mask 
     mask = trues(d)
 
@@ -268,6 +294,10 @@ function compute_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
     # Create a view of factor matrices that are not indexed by s.
     # This is a Vector of AbstractMatrix.
     Y = @view y.fmat[mask]
+
+    lowerYY = compute_lower_triangle(Y, 1)
+
+    # Dot products over all i, k can be expressed as a single matrix multiplication
 
     result = 0
 
@@ -291,7 +321,9 @@ function compute_coefficients(y::ktensor, t::Int, 𝔎::Vector{Int}, s::Int)
 
 end
 
-function matrix_vector(H::KroneckerMatrix{T}, y::ktensor{T})::AbstractVector where T<:AbstractFloat
+function matrix_vector(
+        H::KroneckerMatrix{T},
+        y::ktensor{T})::AbstractVector where T<:AbstractFloat
 
     # Compute the matrix vector products 
     #   
@@ -315,6 +347,7 @@ function matrix_vector(H::KroneckerMatrix{T}, y::ktensor{T})::AbstractVector whe
     return X
 
 end
+
 
 function multiple_hadamard!(
         matrices::Vector{Matrix{T}},
@@ -355,8 +388,8 @@ function compressed_residual(
     Y = @view(y.fmat)
 
     # Allocate memory for the matrices X⁽ˢ⁾ᵀ X⁽ˢ⁾, Y⁽ˢ⁾ᵀ Y⁽ˢ⁾
-    lowerX = repeat( [LowerTriangular( zeros(t, t) )], d )
-    lowerY = repeat( [LowerTriangular( ones(t, t)  )], d )
+    lowerX = repeat( [ ones(t, t) ], d )
+    lowerY = repeat( [ ones(t, t)  ], d )
     
     # Allocate memory for the matrices X⁽ˢ⁾ᵀ Y⁽ˢ⁾
     XY = repeat([ zeros(t,t) ], d)
@@ -366,22 +399,14 @@ function compressed_residual(
 
         mul!(XY[s], @view(transpose(X[s])), Y[s])
 
-        # Since X⁽ˢ⁾ᵀ X⁽ˢ⁾ is symmetric, we only compute the lower triangle.
-        # Maybe I don't need to perform this step.
-        for j = 1:t, i = j:t
+        # Since X⁽ˢ⁾ᵀ X⁽ˢ⁾ Y⁽ˢ⁾ᵀ Y⁽ˢ⁾ are  symmetric (where yᵢᵀyᵢ = 1, for Y⁽ˢ⁾)
+        # we only compute the lower triangle starting from the diagonal and 
+        # subdiagonal, respectively.
 
-            lowerX[s][i, j] = dot(@view( X[s][:, j] ), @view( X[s][i, :] ))
+        # (Maybe I don't need to perform this first step for X⁽ˢ⁾.)
+        lowerX[s] = compute_lower_triangle(X[s], 0)
+        lowerY[s] = compute_lower_triangle(Y[s], 1)
 
-
-        end
-
-        # Since Y⁽ˢ⁾ᵀ Y⁽ˢ⁾ is symmetric and yᵢᵀyᵢ = 1, we only compute the lower
-        # triangle starting at the subdiagonal.
-        for j = 1:t-1, i = j+1:t
-
-            lowerY[s][i, j] = dot(@view( Y[s][:, j] ), @view( Y[s][i, :] ))
-
-        end
     end
 
     # Sum over all traces of X (Σₛ tr( X⁽ˢ⁾ ))
@@ -465,7 +490,35 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
 
     for s = 1:length(H)
 
-        squared_y = approximate_coefficients(y, t, 𝔎, s)
+        # Create mask 
+        mask = trues(d)
+
+        mask[s] = false
+
+        # Create a view of factor matrices that are not indexed by s.
+        # This is a Vector of AbstractMatrix.
+        Y = @view y.fmat[mask]
+
+        # Dot products over all i, k can be expressed as a single matrix multiplication
+        lowerYY = compute_lower_triangle(Y, 1)
+
+        result = 0
+
+        for i = 1:t, k = 1:t
+
+            λᵢ = y.lambda[i]
+
+            λₖ = y.lambda[k]
+
+            αᵢ = λᵢ * @view(y.fmat[s][:, i])[𝔎[s]] 
+
+            αₖ = λₖ * @view(y.fmat[s][:, k])[𝔎[s]] 
+
+            product = inner_products(Y, s, i, k)
+
+            result += (αᵢ * αₖ) * product
+            
+        end
 
         tmp = squared_subdiagonal[s] * squared_y
 
