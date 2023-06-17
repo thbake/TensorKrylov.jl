@@ -7,10 +7,11 @@ module TensorKrylov
 
     include("orthogonal_bases.jl")
 
+    # Tensor approximations
+    include("tensor_struct.jl")
+
     # Linear system solvers
     include("tensor_spd.jl")
-
-    # Tensor approximations
 
     # Eigenvalue solvers
     include("eigenvalues.jl")
