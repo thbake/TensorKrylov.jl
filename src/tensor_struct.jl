@@ -1,7 +1,7 @@
 export KroneckerMatrix
 export KroneckerProduct
 
-abstract type KroneckerProduct{T<:AbstractArray} end
+abstract type KroneckerProduct{T<:AbstractFloat} end
 # We want to generate an abstract notion of structures that can be represented as Kronecker products
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
 # or matrices
@@ -75,42 +75,97 @@ function norm(KP::KroneckerProduct)
 
     return prod( map(norm, KP) )
 end 
-			
-struct TensorStruct{T<:AbstractArray} <: KroneckerProduct{T}
 
-    𝖳::Vector{T} #\sansT
-    rank::Int
-    
-    function TensorStruct(𝖳ₛ::Vector{T}, t::Int) where T<:AbstractArray
-        new{T}(𝖳ₛ, t)
-    end
+function recursivekronecker(A::AbstractMatrix, s::Int, orders::Vector{Int})
 
-    function TensorStruct(dimensions::Array{Int}, t::Int) where T<:AbstractFloat
-        
-        # Allocate memory for different arrays in decomposition
-        # by giving dimensions of each vector/matrix and tensor rank
-        
-        𝖳ₛ = [ Array{T}(undef, dimensions[i]) for i = 1:length(dimensions) ]
+    d = length(orders)
 
-        new{T}(𝖳ₛ, t)
-    end
+    if d == 1
 
-    function TensorStruct(sizes::Array{Tuple{Int}}, t::Int)
+        return A
 
-        𝖳ₛ = [ Matrix(undef, shape) for shape in sizes ]
+    elseif s == 1 && d > 1
 
-        new{T}(𝖳ₛ, t)
+        return kron(recursivekronecker(A, s, orders[1:d-1]), I(orders[d]))
+
+    else
+
+        return kron(I(orders[1]), recursivekronecker(A, s - 1, orders[2:d]))
+
     end
 
 end
 
-struct KroneckerMatrix{T<:AbstractMatrix} <: KroneckerProduct{T} 
+function recursivekronecker(a::AbstractArray, b::AbstractArray, s::Int, d::Int)
+
+    if d == 1
+
+        return a
+
+    elseif s == 1 && d > 1
+
+        return kron(recursivekronecker(a, b, s, d - 1), b)
+
+    else
+
+        return kron(b, recursivekronecker(a, s - 1, d - 1))
+
+    end
+
+end
+
+function explicit_kroneckersum(A::Vector{Matrix{T}}) where T <: AbstractFloat
+
+    orders = [ size(A[s], 1) for s in eachindex(A) ]
+
+    N = prod(orders)
+
+    K = zeros(N, N)
+
+    for s in eachindex(A)
+
+        K += recursivekronecker(A[s], s, orders)
+
+    end
+
+    return K
+end
+			
+#struct TensorStruct{T<:AbstractFloat} <: KroneckerProduct{T}
+#
+#    𝖳::Vector{T} #\sansT
+#    rank::Int
+#    
+#    function TensorStruct(𝖳ₛ::Vector{T}, t::Int) where T<:AbstractArray
+#        new{T}(𝖳ₛ, t)
+#    end
+#
+#    function TensorStruct(dimensions::Array{Int}, t::Int) where T<:AbstractFloat
+#        
+#        # Allocate memory for different arrays in decomposition
+#        # by giving dimensions of each vector/matrix and tensor rank
+#        
+#        𝖳ₛ = [ Array{T}(undef, dimensions[i]) for i = 1:length(dimensions) ]
+#
+#        new{T}(𝖳ₛ, t)
+#    end
+#
+#    function TensorStruct(sizes::Array{Tuple{Int}}, t::Int)
+#
+#        𝖳ₛ = [ Matrix(undef, shape) for shape in sizes ]
+#
+#        new{T}(𝖳ₛ, t)
+#    end
+#
+#end
+
+struct KroneckerMatrix{T} <: KroneckerProduct{T}
     
-    𝖳::Vector{T} # We only store the d matrices explicitly in a vector.
+    𝖳::Vector{Matrix{T}} # We only store the d matrices explicitly in a vector.
 
-    function KroneckerMatrix(Aₛ::Vector{Matrix{T}}) where T<:AbstractFloat # Constructor with vector of matrix coefficients
+    function KroneckerMatrix(Aₛ::Vector{Matrix{U}}) where U<:AbstractFloat # Constructor with vector of matrix coefficients
 
-        new{T}(Aₛ)
+        new{U}(Aₛ)
 
     end
 

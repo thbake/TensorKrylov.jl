@@ -78,41 +78,51 @@ function hessenberg_subdiagonals(H::AbstractMatrix, 𝔎::Vector{Int})
 
 end
 
+function scale_matrices!(Aₛ::Vector{Matrix{T}}, Λ::Matrix{T}) where T <: AbstractFloat
+
+    for s in eachindex(Aₛ)
+
+        Aₛ[s] .*= Λ
+
+    end
+
+end
+
 function compute_lower_triangle!(
-        LowerTriangle::LowerTriangular{T}{Matrix{T}},
+        LowerTriangle::LowerTriangular{T, Matrix{T}},
         A::Matrix{T},
         B::Matrix{T},
         γ::Array{T},
-        k::Int)::Matrix{T} where T <: AbstractFloat
+        k::Int) where T <: AbstractFloat
 
     t = length(γ)
 
     for j = 1:t-k, i = j+k:t
 
-        LowerTriangle[i, j] = (γ[i]*γ[j])dot(@view(A[:, j]), @view(B[i, :]))
+        LowerTriangle[i, j] = (γ[i]*γ[j])dot(@view(A[:, j]), @view(B[:, i]))
         
     end
 
 end
 
 function compute_lower_triangle!(
-        LowerTriangle::LowerTriangular{T}{Matrix{T}},
+        LowerTriangle::LowerTriangular{T, Matrix{T}},
         A::Matrix{T},
-        k::Int)::Matrix{T} where T <: AbstractFloat
+        k::Int) where T <: AbstractFloat
 
     t = size(A, 2)
 
     for j = 1:t-k, i = j+k:t
 
-        LowerTriangle[i, j] = dot(@view(A[:, j]), @view(A[i, :]))
+        LowerTriangle[i, j] = dot(@view(A[:, j]), @view(A[:, i]))
         
     end
 
 end
 
 function compute_lower_triangle!(
-        LowerTriangle::LowerTriangular{T}{Matrix{T}},
-        γ::Array{T})::Matrix{T} where T <: AbstractFloat
+        LowerTriangle::LowerTriangular{T, Matrix{T}},
+        γ::Array{T}) where T <: AbstractFloat
 
     t = size(LowerTriangle, 1)
 
@@ -125,7 +135,7 @@ function compute_lower_triangle!(
 end
 
 function compute_coefficients(
-        LowerTriangle::LowerTriangular{T}{Matrix{T}},
+        LowerTriangle::LowerTriangular{T, Matrix{T}},
         δ::Vector{T}) where T <: AbstractFloat
 
     # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
@@ -145,39 +155,52 @@ function compute_coefficients(
 
 end
 
+function innerproducts!(
+        LowerTriangles::Vector{LowerTriangular{T, Matrix{T}}},
+        factormatrix,
+        k::Int) where T <: AbstractFloat
+
+    for s in eachindex(LowerTriangles)
+
+        compute_lower_triangle!(LowerTriangles[s], factormatrix[s], k)
+
+    end
+    
+end
+
 function matrix_vector(
-        H::KroneckerMatrix{T},
-        y::ktensor)::AbstractVector where T<:AbstractFloat
+        A::KroneckerMatrix{T},
+        x::ktensor)::AbstractVector where T<:AbstractFloat
 
     # Compute the matrix vector products 
     #   
-    #   x⁽ˢ⁾ᵢ = Hₛ⋅ y⁽ˢ⁾ᵢ for s = 1,…,d, i = 1,…,t
+    #   z⁽ˢ⁾ᵢ = Aₛ⋅ x⁽ˢ⁾ᵢ for s = 1,…,d, i = 1,…,t
     #
-    # This is equivalent as computing the product X⁽ˢ⁾ = Hₛ⋅Y⁽ˢ⁾, where Y⁽ˢ⁾
-    # are the factor matrices of the CP-tensor y.
+    # This is equivalent as computing the product Z⁽ˢ⁾ = Aₛ⋅X⁽ˢ⁾, where X⁽ˢ⁾
+    # are the factor matrices of the CP-tensor x.
 
-    orders = dimensions(H)
-    rank   = ncomponents(y)
+    orders = dimensions(A)
+    rank   = ncomponents(x)
 
     # Return vector of matrices as described above
-    X = [ AbstractMatrix{T}(undef, (orders[s], rank)) for s in eachindex(H) ]
+    Z = [ zeros(orders[s], rank) for s in eachindex(A) ]
 
-    for s = 1:length(H)
+    for s = 1:length(A)
 
-        mul!(X[s], H[s], y.fmat[s])
-
-    end
-
-    for s in eachindex(X)
-
-        X[s] = y.lambda[s] .* X[s] # Scale with lambda
+        LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
 
     end
 
-    return X
+    for s = 1:length(A)
+
+        # Scale columns of each matrix with entries of lambda
+        Z[s] = x.lambda' .* Z[s] 
+
+    end
+
+    return Z
 
 end
-
 
 function skipindex(index::Int, range::UnitRange{Int})
 
@@ -185,50 +208,79 @@ function skipindex(index::Int, range::UnitRange{Int})
 
 end
 
-function compressed_residual(
-        LowerYY::LowerTriangular{T, Matrix{T}},
-        H::KroneckerMatrix{T},
-        y::ktensor,
-        b::AbstractVector{T}) where T <:AbstractFloat
+function ktensor_innerprods!(
+        Lx::Vector{LowerTriangular{T, Matrix{T}}}, 
+        x::ktensor) where T <: AbstractFloat
 
-    # TODO: 
-    #
-    # We know that 
-    #
-    # ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
-    
-    d = length(H)
-    t = ncomponents(y)
+    t = ncomponents(x)
 
-    # First we evaluate all X⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝⁿₛˣᵗ
-    X = matrix_vector(H, y)
+    # Allocate memory for and initialize matrix representing scaling of factor 
+    # matrices in the CP decomposition
+    Λ = LowerTriangular( ones(t, t) )
 
-    LowerXX = repeat([ LowerTriangular(ones(t, t)) ], d)
+    compute_lower_triangle!(Λ, x.lambda)
 
-    compute_lower_triangle!(LowerXX, X, 0)
+    # Compute (lower triangular) matrices representing inner products
+    innerproducts!(Lx, x.fmat, 1)
 
-    XY = repeat([zeros(t,t)], d)
+    # Scale with norms of CP decomposition
+    map(X -> Λ .* X, Lx)
 
-    (mul!(XY[s], transpose(@view(X[s])), y.fmat[s]) for s = 1:d)
+end
 
-    # ||Hy||²
+function squared_matrix_vector(
+        Lx::Vector{LowerTriangular{T, Matrix{T}}},
+        Z::Vector{Matrix{T}},
+        A::KroneckerMatrix{T}, 
+        x::ktensor)::T where T <: AbstractFloat
+
+    # Computes the squared norm ||Ax||², where Ax = z
+
+    d = length(A)
+    t = ncomponents(x)
+
+    Lz = [ LowerTriangular(ones(t, t)) for _ in 1:d ]
+
+    # Compute (lower triangular) matrix represeting inner products z⁽ˢ⁾ᵢᵀz⁽ˢ⁾ⱼ
+    innerproducts!(Lz, Z, 0)
 
     # Case 1: s = r, i = j:
-    # Only compute the squared 2-norms of x⁽ˢ⁾ᵢ for i = 1,…,t
-
-    Hy_norm = sum( tr(LowerXX[s]) for s = 1:eachindex(LowerXX) )
+    # Only sum over the squared 2-norms of z⁽ˢ⁾ᵢ for i = 1,…,t
+    squared_norm = sum( tr(Lz[s]) for s in eachindex(Lz) )
 
     # Case 2: s = r, i != j:
-    # Sum over dot d-1 dot products of the form y⁽ʳ⁾ᵢᵀ y⁽ʳ⁾ⱼ times x⁽ˢ⁾ᵢᵀ x⁽ˢ⁾ⱼ 
+    # Sum over dot d-1 dot products of the form x⁽ʳ⁾ᵢᵀ x⁽ʳ⁾ⱼ times z⁽ˢ⁾ᵢᵀ z⁽ˢ⁾ⱼ 
+    for s = 1:d, r = skipindex(s, 1:d)
 
-    Hy_norm += 2 * sum( LowerYY[r][i, j] * LowerXX[s][i, j] for s = 1:d, r = skipindex(s, 1:d), j = 1:t-1, i = j+1:t )
+        for j = 1:t-1, i = j+1:t
 
+            squared_norm += Lx[r][i, j] * Lz[s][i, j]
+
+        end
+
+    end
+
+    # Here we count twice because of symmetry of the inner products
+    squared_norm *= 2
 
     # Case 3: s != r, i = j:
-    # Only compute two inner products x⁽ʳ⁾ᵢᵀ y⁽ʳ⁾ᵢ times y⁽ˢ⁾ᵢᵀ x⁽ˢ⁾ᵢ
-    
-    Hy_norm += sum( XY[r][i, i] * XY[s][i, i] for s = 1:d, r = skipindex(s, 1:d), i = 1:t )
-    
+    # Only compute two inner products z⁽ʳ⁾ᵢᵀ x⁽ʳ⁾ᵢ times x⁽ˢ⁾ᵢᵀ z⁽ˢ⁾ᵢ and sum
+    # over them
+
+
+    XZ = [ zeros(t,t) for _ in 1:d ]
+
+    (mul!(XZ[s], transpose(@view(Z[s])), x.fmat[s]) for s = 1:d)
+
+    for s = 1:d, r = skipindex(s, 1:d) 
+
+        for i = 1:t
+
+            squared_norm += XZ[r][i, i] * XZ[s][i, i]
+
+        end
+
+    end
 
     # Case 4: s != r, i != j:
     # Compute rest of inner products 
@@ -239,24 +291,49 @@ function compressed_residual(
 
         for j = 1:t, i = skipindex(j , 1:t)
 
-            tmp += XY[r][i, j] * LowerYY[s][i, j] 
+            tmp += XZ[r][i, j] * Lx[s][i, j] 
 
         end
 
     end
 
-    Hy_norm += 2 * tmp
+    squared_norm += 2 * tmp
+
+    return squared_norm
+
+end
+
+function compressed_residual(
+        Ly::Vector{LowerTriangular{T, Matrix{T}}},
+        H::KroneckerMatrix{T},
+        y::ktensor,
+        b::Vector{Array{T}}) where T <:AbstractFloat
+
+    # TODO: 
+    #
+    # We know that 
+    #
+    # ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
+    
+    d = length(H)
+    t = ncomponents(y)
+
+    # For this we evaluate all B⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝⁿₛˣᵗ
+    B = matrix_vector(H, y)
+
+    # First we compute ||Hy||²
+    Hy_norm = squared_matrix_vector(Ly, B, H, y)
 
     # Now we compute <Hy, b>₂
 
     Hy_b = 0.0
 
     bY = repeat( [zeros(t)], d )
-    bX = repeat( [zeros(t)], d )
+    bZ = repeat( [zeros(t)], d )
 
 
     mul!(bY, b, y)
-    mul!(bX, b, X)
+    mul!(bZ, b, B)
     
 
 
@@ -290,20 +367,13 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
     # Tensor rank
     t = ncomponents(y)
 
+    # Extract subdiagonal entries of upper Hesseberg matrices
     h² = map(abs, hessenberg_subdiagonals(H, 𝔎)).^2
 
-    LowerYY = repeat([ LowerTriangular(ones(t, t)) ], d)
+    # Allocate memory for (lower triangular) matrices representing inner products
+    Ly = [ LowerTriangular(ones(t, t)) for _ in 1:d ]
 
-    Λ = LowerTriangular( ones(t, t) )
-
-    compute_lower_triangle!(Λ, y.lambda)
-
-
-    for s = 1:length(H)
-
-        LowerYY[s] = Λ .* compute_lower_triangle!( LowerYY[s], y.fmat[s], 1)
-
-    end
+    ktensor_innerprods!(Ly, y)
 
     res_norm = 0.0
 
@@ -311,7 +381,7 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
 
         y² = 0.0
 
-        C = compute_coefficients(LowerYY[s], y.fmat[s][𝔎[s], :])
+        C = compute_coefficients(Ly[s], y.fmat[s][𝔎[s], :])
 
         for k = 1:t, i = k:t
 
@@ -319,7 +389,7 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
 
             for j = skipindex(s, 1:d)
 
-                product *= LowerYY[j][i, k]
+                product *= Ly[j][i, k]
 
             end
 
@@ -336,7 +406,7 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
 
 
     # Compute squared compressed residual norm
-    rₕ = compressed_residual(LowerYY, H, y, b)
+    rₕ = compressed_residual(Ly, H, y, b)
 
     return res_norm + rₕ
 

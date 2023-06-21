@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "bf6f52bae1e8b95758d36528ffef589a6dc13766"
+project_hash = "a5762376425873bd0008d8b1b26f6ec36f0554c6"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -241,6 +241,12 @@ version = "1.0.0"
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 version = "1.10.1"
+
+[[deps.TensorToolbox]]
+deps = ["LinearAlgebra", "Test"]
+git-tree-sha1 = "acaa4d6c9018ac00ad3d60cba1609b42ad4625d2"
+uuid = "9c690861-8ade-587a-897e-15364bc6f718"
+version = "1.0.1"
 
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
