@@ -96,19 +96,19 @@ function recursivekronecker(A::AbstractMatrix, s::Int, orders::Vector{Int})
 
 end
 
-function recursivekronecker(a::AbstractArray, b::AbstractArray, s::Int, d::Int)
+function recursivekronecker(A::Vector{Matrix{T}}, factor_matrix::Vector{Matrix{T}}, s::Int, i::Int, d::Int) where T<:AbstractFloat
 
     if d == 1
 
-        return a
+        return A[s][:, i]
 
     elseif s == 1 && d > 1
 
-        return kron(recursivekronecker(a, b, s, d - 1), b)
+        return kron(recursivekronecker(A[1:d-1], factor_matrix[1:d-1], s, i, d - 1), factor_matrix[d][:, i])
 
     else
 
-        return kron(b, recursivekronecker(a, s - 1, d - 1))
+        return kron(factor_matrix[1][:, i], recursivekronecker(A[2:d], factor_matrix[2:d], s - 1, i, d - 1))
 
     end
 

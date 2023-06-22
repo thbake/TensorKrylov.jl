@@ -1,58 +1,102 @@
-using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, innerproducts!, ktensor_innerprods!, compressed_residual, matrix_vector, squared_matrix_vector, recursivekronecker
+using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, innerproducts!, ktensor_innerprods!, compressed_residual, matrix_vector, squared_matrix_vector, recursivekronecker, squared_norm_vectorized, lastnorm
 using Kronecker, TensorToolbox, LinearAlgebra, TensorKrylov
 
-function recursive_norm(x::T, y::T, s::Int, d::Int) where T <: AbstractFloat
 
-    if d == 1
+#function recursive_norm(
+#        X,
+#        Z,
+#        XZ,
+#        s, r, i, j d::Int)
+#    j
+#    if d == 1
+#
+#        return y
+#
+#    elseif s == 1 && d > 1
+#
+#        return recursive_norm(x, y, s, d - 1) * x
+#
+#    else
+#
+#        return x * recursive_norm(x, y, s - 1, d - 1)
+#
+#    end
+#
+#end
 
-        return y
+function exact_squared_norm(x::ktensor, Z::Vector{Matrix{T}}, d::Int, N::Int) where T <: AbstractFloat
+    
+    rank = ncomponents(x)
 
-    elseif s == 1 && d > 1
+    lhs = zeros(N)
 
-        return recursive_norm(x, y, s, d - 1) * x
+    for s = 1:d, i = 1:rank
 
-    else
-
-        return x * recursive_norm(x, y, s - 1, d - 1)
-
-    end
-
-end
-
-@testset "Lower triangle computations" begin
-
-    d = 4
-
-    t = 5
-
-    A = repeat( [rand(t, t)], d )
-
-    LowerTriangles = [ LowerTriangular(ones(t, t)) for _ in 1:d ]
-
-    L₀     = LowerTriangles[1]
-    L₁     = LowerTriangles[2]
-
-    compute_lower_triangle!(L₀, A[1], 0) # Including diagonal
-    compute_lower_triangle!(L₁, A[2], 1) # Below the diagonal
-
-
-    exact₀ = LowerTriangular(A[1]'A[1])
-    exact₁ = LowerTriangular(A[2]'A[2])
-
-    exact₁[diagind(exact₁)] = ones(t)
-
-    @test L₀ ≈ exact₀ atol = 1e-12
-    @test L₁ ≈ exact₁ atol = 1e-12
-
-    innerproducts!(LowerTriangles, A, 0)
-
-    for s = 1:d
-
-        @test LowerTriangles[s] ≈ LowerTriangular(A[s]'A[s]) atol = 1e-12 
+        lhs += recursivekronecker(Z, x.lambda[i] * x.fmat, s, i, d)
 
     end
 
+    rhs = zeros(N)
+
+    for r = 1:d, j = 1:rank
+
+        rhs += recursivekronecker(Z, x.lambda[j] * x.fmat, r, j, d)
+
+    end
+
+    return lhs'rhs
 end
+
+function exact_squared_different(X, Z, XZ, d::Int)
+
+    rank = size(X, 1)
+
+    #for s = 1:d, r = 1:d, j = 1:rank, i = 1:rank
+
+    #X[s][i, j] XZ[s][i, j]
+
+    #    recursive_norm(X[s][i, j], Z[s][i, j])
+
+    #end
+
+        
+end
+
+# Everything here works
+#@testset "Lower triangle computations" begin
+#
+#    d = 4
+#
+#    t = 5
+#
+#    A = repeat( [rand(t, t)], d )
+#
+#    LowerTriangles = [ LowerTriangular(ones(t, t)) for _ in 1:d ]
+#
+#    L₀     = LowerTriangles[1]
+#    L₁     = LowerTriangles[2]
+#
+#    compute_lower_triangle!(L₀, A[1], 0) # Including diagonal
+#    compute_lower_triangle!(L₁, A[2], 1) # Below the diagonal
+#
+#
+#    exact₀ = LowerTriangular(A[1]'A[1])
+#    exact₁ = LowerTriangular(A[2]'A[2])
+#
+#    exact₁[diagind(exact₁)] = ones(t)
+#
+#    @test L₀ ≈ exact₀ atol = 1e-12
+#    @test L₁ ≈ exact₁ atol = 1e-12
+#
+#    innerproducts!(LowerTriangles, A, 0)
+#
+#    for s = 1:d
+#
+#        @test LowerTriangles[s] ≈ LowerTriangular(A[s]'A[s]) atol = 1e-12 
+#
+#    end
+#
+#end
 
 @testset "Compressed residual norm" begin
     
@@ -105,41 +149,32 @@ end
 
     ktensor_innerprods!(Ly, y)
 
-    X = matrix_vector(H, y)
+    B = matrix_vector(H, y)
 
-    squared_norm = squared_matrix_vector(Ly, X, H, y)
+    squared_norm = squared_matrix_vector(Ly, B, H, y)
 
     exact_matrix_vector = 0.0
 
-    Sy = repeat( [ones(rank, rank)], d )
+    exact_matrix_vector = exact_squared_norm(y, B, d, N)
 
-    for s = 1:d
+    vectorized_norm = squared_norm_vectorized(y, H)
 
-        Sy[s] = Symmetric(Ly[s], :L)
+    lnorm = lastnorm(H, y)
 
-    end
+    @info "Efficient norm:" squared_norm
 
-    lhs = zeros(N)
+    @info "Recursive Kronecker norm:" exact_matrix_vector
 
-    for s = 1:d, i = 1:rank
+    @info "Vectorized norm:" vectorized_norm
 
-        lhs += recursivekronecker(@view(y.fmat[s][:, i]), @view(X[s][:, i]), s, d)
+    @info "Last norm:" lnorm 
 
-    end
+    @info "Exact norm:" transpose((H_kronsum * Y_vec)) * (H_kronsum * Y_vec)
 
-    rhs = zeros(N)
+    @info "Norm difference:" norm(full(y) - Y)
 
-    for r = 1:d, j = 1:rank
+    @info "Norm difference between Y and its vectorization:" norm(Y) norm(Y_vec)
 
-        rhs += recursivekronecker(@view(y.fmat[r][:, j]), @view(X[s][:, j]), r, d)
-
-    end
-
-    exact_matrix_vector = lhs'rhs
-
-    @info squared_norm
-
-    @info exact_matrix_vector
 
     @test squared_norm ≈ exact_matrix_vector
 

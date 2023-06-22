@@ -28,12 +28,25 @@ function mul!(
 
 end
 
+function matrix_exponential_vector!(
+        factors::AbstractVector,
+        A::KroneckerMatrix{T},
+        b::Vector{Array{T}}, γ::T) where T<:AbstractFloat
+
+    for s = 1:length(A)
+
+        factors[s] = LinearAlgebra.BLAS.gemv('N' , exp(- γ * A[s]), b[s] )
+
+    end
+
+end
+
 #function solve_compressed_system(
-#    H::KroneckerMatrix, 
-#    b::AbstractVector, 
-#    ω::AbstractArray,
-#    α::AbstractArray,
-#    t::Int)
+#        H::KroneckerMatrix{T}, 
+#        b::Vector{Array{T}}, 
+#        ω::Array{T},
+#        α::Array{T},
+#        t::Int) where T <: AbstractFloat
 #
 #    λ = smallest_eigenvalue(H) # This might be different depending on the system
 #
@@ -41,23 +54,18 @@ end
 #
 #    # Since we are considering a canonical decomposition the tensor rank of yₜ
 #    # is equal to 
-#    yₜ  = TensorStruct{Float64}(undef, (t, dimensions))
+#    
+#    yₜ = ktensor(reciprocal .* ω, [ ones(t,t) for _ in 1:length(H)] )
 #    
 #    for j = 1:t
 #
-#        lhs_coeff = ω[j] * reciprocal
+#        γ = -α[j] * reciprocal
 #
-#        rhs = Matrix{Float64}(undef, size(H[s])) 
+#        matrix_exponential_vector!(yₜ.fmat, H, b, γ)
 #
-#        for s = 1:length(H)
-#            
-#            rhs_coeff = -α[j] * reciprocal
-#            
-#            rhs = kron(rhs, exp(coeff .* H[s]) * b[s])
-#        end
-#
-#        yₜ += lhs_coeff * rhs
 #    end
+#
+#    return yₜ
 #end
 
 function hessenberg_subdiagonals(H::AbstractMatrix, 𝔎::Vector{Int})
@@ -75,16 +83,6 @@ function hessenberg_subdiagonals(H::AbstractMatrix, 𝔎::Vector{Int})
     end
 
     return entries
-
-end
-
-function scale_matrices!(Aₛ::Vector{Matrix{T}}, Λ::Matrix{T}) where T <: AbstractFloat
-
-    for s in eachindex(Aₛ)
-
-        Aₛ[s] .*= Λ
-
-    end
 
 end
 
@@ -163,7 +161,6 @@ function innerproducts!(
     for s in eachindex(LowerTriangles)
 
         compute_lower_triangle!(LowerTriangles[s], factormatrix[s], k)
-
     end
     
 end
@@ -226,6 +223,7 @@ function ktensor_innerprods!(
     # Scale with norms of CP decomposition
     map(X -> Λ .* X, Lx)
 
+
 end
 
 function squared_matrix_vector(
@@ -235,6 +233,7 @@ function squared_matrix_vector(
         x::ktensor)::T where T <: AbstractFloat
 
     # Computes the squared norm ||Ax||², where Ax = z
+    # Z is already scaled by λᵢ of the tensor x
 
     d = length(A)
     t = ncomponents(x)
@@ -243,6 +242,17 @@ function squared_matrix_vector(
 
     # Compute (lower triangular) matrix represeting inner products z⁽ˢ⁾ᵢᵀz⁽ˢ⁾ⱼ
     innerproducts!(Lz, Z, 0)
+
+    #alpha_vector = (x.lambda).^2
+    α = (x.lambda).^2
+
+    for i = 1:t, s = 1:d
+
+        #α = alpha_vector .* (d - 1)
+
+        Lz[s][i, i] = Lz[s][i, i] * α[i]
+
+    end
 
     # Case 1: s = r, i = j:
     # Only sum over the squared 2-norms of z⁽ˢ⁾ᵢ for i = 1,…,t
@@ -303,6 +313,84 @@ function squared_matrix_vector(
 
 end
 
+# Last try of squared norm
+function lastnorm(A::KroneckerMatrix{T}, x::ktensor) where T<:AbstractFloat
+
+    orders = dimensions(A)
+    d      = ndims(x)
+    rank   = ncomponents(x)
+
+    # Return vector of matrices as described above
+    Z = [ zeros(orders[s], rank) for s in 1:d ]
+
+    for s = 1:length(A)
+
+        LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
+
+    end
+
+    X_inner = [ ones(rank, rank) for s in 1:d ]
+    Z_inner = [ ones(rank, rank) for s in 1:d ]
+    XZ      = [ ones(rank, rank) for s in 1:d ]
+    ZX      = [ ones(rank, rank) for s in 1:d ]
+    
+
+    for s = 1:length(A)
+
+        LinearAlgebra.mul!(X_inner[s], transpose(x.fmat[s]), x.fmat[s])
+        LinearAlgebra.mul!(Z_inner[s], transpose(Z[s]), Z[s])
+        LinearAlgebra.mul!(XZ[s], transpose(x.fmat[s]), Z[s])
+        ZX[s] = transpose(copy(XZ[s]))
+
+    end
+
+    my_norm = 0.0
+
+    mask_s = trues(d)
+    mask_r = trues(d)
+
+    for s in 1:d
+
+        for i = 1:rank
+
+            my_norm += x.lambda[i]^2 * Z_inner[s][i, i]
+
+            mask_s[s] = false
+
+            for j = skipindex(i, 1:rank)
+
+                my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(X_inner[mask_s], i, j)) * Z_inner[.!mask_s][1][i, j]
+
+            end
+
+        end
+
+        for r = skipindex(s, 1:d)
+
+            mask_r[r] = false
+
+            for i = 1:rank
+
+                my_norm += x.lambda[i]^2 * ZX[s][i, i] * XZ[s][i, i]
+
+                for j = skipindex(i, 1:rank)
+
+                    my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(ZX[mask_r], i, j)) * XZ[.!mask_r][1][i, j]
+
+                end
+
+            end
+
+            mask_r[r] = true
+        end
+
+        mask_s[s] = true
+    end
+
+    return my_norm
+
+end
+
 function compressed_residual(
         Ly::Vector{LowerTriangular{T, Matrix{T}}},
         H::KroneckerMatrix{T},
@@ -328,8 +416,8 @@ function compressed_residual(
 
     Hy_b = 0.0
 
-    bY = repeat( [zeros(t)], d )
-    bZ = repeat( [zeros(t)], d )
+    bY = [ zeros(t) for _ in 1:d ]
+    bZ = [ zeros(t) for _ in 1:d ]
 
 
     mul!(bY, b, y)
@@ -412,6 +500,87 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
 
 end
 
+function multiple_hadamard(S::Vector{Matrix{T}}) where T<:AbstractFloat
+
+    U = ones(size(S[1]))
+
+    for s in eachindex(S)
+
+        U .*= S[s]
+
+    end
+
+    return U
+
+end
+
+function squared_norm_vectorized(x::ktensor, A::KroneckerMatrix{T}) where T<:AbstractFloat
+
+    d = ndims(x)
+    t = ncomponents(x)
+    orders = dimensions(A)
+
+    Z = [ zeros(orders[s], t) for s in eachindex(A) ]
+
+    for s = 1:length(A)
+
+        LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
+
+    end
+
+    ZZ = [ Z[s]'Z[s] for s = 1:d ]
+
+    Λ = x.lambda * x.lambda'
+
+    X = [ x.fmat[s]'x.fmat[s] for s = 1:d ]
+
+    XZ = [ x.fmat[s]'Z[s] for s = 1:d ]
+
+    ZX = [ Z[s]'x.fmat[s] for s = 1:d ]
+
+    mask = falses(d)
+    mask_s = falses(d)
+    mask_r = falses(d)
+
+    A = ones(t,t)
+    B = ones(t,t)
+    C = ones(t,t)
+
+
+    for s = 1:d
+
+        mask_s[s] = true
+
+        for r = 1:d
+
+            mask_r[r] = true
+
+            if r == s
+
+                A = ZZ[mask_s][1]
+
+            else
+                # Yields Z⁽ˢ⁾ᵀX⁽ˢ⁾, and X⁽ʳ⁾ᵀZ⁽ʳ⁾
+                A = ZX[mask_s][1] .* XZ[mask_r][1]
+
+            end
+
+            B = multiple_hadamard(X[.!(mask_s .&& mask_r)]) 
+
+            C += Λ .* A .* B
+
+            mask_r[r] = false
+
+        end
+
+        mask_s[s] = false
+
+    end
+
+    return sum(C)
+
+end
+
 function tensor_krylov(A::KroneckerMatrix, b::AbstractVector, tol) 
 
 	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
@@ -424,6 +593,12 @@ function tensor_krylov(A::KroneckerMatrix, b::AbstractVector, tol)
 		arnoldi_modified!(A[s], b[s], 100, decompositions[s])
 		
 	end
+
+
+    #H = KroneckerMatrix(decompositions)
+
+    
+    #y = solve_compressed_system()
 
 	return decompositions
 end
