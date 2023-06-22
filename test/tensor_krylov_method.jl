@@ -1,66 +1,6 @@
-using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, innerproducts!, ktensor_innerprods!, compressed_residual, matrix_vector, squared_matrix_vector, recursivekronecker, squared_norm_vectorized, lastnorm
+using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, innerproducts!, compressed_residual, matrix_vector, lastnorm, efficient_matrix_vector_norm
 using Kronecker, TensorToolbox, LinearAlgebra, TensorKrylov
 
-
-#function recursive_norm(
-#        X,
-#        Z,
-#        XZ,
-#        s, r, i, j d::Int)
-#    j
-#    if d == 1
-#
-#        return y
-#
-#    elseif s == 1 && d > 1
-#
-#        return recursive_norm(x, y, s, d - 1) * x
-#
-#    else
-#
-#        return x * recursive_norm(x, y, s - 1, d - 1)
-#
-#    end
-#
-#end
-
-function exact_squared_norm(x::ktensor, Z::Vector{Matrix{T}}, d::Int, N::Int) where T <: AbstractFloat
-    
-    rank = ncomponents(x)
-
-    lhs = zeros(N)
-
-    for s = 1:d, i = 1:rank
-
-        lhs += recursivekronecker(Z, x.lambda[i] * x.fmat, s, i, d)
-
-    end
-
-    rhs = zeros(N)
-
-    for r = 1:d, j = 1:rank
-
-        rhs += recursivekronecker(Z, x.lambda[j] * x.fmat, r, j, d)
-
-    end
-
-    return lhs'rhs
-end
-
-function exact_squared_different(X, Z, XZ, d::Int)
-
-    rank = size(X, 1)
-
-    #for s = 1:d, r = 1:d, j = 1:rank, i = 1:rank
-
-    #X[s][i, j] XZ[s][i, j]
-
-    #    recursive_norm(X[s][i, j], Z[s][i, j])
-
-    #end
-
-        
-end
 
 # Everything here works
 #@testset "Lower triangle computations" begin
@@ -142,32 +82,24 @@ end
     y = cp_als(Y, rank) 
     
     # First test ||Hy||²
+    # Allocate memory for (lower triangular) matrices representing inner products
+    Y_inner = [ zeros(rank, rank) for _ in 1:d ]
 
-    # For this we pre-compute a (lower triangular) matrix that represents inner
-    # products of the form yᵢ⁽ˢ⁾ᵀyⱼ⁽ˢ⁾
-    Ly = repeat( [LowerTriangular( ones(rank, rank) )], d )
+    for s = 1:d
 
-    ktensor_innerprods!(Ly, y)
+        LinearAlgebra.BLAS.syrk!('L', 'T', 1.0, y.fmat[s], 1.0, Y_inner[s])
+
+    end
 
     B = matrix_vector(H, y)
 
-    squared_norm = squared_matrix_vector(Ly, B, H, y)
-
-    exact_matrix_vector = 0.0
-
-    exact_matrix_vector = exact_squared_norm(y, B, d, N)
-
-    vectorized_norm = squared_norm_vectorized(y, H)
+    efficient_norm = efficient_matrix_vector_norm(H, y, Y_inner, B)
 
     lnorm = lastnorm(H, y)
 
-    @info "Efficient norm:" squared_norm
-
-    @info "Recursive Kronecker norm:" exact_matrix_vector
-
-    @info "Vectorized norm:" vectorized_norm
-
     @info "Last norm:" lnorm 
+
+    @info "Efficient norm:" efficient_norm
 
     @info "Exact norm:" transpose((H_kronsum * Y_vec)) * (H_kronsum * Y_vec)
 

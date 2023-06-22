@@ -188,13 +188,6 @@ function matrix_vector(
 
     end
 
-    for s = 1:length(A)
-
-        # Scale columns of each matrix with entries of lambda
-        Z[s] = x.lambda' .* Z[s] 
-
-    end
-
     return Z
 
 end
@@ -205,111 +198,70 @@ function skipindex(index::Int, range::UnitRange{Int})
 
 end
 
-function ktensor_innerprods!(
-        Lx::Vector{LowerTriangular{T, Matrix{T}}}, 
-        x::ktensor) where T <: AbstractFloat
+function efficient_matrix_vector_norm(
+        A::KroneckerMatrix{T},
+        x::ktensor,
+        X_inner::Vector{Matrix{T}},
+        Z::Vector{Matrix{T}}) where T <: AbstractFloat
 
-    t = ncomponents(x)
+    orders = dimensions(A)
+    d      = ndims(x)
+    rank   = ncomponents(x)
 
-    # Allocate memory for and initialize matrix representing scaling of factor 
-    # matrices in the CP decomposition
-    Λ = LowerTriangular( ones(t, t) )
+    Z_inner = [ zeros(rank, rank) for s in 1:d ]
+    ZX      = [ zeros(rank, rank) for s in 1:d ]
 
-    compute_lower_triangle!(Λ, x.lambda)
+    for s in 1:d
 
-    # Compute (lower triangular) matrices representing inner products
-    innerproducts!(Lx, x.fmat, 1)
-
-    # Scale with norms of CP decomposition
-    map(X -> Λ .* X, Lx)
-
-
-end
-
-function squared_matrix_vector(
-        Lx::Vector{LowerTriangular{T, Matrix{T}}},
-        Z::Vector{Matrix{T}},
-        A::KroneckerMatrix{T}, 
-        x::ktensor)::T where T <: AbstractFloat
-
-    # Computes the squared norm ||Ax||², where Ax = z
-    # Z is already scaled by λᵢ of the tensor x
-
-    d = length(A)
-    t = ncomponents(x)
-
-    Lz = [ LowerTriangular(ones(t, t)) for _ in 1:d ]
-
-    # Compute (lower triangular) matrix represeting inner products z⁽ˢ⁾ᵢᵀz⁽ˢ⁾ⱼ
-    innerproducts!(Lz, Z, 0)
-
-    #alpha_vector = (x.lambda).^2
-    α = (x.lambda).^2
-
-    for i = 1:t, s = 1:d
-
-        #α = alpha_vector .* (d - 1)
-
-        Lz[s][i, i] = Lz[s][i, i] * α[i]
+        BLAS.syrk!('L', 'T', 1.0, Z[s], 1.0,  Z_inner[s])
+        BLAS.gemm!('T', 'N', 1.0, Z[s], x.fmat[s], 1.0, ZX[s])
 
     end
 
-    # Case 1: s = r, i = j:
-    # Only sum over the squared 2-norms of z⁽ˢ⁾ᵢ for i = 1,…,t
-    squared_norm = sum( tr(Lz[s]) for s in eachindex(Lz) )
+    result = 0.0
 
-    # Case 2: s = r, i != j:
-    # Sum over dot d-1 dot products of the form x⁽ʳ⁾ᵢᵀ x⁽ʳ⁾ⱼ times z⁽ˢ⁾ᵢᵀ z⁽ˢ⁾ⱼ 
-    for s = 1:d, r = skipindex(s, 1:d)
+    mask_s = trues(d)
+    mask_r = trues(d)
 
-        for j = 1:t-1, i = j+1:t
+    for s in 1:d
 
-            squared_norm += Lx[r][i, j] * Lz[s][i, j]
+        for j = 1:rank
+
+            result += x.lambda[j]^2 * Z_inner[s][j, j]
+
+            mask_s[s] = false
+
+            for i = skipindex(j, j:rank)
+
+                result += 2 * x.lambda[j] * x.lambda[i] * prod(getindex.(X_inner[mask_s], i, j)) * Z_inner[.!mask_s][1][i, j]
+
+            end
 
         end
 
-    end
+        for r = skipindex(s, 1:d)
 
-    # Here we count twice because of symmetry of the inner products
-    squared_norm *= 2
+            mask_r[r] = false
 
-    # Case 3: s != r, i = j:
-    # Only compute two inner products z⁽ʳ⁾ᵢᵀ x⁽ʳ⁾ᵢ times x⁽ˢ⁾ᵢᵀ z⁽ˢ⁾ᵢ and sum
-    # over them
+            for i = 1:rank
 
+                result += x.lambda[i]^2 * ZX[s][i, i]^2 
 
-    XZ = [ zeros(t,t) for _ in 1:d ]
+                for j = skipindex(i, 1:rank)
 
-    (mul!(XZ[s], transpose(@view(Z[s])), x.fmat[s]) for s = 1:d)
+                    result += x.lambda[i] * x.lambda[j] * prod(getindex.(ZX[mask_r], i, j)) * ZX[.!mask_r][1][j, i]
 
-    for s = 1:d, r = skipindex(s, 1:d) 
+                end
 
-        for i = 1:t
+            end
 
-            squared_norm += XZ[r][i, i] * XZ[s][i, i]
-
+            mask_r[r] = true
         end
 
+        mask_s[s] = true
     end
 
-    # Case 4: s != r, i != j:
-    # Compute rest of inner products 
-
-    tmp = 0.0
-
-    for s = 1:d, r = skipindex(s, 1:d)
-
-        for j = 1:t, i = skipindex(j , 1:t)
-
-            tmp += XZ[r][i, j] * Lx[s][i, j] 
-
-        end
-
-    end
-
-    squared_norm += 2 * tmp
-
-    return squared_norm
+    return result
 
 end
 
@@ -321,17 +273,10 @@ function lastnorm(A::KroneckerMatrix{T}, x::ktensor) where T<:AbstractFloat
     rank   = ncomponents(x)
 
     # Return vector of matrices as described above
-    Z = [ zeros(orders[s], rank) for s in 1:d ]
-
-    for s = 1:length(A)
-
-        LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
-
-    end
+    Z = matrix_vector(A, x)
 
     X_inner = [ ones(rank, rank) for s in 1:d ]
     Z_inner = [ ones(rank, rank) for s in 1:d ]
-    XZ      = [ ones(rank, rank) for s in 1:d ]
     ZX      = [ ones(rank, rank) for s in 1:d ]
     
 
@@ -339,8 +284,7 @@ function lastnorm(A::KroneckerMatrix{T}, x::ktensor) where T<:AbstractFloat
 
         LinearAlgebra.mul!(X_inner[s], transpose(x.fmat[s]), x.fmat[s])
         LinearAlgebra.mul!(Z_inner[s], transpose(Z[s]), Z[s])
-        LinearAlgebra.mul!(XZ[s], transpose(x.fmat[s]), Z[s])
-        ZX[s] = transpose(copy(XZ[s]))
+        LinearAlgebra.mul!(ZX[s], transpose(Z[s]), x.fmat[s])
 
     end
 
@@ -371,11 +315,12 @@ function lastnorm(A::KroneckerMatrix{T}, x::ktensor) where T<:AbstractFloat
 
             for i = 1:rank
 
-                my_norm += x.lambda[i]^2 * ZX[s][i, i] * XZ[s][i, i]
+                my_norm += x.lambda[i]^2 * ZX[s][i, i]^2 
 
                 for j = skipindex(i, 1:rank)
 
-                    my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(ZX[mask_r], i, j)) * XZ[.!mask_r][1][i, j]
+                    #my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(ZX[mask_r], i, j)) * XZ[.!mask_r][1][i, j]
+                    my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(ZX[mask_r], i, j)) * ZX[.!mask_r][1][j, i]
 
                 end
 
@@ -406,7 +351,7 @@ function compressed_residual(
     d = length(H)
     t = ncomponents(y)
 
-    # For this we evaluate all B⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝⁿₛˣᵗ
+    # For this we evaluate all B⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝⁿₛ for i = 1,…,t
     B = matrix_vector(H, y)
 
     # First we compute ||Hy||²
@@ -459,9 +404,13 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
     h² = map(abs, hessenberg_subdiagonals(H, 𝔎)).^2
 
     # Allocate memory for (lower triangular) matrices representing inner products
-    Ly = [ LowerTriangular(ones(t, t)) for _ in 1:d ]
+    Ly = [ zeros(t, t) for _ in 1:d ]
 
-    ktensor_innerprods!(Ly, y)
+    for s = 1:d
+
+        BLAS.syrk!('L', 'T', 1.0, y.fmat[s], 1.0, Ly[s])
+
+    end
 
     res_norm = 0.0
 
@@ -497,87 +446,6 @@ function residual_norm(H::KroneckerMatrix, y::ktensor, 𝔎::Vector{Int}, b)
     rₕ = compressed_residual(Ly, H, y, b)
 
     return res_norm + rₕ
-
-end
-
-function multiple_hadamard(S::Vector{Matrix{T}}) where T<:AbstractFloat
-
-    U = ones(size(S[1]))
-
-    for s in eachindex(S)
-
-        U .*= S[s]
-
-    end
-
-    return U
-
-end
-
-function squared_norm_vectorized(x::ktensor, A::KroneckerMatrix{T}) where T<:AbstractFloat
-
-    d = ndims(x)
-    t = ncomponents(x)
-    orders = dimensions(A)
-
-    Z = [ zeros(orders[s], t) for s in eachindex(A) ]
-
-    for s = 1:length(A)
-
-        LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
-
-    end
-
-    ZZ = [ Z[s]'Z[s] for s = 1:d ]
-
-    Λ = x.lambda * x.lambda'
-
-    X = [ x.fmat[s]'x.fmat[s] for s = 1:d ]
-
-    XZ = [ x.fmat[s]'Z[s] for s = 1:d ]
-
-    ZX = [ Z[s]'x.fmat[s] for s = 1:d ]
-
-    mask = falses(d)
-    mask_s = falses(d)
-    mask_r = falses(d)
-
-    A = ones(t,t)
-    B = ones(t,t)
-    C = ones(t,t)
-
-
-    for s = 1:d
-
-        mask_s[s] = true
-
-        for r = 1:d
-
-            mask_r[r] = true
-
-            if r == s
-
-                A = ZZ[mask_s][1]
-
-            else
-                # Yields Z⁽ˢ⁾ᵀX⁽ˢ⁾, and X⁽ʳ⁾ᵀZ⁽ʳ⁾
-                A = ZX[mask_s][1] .* XZ[mask_r][1]
-
-            end
-
-            B = multiple_hadamard(X[.!(mask_s .&& mask_r)]) 
-
-            C += Λ .* A .* B
-
-            mask_r[r] = false
-
-        end
-
-        mask_s[s] = false
-
-    end
-
-    return sum(C)
 
 end
 
