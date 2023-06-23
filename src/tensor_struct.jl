@@ -163,9 +163,15 @@ struct KroneckerMatrix{T} <: KroneckerProduct{T}
     
     𝖳::Vector{Matrix{T}} # We only store the d matrices explicitly in a vector.
 
-    function KroneckerMatrix(Aₛ::Vector{Matrix{U}}) where U<:AbstractFloat # Constructor with vector of matrix coefficients
+    function KroneckerMatrix(Aₛ::Vector{Matrix{U}}) where U <: AbstractFloat # Constructor with vector of matrix coefficients
 
         new{U}(Aₛ)
+
+    end
+
+    function KroneckerMatrix(orders::Array{Int}) where U <: AbstractFloat
+
+        new{U}([ I(orders[s]) for s in 1:length(orders) ])
 
     end
 

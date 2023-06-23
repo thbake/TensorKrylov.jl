@@ -1,42 +1,99 @@
-using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, innerproducts!, compressed_residual, matrix_vector, lastnorm, efficient_matrix_vector_norm
+using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, innerproducts!, compressed_residual, matrix_vector, skipindex, efficient_matrix_vector_norm
 using Kronecker, TensorToolbox, LinearAlgebra, TensorKrylov
 
+# Last try of squared norm
+function lastnorm(A::KroneckerMatrix{T}, x::ktensor) where T<:AbstractFloat
+
+    d      = ndims(x)
+    rank   = ncomponents(x)
+
+    # Return vector of matrices as described above
+    Z = matrix_vector(A, x)
+
+    X_inner = [ ones(rank, rank) for _ in 1:d ]
+    Z_inner = [ ones(rank, rank) for _ in 1:d ]
+    ZX      = [ ones(rank, rank) for _ in 1:d ]
+    
+
+    for s = 1:d
+
+        LinearAlgebra.mul!(X_inner[s], transpose(x.fmat[s]), x.fmat[s])
+        LinearAlgebra.mul!(Z_inner[s], transpose(Z[s]), Z[s])
+        LinearAlgebra.mul!(ZX[s], transpose(Z[s]), x.fmat[s])
+
+    end
+
+    my_norm = 0.0
+
+    mask_s = trues(d)
+    mask_r = trues(d)
+
+    for s in 1:d
+
+        for i = 1:rank
+
+            my_norm += x.lambda[i]^2 * Z_inner[s][i, i]
+
+            mask_s[s] = false
+
+            for j = skipindex(i, 1:rank)
+
+                my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(X_inner[mask_s], i, j)) * Z_inner[.!mask_s][1][i, j]
+
+            end
+
+        end
+
+        for r = skipindex(s, 1:d)
+
+            mask_r[r] = false
+
+            for i = 1:rank
+
+                my_norm += x.lambda[i]^2 * ZX[s][i, i] * ZX[r][i, i]
+
+                for j = skipindex(i, 1:rank)
+
+                    my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(ZX[mask_r .&& mask_s], i, j)) * prod(getindex.(ZX[.!(mask_r .&& mask_s)], j, i))
+
+                end
+
+            end
+
+            mask_r[r] = true
+        end
+
+        mask_s[s] = true
+    end
+
+    return my_norm
+
+end
 
 # Everything here works
-#@testset "Lower triangle computations" begin
-#
-#    d = 4
-#
-#    t = 5
-#
-#    A = repeat( [rand(t, t)], d )
-#
-#    LowerTriangles = [ LowerTriangular(ones(t, t)) for _ in 1:d ]
-#
-#    L₀     = LowerTriangles[1]
-#    L₁     = LowerTriangles[2]
-#
-#    compute_lower_triangle!(L₀, A[1], 0) # Including diagonal
-#    compute_lower_triangle!(L₁, A[2], 1) # Below the diagonal
-#
-#
-#    exact₀ = LowerTriangular(A[1]'A[1])
-#    exact₁ = LowerTriangular(A[2]'A[2])
-#
-#    exact₁[diagind(exact₁)] = ones(t)
-#
-#    @test L₀ ≈ exact₀ atol = 1e-12
-#    @test L₁ ≈ exact₁ atol = 1e-12
-#
-#    innerproducts!(LowerTriangles, A, 0)
-#
-#    for s = 1:d
-#
-#        @test LowerTriangles[s] ≈ LowerTriangular(A[s]'A[s]) atol = 1e-12 
-#
-#    end
-#
-#end
+@testset "Lower triangle computations" begin
+
+    d = 4
+
+    t = 5
+
+    #A = repeat( [rand(t, t)], d )
+    A = rand(t, t)
+
+    λ = rand(t)
+
+    Λ = LowerTriangular(λ * λ')
+
+    M = LowerTriangular(zeros(t, t))
+
+    compute_lower_triangle!(M, λ)
+
+    @test M ≈ Λ atol = 1e-15
+
+
+
+
+end
 
 @testset "Compressed residual norm" begin
     
@@ -93,22 +150,25 @@ using Kronecker, TensorToolbox, LinearAlgebra, TensorKrylov
 
     B = matrix_vector(H, y)
 
-    efficient_norm = efficient_matrix_vector_norm(H, y, Y_inner, B)
+    Λ = y.lambda * y.lambda'
+
+    efficient_norm = efficient_matrix_vector_norm(y, Λ, Y_inner, B)
 
     lnorm = lastnorm(H, y)
 
-    @info "Last norm:" lnorm 
+    exact_matrix_vector = transpose( (H_kronsum * Y_vec) ) * (H_kronsum * Y_vec)
 
-    @info "Efficient norm:" efficient_norm
+    @test efficient_norm ≈ lnorm
 
-    @info "Exact norm:" transpose((H_kronsum * Y_vec)) * (H_kronsum * Y_vec)
+
+    @info "Exact norm:" exact_matrix_vector
 
     @info "Norm difference:" norm(full(y) - Y)
 
     @info "Norm difference between Y and its vectorization:" norm(Y) norm(Y_vec)
 
 
-    @test squared_norm ≈ exact_matrix_vector
+    #@test efficient_norm ≈ exact_matrix_vector
 
     
     # On the order of the machine precision
