@@ -1,4 +1,4 @@
-using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, innerproducts!, compressed_residual, matrix_vector, skipindex, efficient_matrix_vector_norm
+using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, compressed_residual, matrix_vector, skipindex, efficient_matrix_vector_norm
 using Kronecker, TensorToolbox, LinearAlgebra, TensorKrylov
 
 # Last try of squared norm
@@ -77,7 +77,6 @@ end
 
     t = 5
 
-    #A = repeat( [rand(t, t)], d )
     A = rand(t, t)
 
     λ = rand(t)
@@ -158,6 +157,7 @@ end
 
     exact_matrix_vector = transpose( (H_kronsum * Y_vec) ) * (H_kronsum * Y_vec)
 
+    @info "Efficient norm:" efficient_norm
     @test efficient_norm ≈ lnorm
 
 
@@ -165,7 +165,7 @@ end
 
     @info "Norm difference:" norm(full(y) - Y)
 
-    @info "Norm difference between Y and its vectorization:" norm(Y) norm(Y_vec)
+    @assert norm(Y) == norm(Y_vec)
 
 
     #@test efficient_norm ≈ exact_matrix_vector
@@ -179,8 +179,6 @@ end
 
     # Create (lower triangular) matrices representing inner products
     LowerTriangles = repeat( [LowerTriangular( ones(rank, rank) )], d )
-
-    innerproducts!(LowerTriangles, y.fmat, 1)
 
     computed_norm = compressed_residual(LowerTriangles, H, y, b)
 

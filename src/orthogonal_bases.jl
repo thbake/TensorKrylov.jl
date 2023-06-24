@@ -1,8 +1,10 @@
 export arnoldi_modified!, arnoldi_classical!
 
+function orthogonalize_and_normalize!
+
 function arnoldi_classical!(A::AbstractMatrix, b::AbstractVector, k::Int, arnoldi::Arnoldi)
 
-    nrm = norm(b, 2) # take the two norm of right hand side 
+    nrm = norm(b) # take the two norm of right hand side 
     
     arnoldi.V[:, 1] = b .* inv(nrm)
 
@@ -18,7 +20,7 @@ function arnoldi_classical!(A::AbstractMatrix, b::AbstractVector, k::Int, arnold
     
         arnoldi.V[:, j + 1] = w - (@views(arnoldi.V[:, 1:j]) * @views(arnoldi.H[1:j, j]))
     
-        arnoldi.H[j + 1, j] = norm(@views(arnoldi.V[:, j + 1]), 2)
+        arnoldi.H[j + 1, j] = norm(@views(arnoldi.V[:, j + 1]))
     
         arnoldi.V[:, j + 1] = @views(arnoldi.V[:, j + 1]) .* inv(arnoldi.H[j + 1, j])
 
