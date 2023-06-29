@@ -177,7 +177,7 @@ struct KroneckerMatrix{T} <: KroneckerProduct{T}
 
 end
 
-function Base.size(KM::KroneckerMatrix)
+function Base.size(KM::KroneckerMatrix)::Array{Tuple{Int, Int}}
 
     # Return size of each KroneckerMatrix element
     
@@ -210,5 +210,35 @@ function Base.getindex(CP::ktensor, i::Int)
     # Returns a vector containing the i-th column of each factor matrix of CP.
 
     return [ @view(CP.fmat[s][:, i]) for s = 1:ndims(CP) ]
+
+end
+
+function mul!(result::Vector{Matrix{T}}, y::Vector{Vector{T}}, x::ktensor) where T <: AbstractFloat
+
+    # Compute product between elementary tensor and factor matrices of Kruskal tensor.
+    nᵢ = ndims(x)
+
+   for s = 1:nᵢ
+
+       # Result is vector of row vectors
+       result[s] = transpose(y[s]) * x.fmat[s]
+
+   end
+
+end
+
+function mul!(
+        result::Vector{Matrix{T}},
+        x::Vector{Vector{T}},
+        A::Vector{Matrix{T}}) where T <: AbstractFloat
+
+    # Compute product between vector of collection of row vectors and matrices.
+    nᵢ = length(result)
+
+    for s = 1:nᵢ
+
+        result[s] = transpose(x[s]) * A[s]
+
+    end
 
 end

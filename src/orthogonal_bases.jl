@@ -1,6 +1,6 @@
 export arnoldi_modified!, arnoldi_classical!
 
-function orthogonalize_and_normalize!
+#function orthonormalize!()
 
 function arnoldi_classical!(A::AbstractMatrix, b::AbstractVector, k::Int, arnoldi::Arnoldi)
 
@@ -30,7 +30,7 @@ end
 
 function arnoldi_modified!(A::AbstractMatrix, b::AbstractVector, k::Int, arnoldi::Arnoldi)
 
-    nrm = norm(b, 2)
+    nrm = norm(b)
     
     arnoldi.V[:, 1] = b .* inv(nrm)
 

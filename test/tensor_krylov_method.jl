@@ -1,74 +1,6 @@
-using TensorKrylov: KroneckerMatrix, compute_lower_triangle!, compressed_residual, matrix_vector, skipindex, efficient_matrix_vector_norm
+using TensorKrylov: KroneckerMatrix, compute_lower_triangles!, compute_lower_outer!, compressed_residual, matrix_vector, skipindex, efficient_matrix_vector_norm, residual_norm, maskprod, innerprod_kronsum_tensor!
 using Kronecker, TensorToolbox, LinearAlgebra, TensorKrylov
 
-# Last try of squared norm
-function lastnorm(A::KroneckerMatrix{T}, x::ktensor) where T<:AbstractFloat
-
-    d      = ndims(x)
-    rank   = ncomponents(x)
-
-    # Return vector of matrices as described above
-    Z = matrix_vector(A, x)
-
-    X_inner = [ ones(rank, rank) for _ in 1:d ]
-    Z_inner = [ ones(rank, rank) for _ in 1:d ]
-    ZX      = [ ones(rank, rank) for _ in 1:d ]
-    
-
-    for s = 1:d
-
-        LinearAlgebra.mul!(X_inner[s], transpose(x.fmat[s]), x.fmat[s])
-        LinearAlgebra.mul!(Z_inner[s], transpose(Z[s]), Z[s])
-        LinearAlgebra.mul!(ZX[s], transpose(Z[s]), x.fmat[s])
-
-    end
-
-    my_norm = 0.0
-
-    mask_s = trues(d)
-    mask_r = trues(d)
-
-    for s in 1:d
-
-        for i = 1:rank
-
-            my_norm += x.lambda[i]^2 * Z_inner[s][i, i]
-
-            mask_s[s] = false
-
-            for j = skipindex(i, 1:rank)
-
-                my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(X_inner[mask_s], i, j)) * Z_inner[.!mask_s][1][i, j]
-
-            end
-
-        end
-
-        for r = skipindex(s, 1:d)
-
-            mask_r[r] = false
-
-            for i = 1:rank
-
-                my_norm += x.lambda[i]^2 * ZX[s][i, i] * ZX[r][i, i]
-
-                for j = skipindex(i, 1:rank)
-
-                    my_norm += x.lambda[i] * x.lambda[j] * prod(getindex.(ZX[mask_r .&& mask_s], i, j)) * prod(getindex.(ZX[.!(mask_r .&& mask_s)], j, i))
-
-                end
-
-            end
-
-            mask_r[r] = true
-        end
-
-        mask_s[s] = true
-    end
-
-    return my_norm
-
-end
 
 # Everything here works
 @testset "Lower triangle computations" begin
@@ -85,12 +17,50 @@ end
 
     M = LowerTriangular(zeros(t, t))
 
-    compute_lower_triangle!(M, λ)
+    compute_lower_outer!(M, λ)
 
     @test M ≈ Λ atol = 1e-15
+end
 
+@testset "Masked products" begin
 
+    n = 5
+    d = 4
 
+    matrices = [ rand(n, n) for _ in 1:d ]
+
+    values      = ones(n, n)
+    test_values = ones(n, n)
+
+    for j = 1:n, i = 1:n
+        
+        values[i, j] = maskprod(matrices, i, j) 
+
+    end
+
+    for s = 1:d
+
+        for j = 1:n, i = 1:n
+
+            test_values[i, j] *= matrices[s][i, j]
+
+        end
+
+    end
+
+    @test all(values .== test_values)
+
+    vec_matrix = [ rand(n, n) ]
+
+    for j = 1:n, i = 1:n
+
+        values[i, j] = maskprod(vec_matrix, i, j)
+
+    end
+
+    test_values .= copy(vec_matrix...)
+
+    @test all(values .== test_values)
 
 end
 
@@ -125,18 +95,33 @@ end
 
     N = nₛ^d  
 
+    # ============================================================
+    # Ignore this for a moment
+
     # Solve the system directly
-    Y_vec = H_kronsum \ reshape(b, N)
+    #Y_vec = H_kronsum \ reshape(b, N)
 
     # Express solution as d-way tensor
-    Y = reshape(Y_vec, (nₛ, nₛ, nₛ, nₛ))
+    #Y = reshape(Y_vec, (nₛ, nₛ, nₛ, nₛ))
 
     # Rank 3 Kruskal tensor (CP) with vectors of order 4.
-    rank = 3
+    #rank = 3
 
     # Construct low- (three-) rank decomposition of Y.
-    y = cp_als(Y, rank) 
+    #y = cp_als(Y, rank) 
     
+    # ===========================================================
+
+    rank = 3
+
+    y = ktensor( ones(rank), [ rand(d, rank) for _ in 1:d] )
+
+    Y_vec = reshape(full(y), N)
+
+    normalize!(y)
+
+    @info "Norm difference:" norm(reshape(full(y), N) - Y_vec)
+
     # First test ||Hy||²
     # Allocate memory for (lower triangular) matrices representing inner products
     Y_inner = [ zeros(rank, rank) for _ in 1:d ]
@@ -147,40 +132,47 @@ end
 
     end
 
-    B = matrix_vector(H, y)
+    Z = matrix_vector(H, y)
 
     Λ = y.lambda * y.lambda'
 
-    efficient_norm = efficient_matrix_vector_norm(y, Λ, Y_inner, B)
 
-    lnorm = lastnorm(H, y)
+    Ly = [LowerTriangular( zeros(rank, rank) ) for _ in 1:d]
+    map!(LowerTriangular, Ly, Y_inner)
 
-    exact_matrix_vector = transpose( (H_kronsum * Y_vec) ) * (H_kronsum * Y_vec)
+    efficient_norm      = efficient_matrix_vector_norm(y, Λ, Ly, Z)
+    exact_matrix_vector = dot( (H_kronsum * Y_vec),  (H_kronsum * Y_vec) )
 
-    @info "Efficient norm:" efficient_norm
-    @test efficient_norm ≈ lnorm
+    bY = [ zeros(1, rank) for _ in 1:d ] # bₛᵀyᵢ⁽ˢ⁾
+    bZ = [ zeros(1, rank) for _ in 1:d ] # bₛᵀzᵢ⁽ˢ⁾, where zᵢ⁽ˢ⁾ = Hₛ⋅yᵢ⁽ˢ⁾
+
+    # Right-hand side represented as factors of Kronecker product
+    b_kronprod = [u, v, w, x]
+    b_vec = reshape(b, N)
+
+    innerprod        = innerprod_kronsum_tensor!(bY, bZ, Z, y, b_kronprod)
+    exact_innerprod  = dot(H_kronsum * Y_vec, b_vec)
+
+    @test efficient_norm ≈ exact_matrix_vector atol = 1e-11
+    @test innerprod      ≈ dot(H_kronsum * Y_vec, b_vec) atol = 1e-12 
+
+    # Compressed residual norm
+    r_comp = compressed_residual(Ly, LowerTriangular(Λ), H, y, b_kronprod)
+
+    exact_comp_norm = exact_matrix_vector - 2 * dot(H_kronsum * Y_vec, b_vec) + dot(b_vec, b_vec)
+    
+    @info exact_comp_norm
+    @test r_comp ≈ exact_comp_norm atol = 1e-11
 
 
-    @info "Exact norm:" exact_matrix_vector
-
-    @info "Norm difference:" norm(full(y) - Y)
-
-    @assert norm(Y) == norm(Y_vec)
-
-
-    #@test efficient_norm ≈ exact_matrix_vector
-
+    #@info "Exact ||Hy||²: " exact_matrix_vector " exact 2 ⋅<Hy, b>: " 2*dot(H_kronsum*Y_vec, b_vec) " exact ||b||²: " dot(b_vec, b_vec)
     
     # On the order of the machine precision
-    exact_norm = norm(H_kronsum * Y_vec - b)
+    exact_norm = dot((H_kronsum * Y_vec - b_vec),  (H_kronsum * Y_vec - b_vec))
+    @info exact_norm
 
     # Check that we have indeed constructed a "good" low-rank approximation
-    @test norm(full(y) - Y) < 1e-13
-
-    # Create (lower triangular) matrices representing inner products
-    LowerTriangles = repeat( [LowerTriangular( ones(rank, rank) )], d )
-
-    computed_norm = compressed_residual(LowerTriangles, H, y, b)
+    #@test norm(full(y) - Y) < 1e-13
 
 end
 
