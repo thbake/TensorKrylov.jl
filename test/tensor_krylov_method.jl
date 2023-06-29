@@ -73,7 +73,7 @@ end
     Hᵢ= rand(nₛ, nₛ)
 
     # Make sure matrix is not singular
-    H = KroneckerMatrix([Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ])
+    H = KroneckerMatrix{Float64}([Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ])
 
     # Matrix given as Kronecker sum
     H_kronsum = kroneckersum( H.𝖳... )

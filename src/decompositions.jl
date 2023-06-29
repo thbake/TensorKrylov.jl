@@ -1,48 +1,49 @@
-export Arnoldi
+export Arnoldis
 
-abstract type Decomposition end 
+mutable struct Arnoldis{T<:AbstractFloat}
 
-mutable struct Arnoldi{T<:AbstractFloat} <: Decomposition # Stores Krylov basis and upper Hessenberg matrix
-    A::Matrix{T} # Original matrix
-    V::Matrix{T} # Matrix representing basis of Krylov subspace
-    H::UpperHessenberg{T, Matrix{T}} # Upper Hessenberg matrix
+    A::KroneckerMatrix{T} # Original matrix
+    V::KroneckerMatrix{T} # Matrix representing basis of Krylov subspace
+    H::KroneckerMatrix{T} # Upper Hessenberg matrix
 
-    function Arnoldi(A::Matrix{T}, order::Int) where T<:AbstractFloat
-        new{T}(
-            A, 
-            zeros(T, size(A, 1), order + 1), # Initialize Krylov basis
-            UpperHessenberg(
-                zeros(T, order + 1, order)
-            )::UpperHessenberg       # Initialize upper Hessenberg matrix
-        )  
-    end
+    function Arnoldis{T}(A::KroneckerMatrix{T}, b::Vector{Vector{T}}) where T<:AbstractFloat
 
-    function Arnoldi(A::Matrix{T}, b::Vector{T}) where T<:AbstractFloat
+        d = length(A)
+        
+        V = KroneckerMatrix{T}(dimensions(A))
+        H = KroneckerMatrix{T}(dimensions(A))
 
-        V = zeros(size(A))
+        for s = 1:d
 
-        V[:, 1] = inv(norm(b)) .* b # Already initialize first column of struct
+            V[s][:, 1] = inv( LinearAlgebra.norm(b[s]) ) .* b[s]
 
-        new{T}(A, V, UpperHessenberg( zeros(size(A)) ))
+        end
+
+        new(A, V, H)
 
     end
 
 end
+   
 
-function arnoldi_step!(arnoldi::Arnoldi{T}, index::Int) where T<:AbstractFloat
+function arnoldi_step!(arnoldis::Arnoldis{T}, index::Int) where T<:AbstractFloat
 
-    v = Array{Float64}(undef, ( size(arnoldi.A, 1) ))
+    for s in 1:length(arnoldis.A)
 
-    mul!(v, arnoldi.A, @views(arnoldi.V[:, index])) 
+        v = Array{Float64}(undef, ( size(arnoldis.A[s], 1) ))
 
-    for i = 1:index
+        mul!(v, arnoldis.A[s], @views(arnoldis.V[s][:, index])) 
 
-        arnoldi.H[i, index] = dot(v, @views(arnoldi.V[:, i]))
+        for i = 1:index
 
-        v .-= arnoldi.H[i, index] * @views(arnoldi.V[:, i])
+            arnoldis.H[s][i, index] = dot(v, @views(arnoldis.V[s][:, i]))
+
+            v .-= arnoldis.H[s][i, index] * @views(arnoldis.V[s][:, i])
+
+        end
+
+        arnoldis.V[s][:, index + 1] = v .* inv(arnoldis.H[s][index + 1, index])
 
     end
-
-    arnoldi.V[:, index + 1] = v .* inv(arnoldi.H[index + 1, index])
 
 end

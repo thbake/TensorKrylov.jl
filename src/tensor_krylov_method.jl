@@ -310,7 +310,7 @@ function compressed_residual(
     Hy_b = innerprod_kronsum_tensor!(bY, bZ, Z, y, b)
 
     # Finally we compute the squared 2-norm of b
-    b_norm = prod( LinearAlgebra.norm(b[s]) for s in 1:d )^2
+    b_norm = prod( dot(b[s], b[s]) for s in 1:d )
 
     return Hy_norm - 2 * Hy_b + b_norm
     
@@ -415,7 +415,7 @@ function update_rhs!(b̃::KronProd{T}, V::KronMat{T}, b::KronProd{T}, k::Int) wh
     for s = 1:length(b̃)
 
         # Update one entry of each component of b̃ by performing a single inner product 
-        mul!(b̃[s][k], transpose(@view(V[s][:, k])), b[s])
+        mul!( b̃[s][k], transpose( @view(V[s][:, k]) ), b[s] )
      
     end
 
@@ -438,20 +438,8 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, ω, α,
 	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
     d = length(A)
 
-    # Initialize vector of Arnoldi decompositions
-    decompositions = [ Arnoldi{T}(A[s], b[s]) for s = 1:d ]
-
-    # Initialize H, V with orders of factor matrices of A.
-    H = KroneckerMatrix{T}( size(A) )
-    V = KroneckerMatrix{T}( size(A) )
-
-    for s = 1:d
-
-        H[s] = decompositions[s].H # H refers to each upper Hessenberg matrix
-        V[s] = decompositions[s].V # V refers to each isometric matrix 
-
-    end
-    
+    # Initialize the d Arnoldi decompositions of Aₛ
+    decomps = Arnoldis(A, b)
 
     # Initialize multiindex 𝔎
     𝔎 = Vector{Int}(undef, d)
@@ -465,23 +453,19 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, ω, α,
     for j = 1:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        for s = 1:length(A)
-		
-            arnoldi_step!(decompositions[s], j)
+        arnoldi_step!(decomps, j)
 
-        end
+        update_rhs!(b̃, decomps.V, b, j)
 
-        update_rhs!(b̃, V, b, j)
-
-        y = solve_compressed_system(H, b̃, ω, α, rank, j)
+        y = solve_compressed_system(decomps.H, b̃, ω, α, rank, j)
 
         𝔎 .= j 
 
-        r_norm = residual_norm(H, y, 𝔎, b̃)
+        r_norm = residual_norm(decomps.H, y, 𝔎, b̃)
 
         if r_norm < tol
 
-            basis_tensor_mul!(x, V, y)
+            basis_tensor_mul!(x, decomps.V, y)
 
             return x
 

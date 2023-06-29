@@ -2,13 +2,13 @@ module TensorKrylov
     
     using LinearAlgebra, TensorToolbox, Kronecker
 
+    # Tensor approximations
+    include("tensor_struct.jl")
+    
     # Matrix decompositions
     include("decompositions.jl")
 
     include("orthogonal_bases.jl")
-
-    # Tensor approximations
-    include("tensor_struct.jl")
 
     # Linear system solvers
     include("tensor_krylov_method.jl")

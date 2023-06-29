@@ -1,4 +1,4 @@
-export KroneckerMatrix
+export KroneckerMatrix, size
 export KroneckerProduct
 
 abstract type KroneckerProduct{T<:AbstractFloat} end
@@ -41,6 +41,14 @@ function Base.getindex(KP::KroneckerProduct, IMult::Matrix{Int})
     end
 
     return entries
+
+end
+
+function Base.setindex!(KP::KroneckerProduct, M::Matrix{T}, i::Int) where T<:AbstractFloat
+
+    1 <= i <= length(KP.𝖳) || throw(BoundsError(KP, i))
+
+    KP.𝖳[i] = M
 
 end
 
@@ -163,15 +171,15 @@ struct KroneckerMatrix{T} <: KroneckerProduct{T}
     
     𝖳::Vector{Matrix{T}} # We only store the d matrices explicitly in a vector.
 
-    function KroneckerMatrix(Aₛ::Vector{Matrix{U}}) where U <: AbstractFloat # Constructor with vector of matrix coefficients
+    function KroneckerMatrix{T}(Aₛ::Vector{Matrix{T}}) where T <: AbstractFloat # Constructor with vector of matrix coefficients
 
-        new{U}(Aₛ)
+        new(Aₛ)
 
     end
 
-    function KroneckerMatrix(orders::Array{Int}) where U <: AbstractFloat
+    function KroneckerMatrix{T}(orders::Array{Int}) where T<:AbstractFloat
 
-        new{U}([ I(orders[s]) for s in 1:length(orders) ])
+        new([ zeros(orders[s], orders[s]) for s in 1:length(orders) ])
 
     end
 
