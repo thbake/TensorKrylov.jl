@@ -64,16 +64,16 @@ end
 
 end
 
-@testset "Compressed residual norm" begin
+@testset "(Compressed) residual norm computations" begin
     
     # We consider tensors of order 4, where each mode is 4 as well.
-    d = 4
-    nₛ= 4
+    d = 5
+    nₛ= 5
 
     Hᵢ= rand(nₛ, nₛ)
 
     # Make sure matrix is not singular
-    H = KroneckerMatrix{Float64}([Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ])
+    H = KroneckerMatrix{Float64}([Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ, Hᵢ'Hᵢ])
 
     # Matrix given as Kronecker sum
     H_kronsum = kroneckersum( H.𝖳... )
@@ -82,38 +82,24 @@ end
     v = rand(nₛ)
     w = rand(nₛ)
     x = rand(nₛ)
+    z = rand(nₛ)
 
     # In the following we construct b as a rank 1 tensor such that the solution
     # of the linear system H * y = b has a good low rank approximation.
-    b = zeros(nₛ, nₛ, nₛ, nₛ)
+    b = zeros(nₛ, nₛ, nₛ, nₛ, nₛ)
 
-    for l = 1:nₛ, k = 1:nₛ, j = 1:nₛ, i = 1:nₛ
+    for m = 1:nₛ, l = 1:nₛ, k = 1:nₛ, j = 1:nₛ, i = 1:nₛ
 
-        b[i, j, k, l] = u[i] * v[j] * w[k] * x[l]
+        b[i, j, k, l, m] = u[i] * v[j] * w[k] * x[l] * z[m]
 
     end
 
     N = nₛ^d  
 
-    # ============================================================
-    # Ignore this for a moment
-
-    # Solve the system directly
-    #Y_vec = H_kronsum \ reshape(b, N)
-
-    # Express solution as d-way tensor
-    #Y = reshape(Y_vec, (nₛ, nₛ, nₛ, nₛ))
-
-    # Rank 3 Kruskal tensor (CP) with vectors of order 4.
-    #rank = 3
-
-    # Construct low- (three-) rank decomposition of Y.
-    #y = cp_als(Y, rank) 
-    
-    # ===========================================================
-
     rank = 3
 
+    # Create Kruskal tensor such that there is no difference between this and its
+    # full tensor representation
     y = ktensor( ones(rank), [ rand(d, rank) for _ in 1:d] )
 
     Y_vec = reshape(full(y), N)
@@ -136,10 +122,11 @@ end
 
     Λ = y.lambda * y.lambda'
 
-
     Ly = [LowerTriangular( zeros(rank, rank) ) for _ in 1:d]
+
     map!(LowerTriangular, Ly, Y_inner)
 
+    # Compute squared norm of Kronecker matrix and ktensor ||Hy||²
     efficient_norm      = efficient_matrix_vector_norm(y, Λ, Ly, Z)
     exact_matrix_vector = dot( (H_kronsum * Y_vec),  (H_kronsum * Y_vec) )
 
@@ -147,13 +134,16 @@ end
     bZ = [ zeros(1, rank) for _ in 1:d ] # bₛᵀzᵢ⁽ˢ⁾, where zᵢ⁽ˢ⁾ = Hₛ⋅yᵢ⁽ˢ⁾
 
     # Right-hand side represented as factors of Kronecker product
-    b_kronprod = [u, v, w, x]
+    b_kronprod = [u, v, w, x, z]
+
+    # Vectorization of right-hand side
     b_vec = reshape(b, N)
 
+    # Compute inner product of Kronecker matrix times ktensor and right-hand side <Hy, b>
     innerprod        = innerprod_kronsum_tensor!(bY, bZ, Z, y, b_kronprod)
     exact_innerprod  = dot(H_kronsum * Y_vec, b_vec)
 
-    @test efficient_norm ≈ exact_matrix_vector atol = 1e-11
+    @test efficient_norm ≈ exact_matrix_vector 
     @test innerprod      ≈ dot(H_kronsum * Y_vec, b_vec) atol = 1e-12 
 
     # Compressed residual norm
@@ -162,17 +152,18 @@ end
     exact_comp_norm = exact_matrix_vector - 2 * dot(H_kronsum * Y_vec, b_vec) + dot(b_vec, b_vec)
     
     @info exact_comp_norm
-    @test r_comp ≈ exact_comp_norm atol = 1e-11
+    @test r_comp ≈ exact_comp_norm 
 
+
+    @info residual_norm(H, y, [3, 3, 3, 3, 3], b_kronprod)
 
     #@info "Exact ||Hy||²: " exact_matrix_vector " exact 2 ⋅<Hy, b>: " 2*dot(H_kronsum*Y_vec, b_vec) " exact ||b||²: " dot(b_vec, b_vec)
     
     # On the order of the machine precision
-    exact_norm = dot((H_kronsum * Y_vec - b_vec),  (H_kronsum * Y_vec - b_vec))
-    @info exact_norm
 
     # Check that we have indeed constructed a "good" low-rank approximation
     #@test norm(full(y) - Y) < 1e-13
 
 end
+
 

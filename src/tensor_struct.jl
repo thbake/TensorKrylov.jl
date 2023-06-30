@@ -169,9 +169,9 @@ end
 
 struct KroneckerMatrix{T} <: KroneckerProduct{T}
     
-    𝖳::Vector{Matrix{T}} # We only store the d matrices explicitly in a vector.
+    𝖳::Vector{<:AbstractMatrix{T}} # We only store the d matrices explicitly in a vector.
 
-    function KroneckerMatrix{T}(Aₛ::Vector{Matrix{T}}) where T <: AbstractFloat # Constructor with vector of matrix coefficients
+    function KroneckerMatrix{T}(Aₛ::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat # Constructor with vector of matrix coefficients
 
         new(Aₛ)
 
@@ -221,7 +221,7 @@ function Base.getindex(CP::ktensor, i::Int)
 
 end
 
-function mul!(result::Vector{Matrix{T}}, y::Vector{Vector{T}}, x::ktensor) where T <: AbstractFloat
+function mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{Vector{T}}, x::ktensor) where T <: AbstractFloat
 
     # Compute product between elementary tensor and factor matrices of Kruskal tensor.
     nᵢ = ndims(x)
@@ -236,9 +236,9 @@ function mul!(result::Vector{Matrix{T}}, y::Vector{Vector{T}}, x::ktensor) where
 end
 
 function mul!(
-        result::Vector{Matrix{T}},
+        result::Vector{<:AbstractMatrix{T}},
         x::Vector{Vector{T}},
-        A::Vector{Matrix{T}}) where T <: AbstractFloat
+        A::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat
 
     # Compute product between vector of collection of row vectors and matrices.
     nᵢ = length(result)
