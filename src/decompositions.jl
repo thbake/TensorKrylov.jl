@@ -1,12 +1,12 @@
-export Arnoldis
+export Arnoldi
 
-mutable struct Arnoldis{T<:AbstractFloat}
+mutable struct Arnoldi{T<:AbstractFloat}
 
     A::KroneckerMatrix{T} # Original matrix
     V::KroneckerMatrix{T} # Matrix representing basis of Krylov subspace
     H::KroneckerMatrix{T} # Upper Hessenberg matrix
 
-    function Arnoldis{T}(A::KroneckerMatrix{T}, b::Vector{Vector{T}}) where T<:AbstractFloat
+    function Arnoldi{T}(A::KroneckerMatrix{T}, b::Vector{Vector{T}}) where T<:AbstractFloat
 
         d = length(A)
         
@@ -26,23 +26,24 @@ mutable struct Arnoldis{T<:AbstractFloat}
 end
    
 
-function arnoldi_step!(arnoldis::Arnoldis{T}, index::Int) where T<:AbstractFloat
+function arnoldi_step!(arnoldi::Arnoldi{T}, j::Int) where T<:AbstractFloat
 
-    for s in 1:length(arnoldis.A)
+    for s in 1:length(arnoldi.A)
 
-        v = Array{Float64}(undef, ( size(arnoldis.A[s], 1) ))
+        v = Array{Float64}(undef, (size(arnoldi.A[s], 1)))
 
-        mul!(v, arnoldis.A[s], @views(arnoldis.V[s][:, index])) 
+        LinearAlgebra.mul!(v, arnoldi.A[s], @view(arnoldi.V[s][:, j])) 
 
-        for i = 1:index
+        for i = 1:j
 
-            arnoldis.H[s][i, index] = dot(v, @views(arnoldis.V[s][:, i]))
+            arnoldi.H[s][i, j] = dot(v, @view(arnoldi.V[s][:, i]))
 
-            v .-= arnoldis.H[s][i, index] * @views(arnoldis.V[s][:, i])
-
+            v .-= arnoldi.H[s][i, j] * @view(arnoldi.V[s][:, i])
         end
 
-        arnoldis.V[s][:, index + 1] = v .* inv(arnoldis.H[s][index + 1, index])
+        arnoldi.H[s][j + 1, j] = LinearAlgebra.norm(v)
+
+        arnoldi.V[s][:, j + 1] = v .* inv(arnoldi.H[s][j + 1, j])
 
     end
 

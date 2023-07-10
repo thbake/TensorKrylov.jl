@@ -1,19 +1,22 @@
+export tensor_krylov
+
 # Aliases
-const KronProd{T}      = Vector{Vector{T}} 
+const KronProd{T}      = Vector{<:AbstractVector{T}} 
 const KronMat{T}       = KroneckerMatrix{T}
 const LowerTriangle{T} = LowerTriangular{T, <:AbstractMatrix{T}} 
 const FMatrices{T}     = Vector{<:AbstractMatrix{T}} 
 
 
 function matrix_exponential_vector!(
-        factors::AbstractVector,
+        y::ktensor,
         A::KronMat{T},
         b::KronProd{T},
-        γ::T) where T<:AbstractFloat
+        γ::T,
+        k::Int) where T<:AbstractFloat
 
     for s = 1:length(A)
 
-        factors[s] = LinearAlgebra.BLAS.gemv('N' , exp(- γ * A[s]), b[s] )
+        y.fmat[s][:, k] = LinearAlgebra.BLAS.gemv('N' , exp(- γ .*  A[s]), b[s])
 
     end
 
@@ -24,7 +27,7 @@ function innerprod_kronsum_tensor!(
         yAx::FMatrices{T},
         Ax::FMatrices{T},
         x::ktensor,
-        y::Vector{Vector{T}}) where T <: AbstractFloat
+        y::KronProd{T}) where T <: AbstractFloat
 
     # Computes <Ax, y>₂, where A is a matrix (Kronecker sum) and y is a Kruskal tensor.
     mul!(yX, y, x)    
@@ -60,27 +63,27 @@ end
 
 function solve_compressed_system(
         H::KronMat{T}, 
-        b::Vector{Vector{T}}, 
+        b::Vector{<:AbstractVector{T}}, 
         ω::Array{T},
         α::Array{T},
         t::Int,
-        j::Int
+        λ::T,
     ) where T <: AbstractFloat
-
-    λ = min_eigenvalue(H) # This might be different depending on the system
 
     reciprocal = inv(λ)
 
     # Since we are considering a canonical decomposition the tensor rank of yₜ
     # is equal to 
+    #
+    k = dimensions(H)
     
-    yₜ = ktensor(reciprocal .* ω, [ ones(t,t) for _ in 1:length(H)] )
+    yₜ = ktensor(reciprocal .* ω, [ ones(k[s], t) for s in 1:length(H)] )
     
-    for j = 1:t
+    for k = 1:t
 
-        γ = -α[j] * reciprocal
+        γ = -α[k] * reciprocal
 
-        matrix_exponential_vector!(yₜ.fmat, H, b, γ)
+        matrix_exponential_vector!(yₜ, H, b, γ, k)
 
     end
 
@@ -117,7 +120,7 @@ function compute_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T <: Abs
 end
 
 function matrix_vector(
-        A::KroneckerMatrix{T},
+        A::KronMat{T},
         x::ktensor)::AbstractVector where T<:AbstractFloat
 
     # Compute the matrix vector products 
@@ -127,7 +130,10 @@ function matrix_vector(
     # This is equivalent as computing the product Z⁽ˢ⁾ = Aₛ⋅X⁽ˢ⁾, where X⁽ˢ⁾
     # are the factor matrices of the CP-tensor x.
 
-    orders = dimensions(A)
+    length(A) == ndims(x) || throw(DimensionMismatch("Kronecker matrix and vector (Kruskal tensor) have different number of components"))
+
+    orders = [ size(A[s], 1) for s in 1:length(A) ]
+
     rank   = ncomponents(x)
 
     # Return vector of matrices as described above
@@ -289,9 +295,9 @@ end
 function compressed_residual(
         Ly::FMatrices{T},
         Λ::AbstractMatrix{T},
-        H::KroneckerMatrix{T},
+        H::KronMat{T},
         y::ktensor,
-        b) where T <:AbstractFloat
+        b::KronProd{T}) where T <:AbstractFloat
 
     # We know that 
     #
@@ -300,7 +306,7 @@ function compressed_residual(
     d = length(H)
     t = ncomponents(y)
 
-    # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝⁿₛ for i = 1,…,t
+    # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
     Z = matrix_vector(H, y)
 
     # First we compute ||Hy||²
@@ -313,7 +319,7 @@ function compressed_residual(
     Hy_b = innerprod_kronsum_tensor!(bY, bZ, Z, y, b)
 
     # Finally we compute the squared 2-norm of b
-    b_norm = prod( dot(b[s], b[s]) for s in 1:d )
+    b_norm = kronproddot(b)
 
     return Hy_norm - 2 * Hy_b + b_norm
     
@@ -366,7 +372,7 @@ function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T})
 
 end
 
-function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b) where T<:AbstractFloat
+function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b::KronProd{T}) where T<:AbstractFloat
     
     # Compute norm of the residual according to Lemma 3.4 of paper.
     
@@ -426,7 +432,7 @@ function update_rhs!(b̃::KronProd{T}, V::KronMat{T}, b::KronProd{T}, k::Int) wh
     for s = 1:length(b̃)
 
         # Update one entry of each component of b̃ by performing a single inner product 
-        mul!( b̃[s][k], transpose( @view(V[s][:, k]) ), b[s] )
+        b̃[s][k] = dot( @view(V[s][:, k]) , b[s] )
      
     end
 
@@ -444,13 +450,14 @@ function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:Abstr
 
 end
 
-function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, ω, α, rank) where T <: AbstractFloat
+
+function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, λ::T, ω, α, rank) where T <: AbstractFloat
 
 	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
     d = length(A)
 
     # Initialize the d Arnoldi decompositions of Aₛ
-    decomps = Arnoldis(A, b)
+    arnoldi = Arnoldi{T}(A, b)
 
     # Initialize multiindex 𝔎
     𝔎 = Vector{Int}(undef, d)
@@ -459,27 +466,32 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, ω, α,
     b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
 
     # Allocate memory for approximate solution
-    x = ktensor( ones(rank), zeros(d, rank))
+    x = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ] )
 
     for j = 1:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        arnoldi_step!(decomps, j)
+        arnoldi_step!(arnoldi, j)
 
         # Update compressed right-hand side b̃ = Vᵀb
-        update_rhs!(b̃, decomps.V, b, j)
+        update_rhs!(b̃, arnoldi.V, b, j)
+
+        H_minors = principal_minors(arnoldi.H, j + 1)
+        b_minors = principal_minors(b̃, j + 1)
 
         # Approximate solution of compressed system
-        y = solve_compressed_system(decomps.H, b̃, ω, α, rank, j)
+        y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ)
+
+        normalize!(y)
 
         𝔎 .= j 
 
         # Compute residual norm
-        r_norm = residual_norm(decomps.H, y, 𝔎, b̃)
+        r_norm = residual_norm(H_minors, y, 𝔎, b_minors)
 
         if r_norm < tol
 
-            basis_tensor_mul!(x, decomps.V, y)
+            basis_tensor_mul!(x, arnoldi.V, y)
 
             return x
 

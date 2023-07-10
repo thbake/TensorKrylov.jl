@@ -1,7 +1,9 @@
-export KroneckerMatrix, size
-export KroneckerProduct
+export KroneckerProduct, KroneckerMatrix, size, kronproddot, kronprodnorm
 
 abstract type KroneckerProduct{T<:AbstractFloat} end
+abstract type KroneckerIndex end
+
+struct KroneckerSlice <: KroneckerIndex end
 # We want to generate an abstract notion of structures that can be represented as Kronecker products
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
 # or matrices
@@ -59,7 +61,7 @@ function Base.eachindex(KP::KroneckerProduct)
 end
 
 
-function dimensions(KP::KroneckerProduct)
+function dimensions(KP::KroneckerProduct)::Array{Int}
     
     factor_dimensions = Array{Int}(undef, length(KP))
 
@@ -139,34 +141,6 @@ function explicit_kroneckersum(A::Vector{Matrix{T}}) where T <: AbstractFloat
     return K
 end
 			
-#struct TensorStruct{T<:AbstractFloat} <: KroneckerProduct{T}
-#
-#    𝖳::Vector{T} #\sansT
-#    rank::Int
-#    
-#    function TensorStruct(𝖳ₛ::Vector{T}, t::Int) where T<:AbstractArray
-#        new{T}(𝖳ₛ, t)
-#    end
-#
-#    function TensorStruct(dimensions::Array{Int}, t::Int) where T<:AbstractFloat
-#        
-#        # Allocate memory for different arrays in decomposition
-#        # by giving dimensions of each vector/matrix and tensor rank
-#        
-#        𝖳ₛ = [ Array{T}(undef, dimensions[i]) for i = 1:length(dimensions) ]
-#
-#        new{T}(𝖳ₛ, t)
-#    end
-#
-#    function TensorStruct(sizes::Array{Tuple{Int}}, t::Int)
-#
-#        𝖳ₛ = [ Matrix(undef, shape) for shape in sizes ]
-#
-#        new{T}(𝖳ₛ, t)
-#    end
-#
-#end
-
 struct KroneckerMatrix{T} <: KroneckerProduct{T}
     
     𝖳::Vector{<:AbstractMatrix{T}} # We only store the d matrices explicitly in a vector.
@@ -210,6 +184,37 @@ function norm(KM::KroneckerMatrix)
 
 end
 
+function kronproddot(v::Vector{<:AbstractVector{T}}) where T<:AbstractFloat
+
+    return prod( dot(v[s], v[s]) for s in 1:length(v) ) 
+
+end
+
+function kronprodnorm(v::Vector{Vector{T}}) where T<:AbstractFloat
+
+    return sqrt( kronproddot(v) )
+
+end
+
+function principal_minors(v::Vector{Vector{T}}, i::Int) where T<:AbstractFloat
+
+    return [ @view(v[s][1:i]) for s in 1:length(v)]
+
+end
+
+function principal_minors(KM::KroneckerMatrix{T}, i::Int) where T<:AbstractFloat
+
+    return KroneckerMatrix{T}( [ @view(KM[s][1:i, 1:i]) for s in 1:length(KM)] )
+
+end
+
+
+function Base.getindex(KM, j::Int, ::KroneckerSlice)
+
+    return [ @view(KM[s][1:j, 1:j]) for s in 1:length(KM) ]
+
+end
+
 
 # Additional functionality for Kruskal tensors
 # ============================================
@@ -221,7 +226,7 @@ function Base.getindex(CP::ktensor, i::Int)
 
 end
 
-function mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{Vector{T}}, x::ktensor) where T <: AbstractFloat
+function mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{<:AbstractVector{T}}, x::ktensor) where T <: AbstractFloat
 
     # Compute product between elementary tensor and factor matrices of Kruskal tensor.
     nᵢ = ndims(x)
@@ -237,7 +242,7 @@ end
 
 function mul!(
         result::Vector{<:AbstractMatrix{T}},
-        x::Vector{Vector{T}},
+        x::Vector{<:AbstractVector{T}},
         A::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat
 
     # Compute product between vector of collection of row vectors and matrices.

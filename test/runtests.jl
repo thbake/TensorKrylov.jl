@@ -4,18 +4,19 @@ using Random
 
 Random.seed!(12345)
 
-#@testset "TensorKrylov tests" begin
 
-	#@testset "Tensor structures test" begin
-	#	include("tensor_structures_tests.jl")
-	#end
+@testset "TensorKrylov tests" begin 
 
-	#@testset "Orthogonality tests" begin
-	#	include("orthonormal_bases_tests.jl")
-	#end
-    #
-#end
+    #@testset "Preprocessing tests" begin
+    #    include("preprocessing.jl")
+    #end
 
-@testset "Tensor Krylov subspace method tests" begin
-    include("tensor_krylov_method.jl")
+    @testset "Decomposition tests" begin
+        include("decompositions.jl")
+    end
+
+    @testset "Tensor Krylov subspace method tests" begin
+        include("tensor_krylov_method.jl")
+    end
+
 end

@@ -4,6 +4,9 @@ module TensorKrylov
 
     # Tensor approximations
     include("tensor_struct.jl")
+
+    # Preprocessing
+    include("preprocessing.jl")
     
     # Matrix decompositions
     include("decompositions.jl")
