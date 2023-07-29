@@ -1,6 +1,6 @@
 module TensorKrylov
     
-    using LinearAlgebra, TensorToolbox, Kronecker
+    using LinearAlgebra, TensorToolbox, Kronecker, SparseArrays
 
     # Tensor approximations
     include("tensor_struct.jl")

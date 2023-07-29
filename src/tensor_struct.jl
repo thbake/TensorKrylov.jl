@@ -1,4 +1,4 @@
-export KroneckerProduct, KroneckerMatrix, size, kronproddot, kronprodnorm
+export KroneckerProduct, KroneckerMatrix, size, kronproddot, kronprodnorm, randkronmat, trikronmat
 
 abstract type KroneckerProduct{T<:AbstractFloat} end
 abstract type KroneckerIndex end
@@ -159,6 +159,19 @@ struct KroneckerMatrix{T} <: KroneckerProduct{T}
 
 end
 
+function randkronmat(orders::Array{Int})
+
+        return KroneckerMatrix{Float64}([ rand(order, order) for order in orders ])
+
+end
+
+
+function trikronmat(orders::Array{Int})
+
+    return KroneckerMatrix{Float64}([ sparse(Tridiagonal( -ones(n - 1), 2ones(n), -ones(n - 1)))  for n in orders ])
+
+end
+
 function Base.size(KM::KroneckerMatrix)::Array{Tuple{Int, Int}}
 
     # Return size of each KroneckerMatrix element
@@ -184,6 +197,11 @@ function norm(KM::KroneckerMatrix)
 
 end
 
+#function kronmatttm(KM::KroneckerMatrix, ktensor)::ktensor
+#
+#
+#end
+
 function kronproddot(v::Vector{<:AbstractVector{T}}) where T<:AbstractFloat
 
     return prod( dot(v[s], v[s]) for s in 1:length(v) ) 
@@ -205,6 +223,12 @@ end
 function principal_minors(KM::KroneckerMatrix{T}, i::Int) where T<:AbstractFloat
 
     return KroneckerMatrix{T}( [ @view(KM[s][1:i, 1:i]) for s in 1:length(KM)] )
+
+end
+
+function principal_minors(x::ktensor, i::Int) 
+
+    return ktensor(x.lambda, [ (x.fmat[s][1:i, :]) for s in 1:ndims(x) ] )
 
 end
 

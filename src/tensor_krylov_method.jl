@@ -16,7 +16,9 @@ function matrix_exponential_vector!(
 
     for s = 1:length(A)
 
-        y.fmat[s][:, k] = LinearAlgebra.BLAS.gemv('N' , exp(- γ .*  A[s]), b[s])
+        #y.fmat[s][:, k] = LinearAlgebra.BLAS.gemv('N' , exp(- γ .*  A[s]), b[s])
+        y.fmat[s][:, k] = exp(- γ .*  A[s]) * b[s]
+        #@info y.fmat[s][:, k]
 
     end
 
@@ -74,11 +76,11 @@ function solve_compressed_system(
 
     # Since we are considering a canonical decomposition the tensor rank of yₜ
     # is equal to 
-    #
+
     k = dimensions(H)
     
     yₜ = ktensor(reciprocal .* ω, [ ones(k[s], t) for s in 1:length(H)] )
-    
+
     for k = 1:t
 
         γ = -α[k] * reciprocal
@@ -138,6 +140,8 @@ function matrix_vector(
 
     # Return vector of matrices as described above
     Z = [ zeros(orders[s], rank) for s in eachindex(A) ]
+
+    @info A[1]
 
     for s = 1:length(A)
 
@@ -206,6 +210,8 @@ function efficient_matrix_vector_norm(
     ZX      = [ zeros(rank, rank) for _ in 1:d ]
 
     compute_lower_triangles!(Z_inner, Z)
+
+    #@info Z_inner
 
     for s in 1:d
 
@@ -292,37 +298,71 @@ function efficient_matrix_vector_norm(
 end
 
 
-function compressed_residual(
-        Ly::FMatrices{T},
-        Λ::AbstractMatrix{T},
-        H::KronMat{T},
-        y::ktensor,
-        b::KronProd{T}) where T <:AbstractFloat
+#function compressed_residual(
+#        Ly::FMatrices{T},
+#        Λ::AbstractMatrix{T},
+#        H::KronMat{T},
+#        y::ktensor,
+#        b::KronProd{T}) where T <:AbstractFloat
+#
+#    # We know that 
+#    #
+#    #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
+#    
+#    d = length(H)
+#    t = ncomponents(y)
+#
+#    # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
+#    Z = matrix_vector(H, y)
+#
+#    @info "Z" Z
+#
+#    # First we compute ||Hy||²
+#    Hy_norm = efficient_matrix_vector_norm(y, Symmetric(Λ, :L), Ly, Z)
+#
+#    # Now we proceed with <Hy, b>₂
+#    bY = [ zeros(1, t) for _ in 1:d ] # bₛᵀyᵢ⁽ˢ⁾
+#    bZ = [ zeros(1, t) for _ in 1:d ] # bₛᵀzᵢ⁽ˢ⁾, where zᵢ⁽ˢ⁾ = Hₛ⋅yᵢ⁽ˢ⁾
+#
+#    Hy_b = innerprod_kronsum_tensor!(bY, bZ, Z, y, b)
+#
+#    # Finally we compute the squared 2-norm of b
+#    b_norm = kronproddot(b)
+#
+#    @info Hy_norm
+#    @info 2Hy_b
+#
+#    return Hy_norm - 2 * Hy_b + b_norm
+#    
+#end
 
-    # We know that 
-    #
-    #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
+#function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
+#
+#    # Perform n-mode multiplication
+#    z = ttm(y, H.𝖳)
+#
+#    x = z - b
+#
+#    return innerprod(x, x)
+#
+#end
     
-    d = length(H)
-    t = ncomponents(y)
+function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
 
-    # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
-    Z = matrix_vector(H, y)
+    # This variant expands the matrices/tensors
 
-    # First we compute ||Hy||²
-    Hy_norm = efficient_matrix_vector_norm(y, Symmetric(Λ, :L), Ly, Z)
+    N = nentries(H)
 
-    # Now we proceed with <Hy, b>₂
-    bY = [ zeros(1, t) for _ in 1:d ] # bₛᵀyᵢ⁽ˢ⁾
-    bZ = [ zeros(1, t) for _ in 1:d ] # bₛᵀzᵢ⁽ˢ⁾, where zᵢ⁽ˢ⁾ = Hₛ⋅yᵢ⁽ˢ⁾
+    H_expanded = sparse(kroneckersum(H.𝖳...))
+    y_expanded = reshape(full(y), N)
+    b_expanded = kronecker(b...)
 
-    Hy_b = innerprod_kronsum_tensor!(bY, bZ, Z, y, b)
+    @assert issparse(H_expanded)
 
-    # Finally we compute the squared 2-norm of b
-    b_norm = kronproddot(b)
-
-    return Hy_norm - 2 * Hy_b + b_norm
+    comp_res = (H_expanded * y_expanded) - b_expanded
     
+    return dot(comp_res, comp_res)
+
 end
 
 function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) where T <: AbstractFloat
@@ -374,7 +414,7 @@ end
 
 function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b::KronProd{T}) where T<:AbstractFloat
     
-    # Compute norm of the residual according to Lemma 3.4 of paper.
+    # Compute squared norm of the residual according to Lemma 3.4 of paper.
     
     # Σ |hˢₖ₊₁ₖ|² * Σ |y\_𝔏|² + ||ℋy - b̃||²
     
@@ -419,9 +459,10 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b::KronProd
     end
 
     # Compute squared compressed residual norm
-    r_compressed = compressed_residual(Ly, Λ, H, y, b)
-
-    return res_norm + r_compressed
+    #r_compressed = compressed_residual(Ly, Λ, H, y, b)
+    r_compressed = compressed_residual(H, y, b)
+    
+    return sqrt(res_norm + r_compressed)
 
 end
 
@@ -444,7 +485,7 @@ function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:Abstr
 
     for s in eachindex(V)
 
-        mul!(x.fmat[s], V[s], y.fmat[s])
+        LinearAlgebra.mul!(x.fmat[s], V[s], y.fmat[s])
 
     end
 
@@ -489,14 +530,27 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, λ::T, 
         # Compute residual norm
         r_norm = residual_norm(H_minors, y, 𝔎, b_minors)
 
-        if r_norm < tol
+        rel_res_norm = (r_norm/ kronprodnorm(b))
 
-            basis_tensor_mul!(x, arnoldi.V, y)
+        #@info "Iteration: " j "relative residual norm:" rel_res_norm
+        #@info H_minors[1]
+
+
+        if rel_res_norm < tol
+
+            x_minors = principal_minors(x, j + 1)
+            V_minors = principal_minors(arnoldi.V, j + 1)
+
+            basis_tensor_mul!(x_minors, V_minors, y)
+
+            println("Convergence")
 
             return x
 
         end
 
     end
+
+    println("No convergence")
 
 end

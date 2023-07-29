@@ -3,7 +3,6 @@ using LinearAlgebra, Kronecker
 
 @testset "Stenger coefficients" begin
 
-
     d = 5
 
     nₛ = 1000
@@ -22,8 +21,6 @@ using LinearAlgebra, Kronecker
     λ_max = (2 / h^2) * (1 - cos( (nₛ * π) / (nₛ + 1)))
 
     κ = 4 * (nₛ + 1)^2 * inv(π^2 * d)
-
-    @info κ
 
     τ = 1e-14
 

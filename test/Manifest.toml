@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "a5762376425873bd0008d8b1b26f6ec36f0554c6"
+project_hash = "c8e1ce7452767265c6367548bbe5600a105e2382"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -19,6 +19,12 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "d9a9701b899b30332bbcb3e1679c41cce81fb0e8"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.3.2"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -93,6 +99,12 @@ git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
 
+[[deps.JSON]]
+deps = ["Dates", "Mmap", "Parsers", "Unicode"]
+git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+version = "0.21.4"
+
 [[deps.Kronecker]]
 deps = ["LinearAlgebra", "NamedDims", "SparseArrays", "StatsBase"]
 git-tree-sha1 = "bd47e8074c6bd478abf7efa6d504f6c1c38a487c"
@@ -149,6 +161,9 @@ git-tree-sha1 = "f66bdc5de519e8f8ae43bdc598782d35a25b1272"
 uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
 version = "1.1.0"
 
+[[deps.Mmap]]
+uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2022.2.1"
@@ -173,14 +188,36 @@ git-tree-sha1 = "d321bf2de576bf25ec4d3e4360faca399afca282"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.6.0"
 
+[[deps.Parsers]]
+deps = ["Dates", "PrecompileTools", "UUIDs"]
+git-tree-sha1 = "4b2e829ee66d4218e0cef22c0a64ee37cf258c29"
+uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
+version = "2.7.1"
+
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.8.0"
 
+[[deps.PrecompileTools]]
+deps = ["Preferences"]
+git-tree-sha1 = "9673d39decc5feece56ef3940e5dafba15ba0f81"
+uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+version = "1.1.2"
+
+[[deps.Preferences]]
+deps = ["TOML"]
+git-tree-sha1 = "7eb1686b4f04b82f96ed7a4ea5890a4f0c7a09f1"
+uuid = "21216c6a-2e73-6563-6e65-726566657250"
+version = "1.4.0"
+
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]

@@ -1,5 +1,5 @@
 using TensorKrylov: compute_lower_outer!, matrix_vector, maskprod, efficient_matrix_vector_norm, innerprod_kronsum_tensor!, compressed_residual, residual_norm
-using Kronecker, TensorToolbox, LinearAlgebra
+using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
 
 
 # Everything here works
@@ -171,34 +171,95 @@ using Kronecker, TensorToolbox, LinearAlgebra
 #
 #end
 
-@testset "Solution of compressed system" begin
+@testset "Analytic results" begin
 
-    d = 5
+    d = 2
 
-    nₛ = 100
+    nₛ = 10
 
-    nmax = 50
 
     h = inv(nₛ + 1)
 
-    Aₛ= inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
+    Aₛ= sparse(
 
-    A = KroneckerMatrix{Float64}([Aₛ'Aₛ for _ in 1:d])
+            inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
+        )
+
+    #Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
+
+    #A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+    A = trikronmat([nₛ for _ in 1:d])
 
     b = [ rand(nₛ) for _ in 1:d ]
 
     τ = 1e-14
 
-    κ = 4 * (nₛ + 1)^2 * inv(π^2 * d)
+    #λ_min = (2 / h^2) * (1 - cos( π / (nₛ + 1)))
+    #λ_max = (2 / h^2) * (1 - cos( nₛ * π / (nₛ + 1)))
 
-    λ = (2 / h^2) * (1 - cos( π / (nₛ + 1)))
+    λ_min = 2(1 - cos( π / (nₛ + 1)))
+    λ_max = 2(1 - cos( nₛ * π / (nₛ + 1)))
+    @info "Analytic eigenvalues" λ_min, λ_max
+
+    A_big = kroneckersum(A.𝖳...)
+
+    @info "Julia computed eigenvalues" eigvals(A_big)
+
+    #κ = 4 * (nₛ + 1)^2 / (π^2 * d)
+    #κ = 1 + cos(π / (nₛ + 1)) * inv( d * (1 - cos(π / (nₛ + 1)) ))
+    κ = λ_max / λ_min
+
+    @info "Condition number" κ
+
+
+    @assert issparse(A_big)
+
+    @info "Julia computed condition number" cond(A_big)
+
+
+end
+
+@testset "Solution of compressed system" begin
+
+    d = 3
+
+    nₛ = 200
+
+    nmax = 50
+
+    h = inv(nₛ + 1)
+
+    Aₛ= sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
+    #Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
+
+    A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+
+    b = [ rand(nₛ) for _ in 1:d ]
+
+    τ = 1e-14
+
+    λ_min = 2 * (1 - cos( π / (nₛ + 1)))
+    λ_max = 2 * (1 - cos( nₛ * π / (nₛ + 1)))
+    κ = λ_max / λ_min
+
+    @info "Condition number" κ
 
     b_norm = kronprodnorm(b)
 
-    ω, α, rank = extract_coefficients(τ, κ, λ, b_norm)
+    @info "Norm of ⨂ b " b_norm
 
-    x = tensor_krylov(A, b, 1e-9, nmax, λ, ω, α, rank)
+    ω, α, rank = extract_coefficients(τ, κ, λ_min, b_norm)
 
+    #@btime x = tensor_krylov($A, $b, 1e-9, $nmax, $λ, $ω, $α, $rank)
+    x = tensor_krylov(A, b, 1e-9, nmax, λ_min, ω, α, rank)
+
+    #A_explicit = kroneckersum(A.𝖳...)
+
+    #b_explicit = kron(b...)
+
+    #x_exact = A_explicit\b_explicit
+
+    #@info norm(x_exact), norm(full(x))
 
 
 end

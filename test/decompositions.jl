@@ -3,7 +3,7 @@ using LinearAlgebra
 
 @testset "Arnoldi decomposition steps" begin
 
-    d = 5
+    d = 100
 
     nₛ = 1000
 
@@ -18,7 +18,7 @@ using LinearAlgebra
     # Initialize Arnoldi decomposition
     arnoldi = Arnoldi{Float64}(A, b)
 
-    k = 200
+    k = 500
 
     for j in 1:k
 
