@@ -182,7 +182,7 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
 
     Aₛ= sparse(
 
-            inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
+            Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
         )
 
     #Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
@@ -197,25 +197,24 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
     #λ_min = (2 / h^2) * (1 - cos( π / (nₛ + 1)))
     #λ_max = (2 / h^2) * (1 - cos( nₛ * π / (nₛ + 1)))
 
-    λ_min = 2(1 - cos( π / (nₛ + 1)))
-    λ_max = 2(1 - cos( nₛ * π / (nₛ + 1)))
-    @info "Analytic eigenvalues" λ_min, λ_max
+    λ_min = d * 2(1 - cos( π / (nₛ + 1)))
+    λ_max = d * 2(1 - cos( nₛ * π / (nₛ + 1)))
 
     A_big = kroneckersum(A.𝖳...)
 
-    @info "Julia computed eigenvalues" eigvals(A_big)
+    julia_eigenvalues = eigvals(A_big)
+
+    @test λ_min ≈ julia_eigenvalues[1]
+    @test λ_max ≈ julia_eigenvalues[end]
 
     #κ = 4 * (nₛ + 1)^2 / (π^2 * d)
     #κ = 1 + cos(π / (nₛ + 1)) * inv( d * (1 - cos(π / (nₛ + 1)) ))
+
     κ = λ_max / λ_min
 
-    @info "Condition number" κ
-
+    @test κ ≈ cond(A_big)
 
     @assert issparse(A_big)
-
-    @info "Julia computed condition number" cond(A_big)
-
 
 end
 
@@ -238,8 +237,12 @@ end
 
     τ = 1e-14
 
-    λ_min = 2 * (1 - cos( π / (nₛ + 1)))
-    λ_max = 2 * (1 - cos( nₛ * π / (nₛ + 1)))
+    λ_min_s = 2 * (1 - cos( π / (nₛ + 1)))
+    λ_max_s = 2 * (1 - cos( nₛ * π / (nₛ + 1)))
+
+    λ_min = d * λ_min_s
+    λ_max = d * λ_max_s
+
     κ = λ_max / λ_min
 
     @info "Condition number" κ

@@ -1,7 +1,22 @@
 using TensorKrylov: Arnoldi, arnoldi_step!
 using LinearAlgebra
 
-@testset "Arnoldi decomposition steps" begin
+#@testset "Arnoldi steps" begin
+#
+#    n = 1000
+#
+#    h = inv(n + 1)
+#
+#    A = inv(h^2) * Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
+#    
+#    b = rand(n)
+#
+#    # Initialize Arnoldi decomposition
+#    
+#    arnoldi = Arnoldi{T}(A, b, j)
+#end
+
+@testset "Multiple Arnoldi decomposition steps" begin
 
     d = 100
 
@@ -11,18 +26,18 @@ using LinearAlgebra
 
     Aₛ= inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
 
-    A = KroneckerMatrix{Float64}([Aₛ'Aₛ for _ in 1:d])
+    A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
 
     b = [ rand(nₛ) for _ in 1:d ]
 
-    # Initialize Arnoldi decomposition
-    arnoldi = Arnoldi{Float64}(A, b)
+    # Initialize Arnoldi decompositions
+    t_arnoldi = TensorArnoldi{Float64}(A)
 
     k = 500
 
     for j in 1:k
 
-        arnoldi_step!(arnoldi, j)
+        multiple_arnoldi!(t_arnoldi, b, j)
 
     end
 
@@ -30,7 +45,7 @@ using LinearAlgebra
 
     for s in 1:d
 
-        mul!(C, arnoldi.V[s][:, 1:k]', arnoldi.V[s][:, 1:k] ) 
+        mul!(C, t_arnoldi.V[s][:, 1:k]', t_arnoldi.V[s][:, 1:k] ) 
 
         @test C ≈ I(k) 
 

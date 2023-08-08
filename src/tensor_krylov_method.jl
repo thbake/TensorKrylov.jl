@@ -7,6 +7,18 @@ const LowerTriangle{T} = LowerTriangular{T, <:AbstractMatrix{T}}
 const FMatrices{T}     = Vector{<:AbstractMatrix{T}} 
 
 
+function exponentiate(A::AbstractMatrix{T}) where T <: AbstractFloat
+
+    # Compute eigenvalues. Recall that the considered matrix is the Jacobi
+    # matrix resulting from the Hermitian Lanczos algorithm. Therefore, the 
+    # matrix is not necessarily Toepliz. However, we know that such a matrix
+    # is of the form
+    #   T = UᵀAU, where the eigenvalues of T are also eigenvalues of U. The 
+    # question is then, which ones? The first k?
+
+
+end
+
 function matrix_exponential_vector!(
         y::ktensor,
         A::KronMat{T},
@@ -17,8 +29,7 @@ function matrix_exponential_vector!(
     for s = 1:length(A)
 
         #y.fmat[s][:, k] = LinearAlgebra.BLAS.gemv('N' , exp(- γ .*  A[s]), b[s])
-        y.fmat[s][:, k] = exp(- γ .*  A[s]) * b[s]
-        #@info y.fmat[s][:, k]
+        y.fmat[s][:, k] = exponentiate(- γ .*  A[s]) * b[s]
 
     end
 
@@ -461,6 +472,8 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b::KronProd
     # Compute squared compressed residual norm
     #r_compressed = compressed_residual(Ly, Λ, H, y, b)
     r_compressed = compressed_residual(H, y, b)
+
+    #@info r_compressed
     
     return sqrt(res_norm + r_compressed)
 
@@ -498,7 +511,7 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, λ::T, 
     d = length(A)
 
     # Initialize the d Arnoldi decompositions of Aₛ
-    arnoldi = Arnoldi{T}(A, b)
+    tensor_arnoldi = TensorArnoldi{T}(A)
 
     # Initialize multiindex 𝔎
     𝔎 = Vector{Int}(undef, d)
@@ -512,12 +525,12 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, λ::T, 
     for j = 1:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        arnoldi_step!(arnoldi, j)
+        multiple_arnoldi!(tensor_arnoldi, b, j)
 
         # Update compressed right-hand side b̃ = Vᵀb
-        update_rhs!(b̃, arnoldi.V, b, j)
+        update_rhs!(b̃, tensor_arnoldi.V, b, j)
 
-        H_minors = principal_minors(arnoldi.H, j + 1)
+        H_minors = principal_minors(tensor_arnoldi.H, j + 1)
         b_minors = principal_minors(b̃, j + 1)
 
         # Approximate solution of compressed system
@@ -539,7 +552,7 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, λ::T, 
         if rel_res_norm < tol
 
             x_minors = principal_minors(x, j + 1)
-            V_minors = principal_minors(arnoldi.V, j + 1)
+            V_minors = principal_minors(tensor_arnoldi.V, j + 1)
 
             basis_tensor_mul!(x_minors, V_minors, y)
 
