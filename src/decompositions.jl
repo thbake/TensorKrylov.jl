@@ -1,10 +1,16 @@
-export TensorArnoldi, Arnoldi, TensorLanczos, multiple_arnoldi!
+export Arnoldi, Lanczos, TensorArnoldi, TensorLanczos, multiple_arnoldi!, multiple_lanczos!, arnoldi_step!, lanczos_step!
 
 const MatrixView{T}    = AbstractMatrix{T}
 const KroneckerProd{T} = AbstractArray{<:AbstractArray{T}}
 
 abstract type Decomposition{T<:AbstractFloat}       end
 abstract type TensorDecomposition{T<:AbstractFloat} end
+
+function order(decomposition::Decomposition)
+
+    return size(decomposition.A, 1)
+
+end
 
 function Base.length(tensor_decomp::TensorDecomposition) 
 
@@ -56,6 +62,14 @@ function arnoldi_step!(arnoldi::Arnoldi{T}, j::Int) where T<:AbstractFloat
 
 end
 
+function update_subdiagonals!(T::AbstractMatrix{U}, j::Int, β::U) where U<:AbstractFloat
+
+    indices = [CartesianIndex(j + 1, j), CartesianIndex(j, j + 1)]
+
+    T[indices] .= β
+
+end
+
 mutable struct Lanczos{U} <: Decomposition{U}
 
     A::MatrixView{U}
@@ -69,7 +83,25 @@ mutable struct Lanczos{U} <: Decomposition{U}
                 b::AbstractArray{U}) where U<:AbstractFloat
 
 
+        # Initialization: perform orthonormalization for second basis vector
+
+        n = size(A, 1)
+
         V[:, 1] = inv( LinearAlgebra.norm(b) ) .* b
+
+        u = zeros(n) 
+
+        LinearAlgebra.mul!(u, A, @view(V[:, 1]))
+
+        v = zeros(n)
+
+        v = u - dot(u, @view(V[:, 1])) .* @view(V[:, 1])
+
+        β = LinearAlgebra.norm(v)
+
+        β == 0.0 ? V[:, 2] = zeros(n) : V[:, 2] = v .* inv(β)
+
+        update_subdiagonals!(T, 1, β)
 
         new(A, V, T)
 
@@ -79,20 +111,31 @@ end
 
 function lanczos_step!(lanczos::Lanczos{U}, j::Int) where U<:AbstractFloat
 
-    u = lanczos.A * @view(lanczos.V[:, j]) - lanczos.T[j-1, j] .* lanczos.V[:, j-1]
+    # First step is performed in initialization
+    @assert j >= 2
 
-    lanczos.T[j,j] = dot(u, lanczos.V[:, j])
+    n = order(lanczos)
+    u = zeros(n)
 
-    v = u - lanczos.T[j,j] .* @view(lanczos.V[:, j])
+    LinearAlgebra.mul!(u, lanczos.A, @view(lanczos.V[:, j]))
 
-    β = norm(v)
+    u -= lanczos.T[j, j-1] .* @view(lanczos.V[:, j - 1])
 
-    if β == 0.0
+    lanczos.T[j, j] = dot( u, @view(lanczos.V[:, j]) )
 
-        lanczos.V[:, j + 1] = zeros(size(lanczos.V, 1))
+    v = u - lanczos.T[j, j] .* @view(lanczos.V[:, j])
 
-    else
-        lanczos.V[:, j + 1] = v .* inv(β)
+    β = LinearAlgebra.norm(v)
+
+    # Update basis vector
+    β == 0.0 ? lanczos.V[:, j + 1] = zeros(n) : lanczos.V[:, j + 1] = inv(β) .* v 
+    #if β == 0.0
+
+        #@info "I'm 0"
+        #lanczos.V[:, j] = zeros()
+
+    # Update Jacobi matrix
+    update_subdiagonals!(lanczos.T, j, β)
 
 end
 
@@ -131,26 +174,35 @@ function multiple_arnoldi!(t_arnoldi::TensorArnoldi{T}, b::KroneckerProd{T}, j::
 end
 
 
-mutable struct TensorLanczos{T<:AbstractFloat}
+mutable struct TensorLanczos{U} <: TensorDecomposition{U}
 
-    A::KroneckerMatrix{T} # Original matrix
-    V::KroneckerMatrix{T} # Matrix representing basis of Krylov subspace
-    H::KroneckerMatrix{T} # Upper Hessenberg matrix
+    A::KroneckerMatrix{U} # Original matrix
+    V::KroneckerMatrix{U} # Matrix representing basis of Krylov subspace
+    T::KroneckerMatrix{U} # Upper Hessenberg matrix
 
-    function TensorLanczos{T}(A::KroneckerMatrix{T}, b::Vector{Vector{T}}) where T<:AbstractFloat
+    function TensorLanczos{U}(A::KroneckerMatrix{U}) where U<:AbstractFloat
 
-        d = length(A)
-        
-        V = KroneckerMatrix{T}(dimensions(A))
-        H = KroneckerMatrix{T}(dimensions(A))
+        V = KroneckerMatrix{U}(dimensions(A))
+        T = KroneckerMatrix{U}(dimensions(A))
 
-        for s = 1:d
+        new(A, V, T)
 
-            V[s][:, 1] = inv( LinearAlgebra.norm(b[s]) ) .* b[s]
+    end
 
-        end
+end
 
-        new(A, V, H)
+
+function multiple_lanczos!(t_lanczos::TensorLanczos{U}, b::KroneckerProd{U}, j::Int) where U<:AbstractFloat
+
+    for s in 1:length(t_lanczos)
+
+        lanczos = Lanczos{U}(
+                t_lanczos.A.𝖳[s], 
+                t_lanczos.V.𝖳[s],
+                t_lanczos.T.𝖳[s], 
+                b[s])
+
+        lanczos_step!(lanczos, j)
 
     end
 
