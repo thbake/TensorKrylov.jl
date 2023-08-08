@@ -1,5 +1,7 @@
 export tensor_krylov
 
+using ExponentialUtilities: exponential!
+
 # Aliases
 const KronProd{T}      = Vector{<:AbstractVector{T}} 
 const KronMat{T}       = KroneckerMatrix{T}
@@ -29,7 +31,9 @@ function matrix_exponential_vector!(
     for s = 1:length(A)
 
         #y.fmat[s][:, k] = LinearAlgebra.BLAS.gemv('N' , exp(- γ .*  A[s]), b[s])
-        y.fmat[s][:, k] = exponentiate(- γ .*  A[s]) * b[s]
+        tmp = copy(A[s])
+
+        y.fmat[s][:, k] = γ .* exponential!(tmp) * b[s]
 
     end
 

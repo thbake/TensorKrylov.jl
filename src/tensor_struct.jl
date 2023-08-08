@@ -1,6 +1,6 @@
 export KroneckerProduct, KroneckerMatrix, size, kronproddot, kronprodnorm, randkronmat, trikronmat
 
-abstract type KroneckerProduct{T<:AbstractFloat} end
+abstract type KroneckerProduct{T} end
 abstract type KroneckerIndex end
 
 struct KroneckerSlice <: KroneckerIndex end
@@ -150,6 +150,7 @@ struct KroneckerMatrix{T} <: KroneckerProduct{T}
         new(Aₛ)
 
     end
+
 
     function KroneckerMatrix{T}(orders::Array{Int}) where T<:AbstractFloat
 

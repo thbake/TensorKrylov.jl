@@ -11,12 +11,12 @@ Random.seed!(12345)
     #    include("preprocessing.jl")
     #end
 
-    @testset "Decomposition tests" begin
-       include("decompositions.jl")
-    end
-
-    #@testset "Tensor Krylov subspace method tests" begin
-    #    include("tensor_krylov_method.jl")
+    #@testset "Decomposition tests" begin
+    #   include("decompositions.jl")
     #end
+
+    @testset "Tensor Krylov subspace method tests" begin
+        include("tensor_krylov_method.jl")
+    end
 
 end
