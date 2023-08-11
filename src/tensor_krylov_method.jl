@@ -1,6 +1,6 @@
-export tensor_krylov
+export tensor_krylov, update_rhs!, KronMat, KronProd
 
-using ExponentialUtilities: exponential!
+using ExponentialUtilities: exponential!, expv
 
 # Aliases
 const KronProd{T}      = Vector{<:AbstractVector{T}} 
@@ -21,6 +21,14 @@ function exponentiate(A::AbstractMatrix{T}) where T <: AbstractFloat
 
 end
 
+function get_subdiagonal_entries(A::KronMat, k::Int) 
+
+    entries = [A[s][k + 1, k] for s in 1:length(A)]
+
+    return entries
+
+end
+
 function matrix_exponential_vector!(
         y::ktensor,
         A::KronMat{T},
@@ -31,9 +39,11 @@ function matrix_exponential_vector!(
     for s = 1:length(A)
 
         #y.fmat[s][:, k] = LinearAlgebra.BLAS.gemv('N' , exp(- γ .*  A[s]), b[s])
-        tmp = copy(A[s])
+
+        tmp = Matrix(copy(A[s]))
 
         y.fmat[s][:, k] = γ .* exponential!(tmp) * b[s]
+        #y.fmat[s][:, k] = expv(γ, tmp, b[s])
 
     end
 
@@ -313,55 +323,6 @@ function efficient_matrix_vector_norm(
 end
 
 
-#function compressed_residual(
-#        Ly::FMatrices{T},
-#        Λ::AbstractMatrix{T},
-#        H::KronMat{T},
-#        y::ktensor,
-#        b::KronProd{T}) where T <:AbstractFloat
-#
-#    # We know that 
-#    #
-#    #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
-#    
-#    d = length(H)
-#    t = ncomponents(y)
-#
-#    # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
-#    Z = matrix_vector(H, y)
-#
-#    @info "Z" Z
-#
-#    # First we compute ||Hy||²
-#    Hy_norm = efficient_matrix_vector_norm(y, Symmetric(Λ, :L), Ly, Z)
-#
-#    # Now we proceed with <Hy, b>₂
-#    bY = [ zeros(1, t) for _ in 1:d ] # bₛᵀyᵢ⁽ˢ⁾
-#    bZ = [ zeros(1, t) for _ in 1:d ] # bₛᵀzᵢ⁽ˢ⁾, where zᵢ⁽ˢ⁾ = Hₛ⋅yᵢ⁽ˢ⁾
-#
-#    Hy_b = innerprod_kronsum_tensor!(bY, bZ, Z, y, b)
-#
-#    # Finally we compute the squared 2-norm of b
-#    b_norm = kronproddot(b)
-#
-#    @info Hy_norm
-#    @info 2Hy_b
-#
-#    return Hy_norm - 2 * Hy_b + b_norm
-#    
-#end
-
-#function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
-#
-#    # Perform n-mode multiplication
-#    z = ttm(y, H.𝖳)
-#
-#    x = z - b
-#
-#    return innerprod(x, x)
-#
-#end
-    
 function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
 
     # This variant expands the matrices/tensors
@@ -376,6 +337,7 @@ function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<
 
     comp_res = (H_expanded * y_expanded) - b_expanded
     
+    @info dot(comp_res, comp_res)
     return dot(comp_res, comp_res)
 
 end
@@ -427,7 +389,12 @@ function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T})
 
 end
 
-function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b::KronProd{T}) where T<:AbstractFloat
+function residual_norm(
+        H::KronMat{T},
+        y::ktensor,
+        𝔎::Vector{Int},
+        subdiagonal_entries::Vector{T},
+        b::KronProd{T}) where T<:AbstractFloat
     
     # Compute squared norm of the residual according to Lemma 3.4 of paper.
     
@@ -467,7 +434,7 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b::KronProd
 
         y² = squared_tensor_entries(Ly[.!mask], Γ)
 
-        res_norm += abs( H[s][𝔎[s] + 1, 𝔎[s]] )^2 * y²
+        res_norm += abs( subdiagonal_entries[s] )^2 * y²
 
         mask[s] = true
 
@@ -483,14 +450,14 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, b::KronProd
 
 end
 
-function update_rhs!(b̃::KronProd{T}, V::KronMat{T}, b::KronProd{T}, k::Int) where T<:AbstractFloat
+function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}) where T<:AbstractFloat
 
     # b̃ = Vᵀb = ⨂ Vₛᵀ ⋅ ⨂ bₛ = ⨂ Vₛᵀbₛ
     
     for s = 1:length(b̃)
 
         # Update one entry of each component of b̃ by performing a single inner product 
-        b̃[s][k] = dot( @view(V[s][:, k]) , b[s] )
+        b̃[s][end] = dot( V[s] , b[s] )
      
     end
 
@@ -509,13 +476,22 @@ function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:Abstr
 end
 
 
-function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, λ::T, ω, α, rank) where T <: AbstractFloat
+function tensor_krylov(
+        A::KronMat{T},
+        b::KronProd{T},
+        tol::T,
+        nmax::Int,
+        λ::T,
+        ω,
+        α,
+        rank,
+        orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
 
 	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
     d = length(A)
 
     # Initialize the d Arnoldi decompositions of Aₛ
-    tensor_arnoldi = TensorArnoldi{T}(A)
+    tensor_decomposition = orthonormalization{T}(A)
 
     # Initialize multiindex 𝔎
     𝔎 = Vector{Int}(undef, d)
@@ -523,40 +499,49 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, λ::T, 
     # Allocate memory for right-hand side b̃
     b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
 
+    #@info "b̃ after update" b̃
+
     # Allocate memory for approximate solution
     x = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ] )
 
-    for j = 1:nmax
+    for k = 1:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        multiple_arnoldi!(tensor_arnoldi, b, j)
+        orthonormal_basis!(tensor_decomposition, b, k, Lanczos)
+
+        H_minors = principal_minors(tensor_decomposition.H, k)
+        V_minors = principal_minors(tensor_decomposition.V, k)
+        b_minors = principal_minors(b̃, k)
+
+        #@info "b_minors before update"  b_minors
+
+        columns = kth_columns(tensor_decomposition.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
-        update_rhs!(b̃, tensor_arnoldi.V, b, j)
-
-        H_minors = principal_minors(tensor_arnoldi.H, j + 1)
-        b_minors = principal_minors(b̃, j + 1)
+        update_rhs!(b_minors, columns, b)
+        #@info "b_minors after update " b_minors
 
         # Approximate solution of compressed system
         y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ)
 
-        normalize!(y)
+        𝔎 .= k 
 
-        𝔎 .= j 
+        subdiagonal_entries = [ tensor_decomposition.H[s][k + 1, k] for s in 1:d ]
 
         # Compute residual norm
-        r_norm = residual_norm(H_minors, y, 𝔎, b_minors)
+        r_norm = residual_norm(H_minors, y, 𝔎, subdiagonal_entries, b_minors)
 
-        rel_res_norm = (r_norm/ kronprodnorm(b))
+        rel_res_norm = (r_norm / kronprodnorm(b))
 
-        #@info "Iteration: " j "relative residual norm:" rel_res_norm
+        @info "Iteration: " k "relative residual norm:" rel_res_norm
         #@info H_minors[1]
 
 
         if rel_res_norm < tol
 
-            x_minors = principal_minors(x, j + 1)
-            V_minors = principal_minors(tensor_arnoldi.V, j + 1)
+            x_minors = principal_minors(x, k)
+
+            #@info "Orthonormal basis V:" V_minors
 
             basis_tensor_mul!(x_minors, V_minors, y)
 

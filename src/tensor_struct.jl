@@ -1,4 +1,5 @@
-export KroneckerProduct, KroneckerMatrix, size, kronproddot, kronprodnorm, randkronmat, trikronmat
+export KroneckerProduct, KroneckerMatrix
+export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries
 
 abstract type KroneckerProduct{T} end
 abstract type KroneckerIndex end
@@ -240,6 +241,11 @@ function Base.getindex(KM, j::Int, ::KroneckerSlice)
 
 end
 
+function kth_columns(KM::KroneckerMatrix, k::Int)
+
+    return [ @view(KM[s][:, k]) for s in 1:length(KM) ]
+
+end
 
 # Additional functionality for Kruskal tensors
 # ============================================

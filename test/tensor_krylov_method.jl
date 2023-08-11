@@ -220,7 +220,7 @@ end
 
 @testset "Solution of compressed system" begin
 
-    d = 3
+    d = 5
 
     nₛ = 200
 
@@ -228,12 +228,14 @@ end
 
     h = inv(nₛ + 1)
 
-    Aₛ= sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
-    #Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
+    #Aₛ= sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
+    Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
 
     A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
 
     b = [ rand(nₛ) for _ in 1:d ]
+
+    #@info "b" b
 
     τ = 1e-14
 
@@ -245,16 +247,16 @@ end
 
     κ = λ_max / λ_min
 
-    @info "Condition number" κ
+    #@info "Condition number" κ
 
     b_norm = kronprodnorm(b)
 
-    @info "Norm of ⨂ b " b_norm
+    #@info "Norm of ⨂ b " b_norm
 
     ω, α, rank = extract_coefficients(τ, κ, λ_min, b_norm)
 
     #@btime x = tensor_krylov($A, $b, 1e-9, $nmax, $λ, $ω, $α, $rank)
-    x = tensor_krylov(A, b, 1e-9, nmax, λ_min, ω, α, rank)
+    x = tensor_krylov(A, b, 1e-9, nmax, λ_min, ω, α, rank, TensorLanczos)
 
     #A_explicit = kroneckersum(A.𝖳...)
 
