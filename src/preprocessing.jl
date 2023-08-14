@@ -1,9 +1,20 @@
 using DataFrames
 using CSV
 
-export extract_coefficients
+function compute_dataframe()
 
-function extract_coefficients(τ::T, κ::T, λ::T, b̃_norm::T) where T<:AbstractFloat
+    # Read csv file into dataframe
+    data = "../coefficients_data/output_data/k_R_accuracy_sorted.csv"
+
+    column_types = [ fill(Float64, 64)... ]
+
+    df = CSV.read(data, DataFrame, delim = ',', types = column_types)
+
+    return df
+
+end
+
+function optimal_coefficients(df::DataFrame, τ::T, κ::T, λ::T, b̃_norm::T) where T<:AbstractFloat
 
     # Extracts coefficients αⱼ, ωⱼ > 0 and tensor rank t such that the bound of 
     # Lemma 2.6 (denoted by γ) is satisfied.
@@ -17,25 +28,27 @@ function extract_coefficients(τ::T, κ::T, λ::T, b̃_norm::T) where T<:Abstrac
     #   γ ≤ (τ ⋅ λ) / ||b̃||₂
     #
 
-    data = "../coefficients_data/output_data/k_R_accuracy_processed.csv"
-
-    column_types = [ fill(Float64, 64)... ]
-
     # Compute desired tolerance
     γ = λ * inv(b̃_norm) * τ
+
+    @info "γ = " γ
 
     # Compute order
     condition_order = Int(floor(log10(κ)))
 
     first_digit = Int( floor(κ / (10^condition_order)) )
 
-    df = CSV.read(data, DataFrame, delim = ',', types = column_types)
+    @info first_digit * 10^condition_order
 
     # Find row that matches best the condition number 
     closest_row = filter(row -> row.R ≈ first_digit * 10^condition_order, df)[:, 2:end]
 
+    @info closest_row
+
     # Take ranks whose corresponding accuracy is below γ
     mask = γ .<= Vector(closest_row[1, :])
+
+    @info mask
 
     # Extract column headers (represent tensor ranks)
     matching_ranks = parse.(Int, names(closest_row[:, mask]) )

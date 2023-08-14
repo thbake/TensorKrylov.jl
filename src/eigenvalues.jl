@@ -1,3 +1,5 @@
+export qr_hessenberg
+
 function qr_decomposition!(H::AbstractMatrix, rotations::AbstractVector)
 
 	n = size(H, 1)
@@ -38,7 +40,7 @@ function qr_hessenberg(A, tol, n_max)
 		# Build QR-decomposition implicitly, with O(n) Givens rotations and compute Aᵢ
 		Hⱼ = qr_decomposition!(Hⱼ, rotations)
 
-		nrm = norm(diag(Hⱼ, -1))
+		nrm = LinearAlgebra.norm(diag(Hⱼ, -1))
 
 		if nrm <= tol
 
@@ -72,3 +74,49 @@ function qr_algorithm(A::AbstractMatrix, tol, n_max)
 	
 	return Â
 end
+
+function hessenberg_eigenvalues(H::AbstractMatrix{T}) where T<:AbstractFloat
+
+    H_tmp = copy(H)
+    
+	k = size(H, 1)
+	
+	for j = 1:(k - 1)
+
+		# Compute Givens rotations to zero out each subdiagonal entry
+		Gⱼ = givens(H_tmp[j, j], H_tmp[j + 1, j], j, j + 1)[1]
+
+		# After applying n-1 Givens rotations H becomes an upper triangular matrix
+		H_tmp = Gⱼ * H_tmp
+
+	end
+
+    eigenvalues = sort(diag(H_tmp))
+
+    λ_min = eigenvalues[1]
+    λ_max = eigenvalues[end]
+
+    return λ_min, λ_max
+
+end
+
+function projected_kronecker_eigenvalues(A::KronMat{T}) where T<:AbstractFloat
+
+    λ_min, λ_max = 0.0, 0.0
+
+    for s in 1:length(A)
+
+        λ_min_s, λ_max_s = hessenberg_eigenvalues(A[s])
+
+        λ_min += λ_min_s
+
+        λ_max += λ_max_s
+
+    end
+
+    return λ_min, λ_max
+
+end
+
+        
+    

@@ -251,21 +251,9 @@ end
 
     b_norm = kronprodnorm(b)
 
-    #@info "Norm of ⨂ b " b_norm
+    @info "Norm of ⨂ b " b_norm
 
-    ω, α, rank = extract_coefficients(τ, κ, λ_min, b_norm)
-
-    #@btime x = tensor_krylov($A, $b, 1e-9, $nmax, $λ, $ω, $α, $rank)
-    x = tensor_krylov(A, b, 1e-9, nmax, λ_min, ω, α, rank, TensorLanczos)
-
-    #A_explicit = kroneckersum(A.𝖳...)
-
-    #b_explicit = kron(b...)
-
-    #x_exact = A_explicit\b_explicit
-
-    #@info norm(x_exact), norm(full(x))
-
+    x = tensor_krylov(A, b, 1e-5, nmax, TensorLanczos{Float64})
 
 end
 

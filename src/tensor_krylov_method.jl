@@ -42,8 +42,8 @@ function matrix_exponential_vector!(
 
         tmp = Matrix(copy(A[s]))
 
-        y.fmat[s][:, k] = γ .* exponential!(tmp) * b[s]
-        #y.fmat[s][:, k] = expv(γ, tmp, b[s])
+        #y.fmat[s][:, k] = γ .* exponential!(tmp) * b[s]
+        y.fmat[s][:, k] = expv(γ, tmp, b[s])
 
     end
 
@@ -475,16 +475,31 @@ function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:Abstr
 
 end
 
+function initialize(
+        A::KronMat{T},
+        b::KronProd{T},
+        orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+
+
+    # Initialize the d Arnoldi decompositions of Aₛ
+    tensor_decomposition = orthonormalization{T}(A)
+
+    # Initialize multiindex 𝔎
+    𝔎 = Vector{Int}(undef, d)
+
+    # Allocate memory for right-hand side b̃
+    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+
+    orthonormal_basis!(tensor_decomposition, b, 1, orthonormalization)
+
+end
+
 
 function tensor_krylov(
         A::KronMat{T},
         b::KronProd{T},
         tol::T,
         nmax::Int,
-        λ::T,
-        ω,
-        α,
-        rank,
         orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
 
 	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
@@ -502,46 +517,65 @@ function tensor_krylov(
     #@info "b̃ after update" b̃
 
     # Allocate memory for approximate solution
-    x = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ] )
+    #x = ktensor( ones(1), [ zeros(size(A[s], 1), 1) for s in 1:d ] )
+    x = nothing
 
-    for k = 1:nmax
+    coefficients_df = compute_dataframe()
+
+    orthonormal_basis!(tensor_decomposition, b, 1, orthonormalization)
+
+    H_minors = principal_minors(tensor_decomposition.H, 1)
+    V_minors = principal_minors(tensor_decomposition.V, 1)
+    b_minors = principal_minors(b̃, 1)
+
+    y = inv( sum(H_minors[1, 1]) ) * prod( [ b_minors[s][1] for s in 1:d ] )
+
+    x = prod(V_minors[1, 1]) * y
+
+    for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        orthonormal_basis!(tensor_decomposition, b, k, Lanczos)
+        orthonormal_basis!(tensor_decomposition, b, k, orthonormalization)
 
         H_minors = principal_minors(tensor_decomposition.H, k)
         V_minors = principal_minors(tensor_decomposition.V, k)
         b_minors = principal_minors(b̃, k)
 
-        #@info "b_minors before update"  b_minors
-
         columns = kth_columns(tensor_decomposition.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b)
-        #@info "b_minors after update " b_minors
+
+        b_norm = kronprodnorm(b_minors)
+
+        λ_min, λ_max = projected_kronecker_eigenvalues(H_minors)
+
+        κ = λ_max / λ_min
+
+        ω, α, rank = optimal_coefficients(coefficients_df, tol, κ, λ_min, b_norm)
 
         # Approximate solution of compressed system
-        y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ)
+        y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
 
         𝔎 .= k 
 
         subdiagonal_entries = [ tensor_decomposition.H[s][k + 1, k] for s in 1:d ]
 
+        @info subdiagonal_entries
+
         # Compute residual norm
         r_norm = residual_norm(H_minors, y, 𝔎, subdiagonal_entries, b_minors)
 
-        rel_res_norm = (r_norm / kronprodnorm(b))
+        rel_res_norm = (r_norm / kronprodnorm(b_minors))
 
         @info "Iteration: " k "relative residual norm:" rel_res_norm
-        #@info H_minors[1]
 
 
         if rel_res_norm < tol
 
-            x_minors = principal_minors(x, k)
+            x = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ])
 
-            #@info "Orthonormal basis V:" V_minors
+            x_minors = principal_minors(x, k)
 
             basis_tensor_mul!(x_minors, V_minors, y)
 

@@ -5,6 +5,7 @@ abstract type KroneckerProduct{T} end
 abstract type KroneckerIndex end
 
 struct KroneckerSlice <: KroneckerIndex end
+struct KroneckerEntry <: KroneckerIndex end
 # We want to generate an abstract notion of structures that can be represented as Kronecker products
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
 # or matrices
@@ -204,13 +205,13 @@ end
 #
 #end
 
-function kronproddot(v::Vector{<:AbstractVector{T}}) where T<:AbstractFloat
+function kronproddot(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
 
     return prod( dot(v[s], v[s]) for s in 1:length(v) ) 
 
 end
 
-function kronprodnorm(v::Vector{Vector{T}}) where T<:AbstractFloat
+function kronprodnorm(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
 
     return sqrt( kronproddot(v) )
 
@@ -238,6 +239,12 @@ end
 function Base.getindex(KM, j::Int, ::KroneckerSlice)
 
     return [ @view(KM[s][1:j, 1:j]) for s in 1:length(KM) ]
+
+end
+
+function Base.getindex(KM::KroneckerMatrix, i::Int, j::Int)
+
+    return [ KM[s][i, j] for s in 1:length(KM) ]
 
 end
 

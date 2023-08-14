@@ -16,7 +16,7 @@ module TensorKrylov
     # Linear system solvers
     include("tensor_krylov_method.jl")
 
-    include("variants.jl")
+    #include("variants.jl")
 
     # Eigenvalue solvers
     include("eigenvalues.jl")
