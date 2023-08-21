@@ -44,12 +44,16 @@ function qr_hessenberg(A, tol, n_max)
 
 		if nrm <= tol
 
-			return Hⱼ
+            @info "Convergence of eigenvalues"
+
+            return diag(Hⱼ)
 		end
 		
 	end
+
+    @info "No convergence of eigenvalues"
 	
-	return Hⱼ
+    return diag(Hⱼ)
 end
 
 function qr_algorithm(A::AbstractMatrix, tol, n_max)
@@ -91,7 +95,8 @@ function hessenberg_eigenvalues(H::AbstractMatrix{T}) where T<:AbstractFloat
 
 	end
 
-    eigenvalues = sort(diag(H_tmp))
+    # Choose eigenvalues with maximal and minimal magnitude
+    eigenvalues = sort( map(abs, diag(H_tmp)) )
 
     λ_min = eigenvalues[1]
     λ_max = eigenvalues[end]
@@ -106,12 +111,19 @@ function projected_kronecker_eigenvalues(A::KronMat{T}) where T<:AbstractFloat
 
     for s in 1:length(A)
 
-        λ_min_s, λ_max_s = hessenberg_eigenvalues(A[s])
+        #λ_min_s, λ_max_s = hessenberg_eigenvalues(A[s])
 
-        λ_min += λ_min_s
+        #λ_min += λ_min_s
 
-        λ_max += λ_max_s
+        #λ_max += λ_max_s
 
+        #eigenvalues = qr_hessenberg(A[s], 1e-5, 100)
+        #eigenvalues = abs.(eigenvalues)
+        eigenvalues = abs.(eigvals(Matrix(A[s])))
+
+        λ_min += minimum(eigenvalues)
+
+        λ_max += maximum(eigenvalues)
     end
 
     return λ_min, λ_max

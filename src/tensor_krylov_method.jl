@@ -133,6 +133,11 @@ end
 
 function compute_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T <: AbstractFloat
 
+    # Given a collection of lower triangular matrices containing all values of 
+    # λ⁽ˢ⁾corresponding to each factor matrix in the CP-decomposition of the 
+    # tensor y, and an array δ containing the k-th entry of a column of said 
+    # factor matrices, compute the product of both (see section 3.3. bottom).
+
     t = length(δ)
 
     Δ = ones(t, t)
@@ -143,38 +148,6 @@ function compute_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T <: Abs
     Γ = Δ .* Λ
 
     return Γ
-
-end
-
-function matrix_vector(
-        A::KronMat{T},
-        x::ktensor)::AbstractVector where T<:AbstractFloat
-
-    # Compute the matrix vector products 
-    #   
-    #   z⁽ˢ⁾ᵢ = Aₛ⋅ x⁽ˢ⁾ᵢ for s = 1,…,d, i = 1,…,t
-    #
-    # This is equivalent as computing the product Z⁽ˢ⁾ = Aₛ⋅X⁽ˢ⁾, where X⁽ˢ⁾
-    # are the factor matrices of the CP-tensor x.
-
-    length(A) == ndims(x) || throw(DimensionMismatch("Kronecker matrix and vector (Kruskal tensor) have different number of components"))
-
-    orders = [ size(A[s], 1) for s in 1:length(A) ]
-
-    rank   = ncomponents(x)
-
-    # Return vector of matrices as described above
-    Z = [ zeros(orders[s], rank) for s in eachindex(A) ]
-
-    @info A[1]
-
-    for s = 1:length(A)
-
-        LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
-
-    end
-
-    return Z
 
 end
 
@@ -199,129 +172,6 @@ function maskprod(x::FMatrices{T}, i::Int) where T <: AbstractFloat
 
 end
 
-function efficient_matrix_vector_norm(
-        x::ktensor,
-        Λ::AbstractMatrix{T},
-        X_inner::FMatrices{T},
-        Z::FMatrices{T}) where T <: AbstractFloat
-
-    # Compute the squared 2-norm ||Ax||², where A ∈ ℝᴺ×ᴺ is a Kronecker sum and
-    # x ∈ ℝᴺ is given as a Kruskal tensor of rank t.
-    #
-    # X_inner holds the inner products 
-    #
-    #   xᵢ⁽ˢ⁾ᵀxⱼ⁽ˢ⁾ for s = 1,…,d, i,j = 1,…,t
-    #
-    # And Z contains the matrices that represent the matrix vector products
-    # 
-    #   z⁽ˢ⁾ᵢ = Aₛ⋅ x⁽ˢ⁾ᵢ for s = 1,…,d, i = 1,…,t
-    #
-    # A is not passed explicitly, as the precomputed inner products are given.
-
-    d      = ndims(x)
-    rank   = ncomponents(x)
-
-    # The following contain inner products of the form 
-    #
-    #   zᵢ⁽ˢ⁾ᵀzⱼ⁽ˢ⁾ for s = 1,…,d, i,j = 1,…,t,
-    # 
-    # and 
-    #
-    #   zᵢ⁽ˢ⁾ᵀxⱼ⁽ˢ⁾ for s = 1,…,d, i,j = 1,…,t,
-    #
-    # respcetively
-
-    Z_inner = [ zeros(rank, rank) for _ in 1:d ]
-    ZX      = [ zeros(rank, rank) for _ in 1:d ]
-
-    compute_lower_triangles!(Z_inner, Z)
-
-    #@info Z_inner
-
-    for s in 1:d
-
-        BLAS.gemm!('T', 'N', 1.0, Z[s], x.fmat[s], 1.0, ZX[s]) 
-
-    end
-
-    result = 0.0
-
-    mask_s = trues(d)
-    mask_r = trues(d)
-
-    # We can separate the large sum 
-    #
-    #   ΣₛΣᵣΣᵢΣⱼ xᵢ⁽¹⁾ᵀxⱼ⁽¹⁾ ⋯ zᵢ⁽ˢ⁾ᵀxⱼ⁽ˢ⁾ ⋯ xᵢ⁽ʳ⁾ᵀzⱼ⁽ʳ⁾ ⋯ xᵢ⁽ᵈ⁾ᵀxⱼ⁽ᵈ⁾
-    #
-    # into the cases 
-    #
-    #   (1) s  = r, i  = j,
-    #   (2) s  = r, i != j,
-    #   (3) s != r, i  = j,
-    #   (4) s != r, i != j
-    #
-    # and simplify the calculation using the fact that some inner products 
-    # appear twice (only access lower triangle of matrices) and that the norm
-    # of the columns of the factor matrices are one.
-
-    for s in 1:d
-
-        for j = 1:rank # case (1)
-
-            result += Λ[j, j] * Z_inner[s][j, j]
-
-            mask_s[s] = false
-
-            tmp = 0.0
-
-            for i = skipindex(j, j:rank) # case (2)
-
-                tmp += Λ[i, j] * maskprod(X_inner[mask_s], i, j) * maskprod(Z_inner[.!mask_s], i, j)
-
-            end
-
-            result += 2 * tmp
-
-        end
-
-        ZX_masked = ZX[.!mask_s]
-
-        for r = skipindex(s, 1:d) # case (3)
-
-            mask_r[r] = false
-
-            mask_sr = mask_s .&& mask_r
-
-            X_masked  = X_inner[mask_sr]
-            XZ_masked =      ZX[.!mask_r]
-
-            for i = 1:rank
-
-                result += Λ[i, i] * ZX[s][i, i] * ZX[r][i, i]
-
-                tmp = 0.0
-
-                for j = skipindex(i, 1:rank) # case (4)
-
-                    tmp += Λ[j, i] * maskprod(X_masked, i, j) *  maskprod(ZX_masked, i, j) * maskprod(XZ_masked, j, i)
-
-                end
-
-                result += 2 * tmp
-
-            end
-
-            mask_r[r] = true
-        end
-
-        mask_s[s] = true
-
-    end
-
-    return result
-
-end
-
 
 function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
 
@@ -337,7 +187,7 @@ function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<
 
     comp_res = (H_expanded * y_expanded) - b_expanded
     
-    @info dot(comp_res, comp_res)
+    @info "Compressed residual" dot(comp_res, comp_res)
     return dot(comp_res, comp_res)
 
 end
@@ -350,18 +200,24 @@ function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) w
     #
     # where δ represents the vector holding kₛ-th entry of each column of the 
     # s-th factor matrix of y.
+    #
+    # We use the symmetry of the inner products and only require to iterate in
+    # the correct way:
+    #
+    # 2 ⋅Σₖ₌₁ Σᵢ₌ₖ₊₁ Γ[i, k] ⋅ Πⱼ≠ ₛ<yᵢ⁽ʲ⁾,yₖ⁽ʲ⁾> + Σᵢ₌₁ Πⱼ≠ ₛ||yᵢ⁽ʲ⁾||²
     
     t = size(Y_masked, 1)
 
     value = 0.0
 
-    for k = 1:t
+    for k in 1:t
 
-        value += Γ[k, k] 
+        value += Γ[k, k] .* maskprod(Y_masked, k, k)
 
-        for i = skipindex(k, k:t)
+        #for i = skipindex(k, k:t)
+        for i in k + 1 : t
 
-            value += 2 * Γ[i, k] * maskprod(Y_masked, i, k) # Symmetry
+            value += 2 * Γ[i, k] * maskprod(Y_masked, i, k)
 
         end
     end
@@ -388,6 +244,7 @@ function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T})
     end
 
 end
+
 
 function residual_norm(
         H::KronMat{T},
@@ -475,38 +332,38 @@ function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:Abstr
 
 end
 
-function initialize(
+
+function initialize!(
         A::KronMat{T},
         b::KronProd{T},
-        orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+        b̃::KronProd{T},
+        t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
 
 
     # Initialize the d Arnoldi decompositions of Aₛ
-    tensor_decomposition = orthonormalization{T}(A)
+    tensor_decomposition = t_orthonormalization(A)
 
-    # Initialize multiindex 𝔎
-    𝔎 = Vector{Int}(undef, d)
+    orthonormal_basis!(tensor_decomposition, b, 1, tensor_decomposition.orthonormalization)
 
-    # Allocate memory for right-hand side b̃
-    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+    for s in 1:length(A)
 
-    orthonormal_basis!(tensor_decomposition, b, 1, orthonormalization)
+        b̃[s][1] = prod(tensor_decomposition.V[1, 1]) * b[s][1]
+
+    end
+
+    return tensor_decomposition
 
 end
-
 
 function tensor_krylov(
         A::KronMat{T},
         b::KronProd{T},
         tol::T,
         nmax::Int,
-        orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+        t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
 
 	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
     d = length(A)
-
-    # Initialize the d Arnoldi decompositions of Aₛ
-    tensor_decomposition = orthonormalization{T}(A)
 
     # Initialize multiindex 𝔎
     𝔎 = Vector{Int}(undef, d)
@@ -514,28 +371,20 @@ function tensor_krylov(
     # Allocate memory for right-hand side b̃
     b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
 
-    #@info "b̃ after update" b̃
 
     # Allocate memory for approximate solution
-    #x = ktensor( ones(1), [ zeros(size(A[s], 1), 1) for s in 1:d ] )
     x = nothing
 
+    tensor_decomposition = initialize!(A, b, b̃, t_orthonormalization)
+    
+    #@info "b̃ after update" b̃
+
     coefficients_df = compute_dataframe()
-
-    orthonormal_basis!(tensor_decomposition, b, 1, orthonormalization)
-
-    H_minors = principal_minors(tensor_decomposition.H, 1)
-    V_minors = principal_minors(tensor_decomposition.V, 1)
-    b_minors = principal_minors(b̃, 1)
-
-    y = inv( sum(H_minors[1, 1]) ) * prod( [ b_minors[s][1] for s in 1:d ] )
-
-    x = prod(V_minors[1, 1]) * y
 
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        orthonormal_basis!(tensor_decomposition, b, k, orthonormalization)
+        orthonormal_basis!(tensor_decomposition, b, k, tensor_decomposition.orthonormalization)
 
         H_minors = principal_minors(tensor_decomposition.H, k)
         V_minors = principal_minors(tensor_decomposition.V, k)
@@ -552,7 +401,12 @@ function tensor_krylov(
 
         κ = λ_max / λ_min
 
-        ω, α, rank = optimal_coefficients(coefficients_df, tol, κ, λ_min, b_norm)
+        @info "Condition: " κ
+        #@info "Smallest eigenvalue:" λ_min 
+        #@info "b_norm: " b_norm
+
+
+        ω, α, rank = optimal_coefficients_mod(coefficients_df, tol, κ, λ_min, b_norm)
 
         # Approximate solution of compressed system
         y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
@@ -560,8 +414,6 @@ function tensor_krylov(
         𝔎 .= k 
 
         subdiagonal_entries = [ tensor_decomposition.H[s][k + 1, k] for s in 1:d ]
-
-        @info subdiagonal_entries
 
         # Compute residual norm
         r_norm = residual_norm(H_minors, y, 𝔎, subdiagonal_entries, b_minors)

@@ -1,4 +1,4 @@
-using TensorKrylov: compute_lower_outer!, matrix_vector, maskprod, efficient_matrix_vector_norm, innerprod_kronsum_tensor!, compressed_residual, residual_norm
+using TensorKrylov: compute_lower_outer!, maskprod, compressed_residual, residual_norm
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
 
 
@@ -220,16 +220,16 @@ end
 
 @testset "Solution of compressed system" begin
 
-    d = 5
+    d = 10
 
     nₛ = 200
 
-    nmax = 50
+    nmax = 170
 
     h = inv(nₛ + 1)
 
-    #Aₛ= sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
-    Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
+    Aₛ= sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
+    #Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
 
     A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
 
@@ -237,23 +237,11 @@ end
 
     #@info "b" b
 
-    τ = 1e-14
-
-    λ_min_s = 2 * (1 - cos( π / (nₛ + 1)))
-    λ_max_s = 2 * (1 - cos( nₛ * π / (nₛ + 1)))
-
-    λ_min = d * λ_min_s
-    λ_max = d * λ_max_s
-
-    κ = λ_max / λ_min
-
-    #@info "Condition number" κ
-
     b_norm = kronprodnorm(b)
 
     @info "Norm of ⨂ b " b_norm
 
-    x = tensor_krylov(A, b, 1e-5, nmax, TensorLanczos{Float64})
+    x = tensor_krylov(A, b, 1e-9, nmax, TensorLanczos{Float64})
 
 end
 

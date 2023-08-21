@@ -214,6 +214,7 @@ end
 function kronprodnorm(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
 
     return sqrt( kronproddot(v) )
+    #return prod( sqrt(dot(v[s], v[s])) for s in 1:length(v) ) 
 
 end
 

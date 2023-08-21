@@ -80,6 +80,7 @@ mutable struct TensorArnoldi{T} <: TensorDecomposition{T}
     A::KroneckerMatrix{T} # Original matrix
     V::KroneckerMatrix{T} # Matrix representing basis of Krylov subspace
     H::KroneckerMatrix{T} # Upper Hessenberg matrix
+    orthonormalization::Type{Arnoldi}
 
     function TensorArnoldi{T}(A::KroneckerMatrix{T}) where T<:AbstractFloat
 
@@ -90,7 +91,7 @@ mutable struct TensorArnoldi{T} <: TensorDecomposition{T}
 
         )
 
-        new(A, V, H)
+        new(A, V, H, Arnoldi)
 
     end
 
@@ -102,6 +103,7 @@ mutable struct TensorLanczos{T} <: TensorDecomposition{T}
     A::KroneckerMatrix{T} # Original matrix
     V::KroneckerMatrix{T} # Matrix representing basis of Krylov subspace
     H::KroneckerMatrix{T} # Upper Hessenberg matrix
+    orthonormalization::Type{Lanczos}
 
     function TensorLanczos{T}(A::KroneckerMatrix{T}) where T<:AbstractFloat
 
@@ -112,7 +114,7 @@ mutable struct TensorLanczos{T} <: TensorDecomposition{T}
 
         )
 
-        new(A, V, H)
+        new(A, V, H, Lanczos)
 
     end
 
@@ -185,6 +187,26 @@ function orthonormal_basis!(t_decomp::TensorDecomposition{T}, b::KroneckerProd{T
                 b[s])
 
         orthonormal_basis_vector!(decomposition, k)
+
+    end
+
+end
+
+function lanczos_basis!(lanczos::Lanczos{T}, k::Int) where T<:AbstractFloat
+
+    for i in 1:k-1
+
+        orthonormal_basis_vector!(lanczos, i)
+
+    end
+
+end
+
+function arnoldi_basis!(arnoldi::Arnoldi{T}, k::Int) where T<:AbstractFloat
+
+    for i in 1:k-1
+
+        orthonormal_basis_vector!(lanczos, i)
 
     end
 
