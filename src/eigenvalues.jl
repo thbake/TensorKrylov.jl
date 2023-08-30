@@ -1,4 +1,151 @@
-export qr_hessenberg
+export qr_hessenberg, qr_decomposition!
+
+# Data structure d sets of Sturm sequences of polynomials
+
+struct CharacteristicPolynomials{T} 
+
+    coefficients::AbstractVector{AbstractVector{AbstractArray{T}}}
+
+    function CharacteristicPolynomials{T}(d::Int) where T <: AbstractFloat
+
+        coefficients = AbstractVector{AbstractVector{AbstractArray{T}}}(undef, d)
+        new(coefficients)
+
+    end
+
+end
+
+function initialize_polynomials!(polynomials::CharacteristicPolynomials{T}, first_entries::AbstractVector{T}) where T<:AbstractFloat 
+
+    for s in 1:length(polynomials)
+
+        # p₀(λ) = 1, p₁(λ) = γ₁ - λ
+        polynomials.coefficients[s][1] = [1]
+        polynomials.coefficients[s][2] = [first_entries, -1]
+
+    end
+
+end
+
+# Galerkin projection methods
+
+
+
+function lanczos_method(A::AbstractMatrix{T}) where T<:AbstractFloat
+
+    # We assume that A is HPD
+    
+    # Use result of corollary 8.8 in NLA to check convergence
+end
+
+function sign_changes(x::T, polynomials::AbstractArray{<:AbstractArray{T}})::Int where T<:AbstractFloat
+
+    sign_change_counter = 0
+    current_value       = @evalpoly(x, polynomials[1]...)
+
+    for polynomial in @view(polynomials[2:end])
+
+        evaluation = @evalpoly(x, polynomial...)
+
+        if (evaluation * current_value) < 0.0 # Sign changed
+
+            current_value       = evaluation
+            sign_change_counter += 1
+
+        end
+
+    end
+
+    return sign_change_counter
+
+end
+
+function next_coefficients!(characteristic_polynomial::AbstractArray{<:AbstractArray{T}}, j::Int, γ::T, β::T) where T<:AbstractFloat
+
+    # Initialize new coefficients of next characteristic polynomial
+    α = ones(j + 1)
+
+    # Access coefficients of polynomial at position j - 1 in the sequence (which
+    # is j in Julia).
+    p1 = characteristic_polynomial[j]
+
+    α[1]     =  γ * p1[1]
+    α[2:j]   =  (γ .* p1[2:j]) - p1[1:j - 1]
+    α[j + 1] = -p1[j]
+
+    # Access coefficients of polynomial at position j - 2 in the sequence 
+    p2 = characteristic_polynomial[j - 1]
+    
+    α[1:j-1] -= (β^2 .* p2)
+
+    # Add coefficients of new characteristic polynomial to data structure
+    push!(characteristic_polynomial, α)
+
+end
+    
+
+function next_polynomial!(γ::AbstractArray{T}, β::AbstractArray{T}, polynomials::CharacteristicPolynomials{T}, j::Int) where T<:AbstractFloat
+
+    # Generate next characteristic polynomial in the Sturm sequence.
+    # γ and β are the array of the d diagonal and subdiagonal entries at the 
+    # corresponding Jacobi matrices at index j, in the sequence.
+
+    for s in 1:length(polynomials)
+
+        next_coefficients!(polynomials.coefficients[s], γ[s], β[s], j)
+
+    end
+
+end
+
+function initial_interval(γ::AbstractArray{T}, β::AbstractArray{T}) where T<:AbstractFloat
+
+    # Given diagonal and subdiagonal entries, compute initial interval that contains all eigenvalues. 
+    # Follows from Gershgorin disks theorem and tridiagonal structure of matrix.
+
+    tmp = copy(β)
+    β1 = abs.( push!(tmp, 0.0) )
+    β2 = abs.( pushfirst!(tmp[1:end-1], 0.0) )
+
+    left  = minimum(γ - β1 -  β2)
+    right = maximum(γ + β1 +  β2)
+
+    return left, right
+
+end
+
+function bisection(y::T, z::T, n::Int, k::Int, polynomials::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
+
+    # Find the roots of the characteristic polynomial of the (symmetric)
+    # tridiagonal matrix T.
+    
+    # Compute unit roundoff
+    u = eps(T) / 2
+
+    x = 0.0
+
+    while abs(z - y) > (u * (abs(y) + abs(z)))
+
+        x = (y + z) / 2
+
+        # Count number of sign changes in the sequence which is equal to the 
+        # number of eigenvalues of T that, by the Sturm sequence property are 
+        # less than x.
+        if sign_changes(x, polynomials) >= (n - k)
+
+            z = x
+
+        else
+            y = x
+
+        end
+
+    end
+
+    return x
+end
+
+# QR-Iterations
 
 function qr_decomposition!(H::AbstractMatrix, rotations::AbstractVector)
 
@@ -12,7 +159,7 @@ function qr_decomposition!(H::AbstractMatrix, rotations::AbstractVector)
 		rotations[j] = Gⱼ
 
 		# After applying n-1 Givens rotations H becomes an upper triangular matrix
-		H[:] = Gⱼ * H
+		H = Gⱼ * H
 
 	end
 
@@ -20,7 +167,7 @@ function qr_decomposition!(H::AbstractMatrix, rotations::AbstractVector)
 		
 		# Apply the conjugate transpose Givens rotations from the right to
         # upper triangular matrix
-		H[:] = H * rotations[j]'
+		H = H * rotations[j]'
 	end
 
 	
@@ -35,7 +182,7 @@ function qr_hessenberg(A, tol, n_max)
 	
 	Hⱼ = copy(A)
 
-	for j = 1:n_max
+	for _ in 1:n_max
 		
 		# Build QR-decomposition implicitly, with O(n) Givens rotations and compute Aᵢ
 		Hⱼ = qr_decomposition!(Hⱼ, rotations)
@@ -46,14 +193,14 @@ function qr_hessenberg(A, tol, n_max)
 
             @info "Convergence of eigenvalues"
 
-            return diag(Hⱼ)
+            return sort(diag(Hⱼ))
 		end
 		
 	end
 
     @info "No convergence of eigenvalues"
 	
-    return diag(Hⱼ)
+    return sort(diag(Hⱼ))
 end
 
 function qr_algorithm(A::AbstractMatrix, tol, n_max)

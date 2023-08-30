@@ -371,16 +371,18 @@ function tensor_krylov(
     # Allocate memory for right-hand side b̃
     b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
 
-
     # Allocate memory for approximate solution
     x = nothing
 
     tensor_decomposition = initialize!(A, b, b̃, t_orthonormalization)
     
-    #@info "b̃ after update" b̃
-
     coefficients_df = compute_dataframe()
 
+    # Initialize list of characteristic polynomials of Jacobi matrices Tₖ
+    characteristic_polynomials = CharacteristicPolynomials(d)
+
+    initialize_polynomials!(characteristic_polynomials, tensor_decomposition.H[1, 1])
+    
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
@@ -389,6 +391,10 @@ function tensor_krylov(
         H_minors = principal_minors(tensor_decomposition.H, k)
         V_minors = principal_minors(tensor_decomposition.V, k)
         b_minors = principal_minors(b̃, k)
+
+        next_polynomial!(H_minors[k, k], H_minors[k, k - 1], characteristic_polynomials, k)
+
+        bisection(characteristic_polynomials)
 
         columns = kth_columns(tensor_decomposition.V, k)
 

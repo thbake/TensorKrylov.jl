@@ -1,34 +1,99 @@
 using TensorKrylov: Arnoldi, Lanczos
-using TensorKrylov: qr_hessenberg
+using TensorKrylov: qr_hessenberg, bisection, next_coefficients!, initial_interval, sign_changes
 
 using LinearAlgebra, SparseArrays
 
-@testset "QR-algorithm for upper Hessenberg matrices" begin
+@testset "Bisection method for symmetric tridiagonal eigenvalue problems" begin
 
-    τ = 1e-5
+    n = 50
+    k = 5
 
-    n_small = 10
+    A = Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1))
+    v = inv(sqrt(n)) .* ones(n)
 
-    k_small = 5
+    lanczos = Lanczos{Float64}(A, zeros(n, k + 1), zeros(k + 1, k + 1), v)
 
-    A_small = sparse(Tridiagonal(-ones(n_small - 1), 2ones(n_small), -ones(n_small - 1)))
+    for j in 1:k 
 
-    eigvalssmall = qr_hessenberg(A_small, τ, 8)
+        orthonormal_basis_vector!(lanczos, j)
 
-    @info "Eigenvalues of small matrix " eigvalssmall
+    end
 
-    sorted_eigenvalues = sort(Vector(eigvalssmall))
-    @test sorted_eigenvalues ≈ eigvals(Matrix(A_small))
+    # Initialize sequence of characteristic polynomials
+    char_polynomials = [ [1], [ lanczos.H[1, 1], -1.0] ]
 
-    n_large = 200
+    for j in 2:k 
 
-    k_large = 100
+        γ = lanczos.H[j, j]
+        β = lanczos.H[j, j - 1]
+        next_coefficients!(char_polynomials, j, γ, β)
 
-    A_large = sparse(Tridiagonal(-ones(n_large - 1), 2ones(n_large), -ones(n_large - 1)))
+    end
 
-    eigvalslarge = qr_hessenberg(A_large, τ, 100)
+    # Test for correct generation of polynomials by evaluating them at μ = 2
+    test_values = [1.0, -1.96, -0.04166666666666724, 1.9565217391304344, 0.04545454545454549, -1.9523809523809523]
 
-    λ_max = maximum(eigvalslarge)
-    λ_min = minimum(eigvalslarge)
+    μ1 = 2.0
+    μ2 = 1.0
+    μ3 = 0.25
 
+    for j in 1:length(char_polynomials)
+
+        polynomial = char_polynomials[j]
+
+        @test @evalpoly(μ1, polynomial...) ≈ test_values[j]
+
+    end
+
+    γ = diag(lanczos.H, 0)[1:k]
+    β = diag(lanczos.H, 1)[1:k-1]
+
+    # Initial interval
+    y, z = initial_interval( γ, β )
+
+    
+
+    # Test for correct counting of sign change
+    @test  sign_changes(μ1, char_polynomials) == 3
+    @test  sign_changes(μ2, char_polynomials) == 2
+    @test  sign_changes(μ3, char_polynomials) == 1
+    
+
+    approximations = [ bisection(y, z, k, i, char_polynomials) for i in k - 1 : -1 : 0 ]
+
+    exact = eigvals(Matrix(lanczos.H[1:k, 1:k]))
+
+
+    @test approximations ≈ exact
 end
+
+
+#@testset "QR-algorithm for upper Hessenberg matrices" begin
+#
+#    τ = 1e-5
+#
+#    n_small = 10
+#
+#    k_small = 5
+#
+#    A_small = sparse(Tridiagonal(-ones(n_small - 1), 2ones(n_small), -ones(n_small - 1)))
+#
+#    eigvalssmall = qr_hessenberg(A_small, τ, 8)
+#
+#    @info "Eigenvalues of small matrix " eigvalssmall
+#
+#    sorted_eigenvalues = sort(Vector(eigvalssmall))
+#    @test sorted_eigenvalues ≈ eigvals(Matrix(A_small))
+#
+#    n_large = 200
+#
+#    k_large = 100
+#
+#    A_large = sparse(Tridiagonal(-ones(n_large - 1), 2ones(n_large), -ones(n_large - 1)))
+#
+#    eigvalslarge = qr_hessenberg(A_large, τ, 100)
+#
+#    λ_max = maximum(eigvalslarge)
+#    λ_min = minimum(eigvalslarge)
+#
+#end

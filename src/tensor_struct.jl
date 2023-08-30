@@ -245,6 +245,7 @@ end
 
 function Base.getindex(KM::KroneckerMatrix, i::Int, j::Int)
 
+    # Return the entry (i, j) of all d coefficient matrices
     return [ KM[s][i, j] for s in 1:length(KM) ]
 
 end
