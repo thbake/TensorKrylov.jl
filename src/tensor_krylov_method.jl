@@ -383,18 +383,18 @@ function tensor_krylov(
 
     initialize_polynomials!(characteristic_polynomials, tensor_decomposition.H[1, 1])
     
+    orthonormalization = tensor_decomposition.orthonormalization
+
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        orthonormal_basis!(tensor_decomposition, b, k, tensor_decomposition.orthonormalization)
+        orthonormal_basis!(tensor_decomposition, b, k, orthonormalization)
 
         H_minors = principal_minors(tensor_decomposition.H, k)
         V_minors = principal_minors(tensor_decomposition.V, k)
         b_minors = principal_minors(b̃, k)
 
-        next_polynomial!(H_minors[k, k], H_minors[k, k - 1], characteristic_polynomials, k)
-
-        bisection(characteristic_polynomials)
+        λ_min, λ_max = extremal_tensorized_eigenvalues(H_minors, characteristic_polynomials, k)
 
         columns = kth_columns(tensor_decomposition.V, k)
 
@@ -402,8 +402,6 @@ function tensor_krylov(
         update_rhs!(b_minors, columns, b)
 
         b_norm = kronprodnorm(b_minors)
-
-        λ_min, λ_max = projected_kronecker_eigenvalues(H_minors)
 
         κ = λ_max / λ_min
 

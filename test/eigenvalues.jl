@@ -1,5 +1,26 @@
-using TensorKrylov: Arnoldi, Lanczos
-using TensorKrylov: qr_hessenberg, bisection, next_coefficients!, initial_interval, sign_changes
+# Structs
+# -------
+
+# decompositions.jl 
+using TensorKrylov: Arnoldi, Lanczos, TensorLanczos
+
+# eigenvalues.jl 
+using TensorKrylov: CharacteristicPolynomials
+
+# tensor_struct.jl 
+using TensorKrylov: KroneckerMatrix
+
+# Functions
+# ---------
+
+# eigenvalues.jl functions
+using TensorKrylov: qr_hessenberg, bisection, next_coefficients!, initial_interval, sign_changes, extremal_tensorized_eigenvalues
+
+# decompositions.jl functions
+using TensorKrylov: initialize!, orthonormal_basis!
+
+# tensor_struct.jl functions
+using TensorKrylov: principal_minors
 
 using LinearAlgebra, SparseArrays
 
@@ -24,9 +45,9 @@ using LinearAlgebra, SparseArrays
 
     for j in 2:k 
 
-        γ = lanczos.H[j, j]
-        β = lanczos.H[j, j - 1]
-        next_coefficients!(char_polynomials, j, γ, β)
+        γⱼ = lanczos.H[j, j]
+        βⱼ = lanczos.H[j, j - 1]
+        next_coefficients!(char_polynomials, j, γⱼ, βⱼ)
 
     end
 
@@ -66,6 +87,63 @@ using LinearAlgebra, SparseArrays
 
     @test approximations ≈ exact
 end
+
+@testset "Extremal eigenvalues of system with symmetric tridiagonal coefficient matrices" begin
+
+
+    d = 5
+
+    n = 200
+
+    Aₛ = Tridiagonal(-ones(n - 1), 2ones(n), ones(n - 1))
+
+    A = KroneckerMatrix{Float64}([ Aₛ for _ in 1:d ])
+
+    b = [ rand(n) for _ in 1:d ]
+
+    # Allocate memory for right-hand side b̃
+    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+
+    tensor_decomp = initialize!(A, b, b̃, TensorLanczos{Float64})
+
+    char_poly = CharacteristicPolynomials{Float64}(d, tensor_decomp.H[1, 1])
+
+    orthonormalization = tensor_decomp.orthonormalization
+
+    nmax = 50
+
+    λ_min = 0.0
+    λ_max = 0.0
+
+    for k = 2:nmax
+
+        orthonormal_basis!(tensor_decomp, b, k, orthonormalization)
+
+        H_minors = principal_minors(tensor_decomp.H, k)
+        b_minors = principal_minors(b̃, k)
+
+        λ_min, λ_max = extremal_tensorized_eigenvalues(H_minors, char_poly, k)
+
+    end
+
+    exact_eigenvalues = eigvals(Matrix(tensor_decomp.H[1][1:nmax, 1:nmax]))
+
+    @info "First exact eigenvalues" exact_eigenvalues[1], exact_eigenvalues[end]
+
+    exact_extremal = [d * exact_eigenvalues[1], d * exact_eigenvalues[end]]
+
+    @info "Exact extremal: " exact_extremal
+
+    @info "Approximated extremal eigenvalues: " λ_min, λ_max
+
+    approximation_extremal = [λ_min, λ_max]
+
+    @test exact_extremal ≈ approximation_extremal
+
+
+
+end
+
 
 
 #@testset "QR-algorithm for upper Hessenberg matrices" begin

@@ -4,11 +4,19 @@ export qr_hessenberg, qr_decomposition!
 
 struct CharacteristicPolynomials{T} 
 
-    coefficients::AbstractVector{AbstractVector{AbstractArray{T}}}
+    coefficients::AbstractArray{<:AbstractArray{<:AbstractArray{T}}}
 
-    function CharacteristicPolynomials{T}(d::Int) where T <: AbstractFloat
+    function CharacteristicPolynomials{T}(d::Int, first_entries::AbstractArray{T}) where T <: AbstractFloat
 
-        coefficients = AbstractVector{AbstractVector{AbstractArray{T}}}(undef, d)
+        coefficients = [ Vector{Vector{T}}(undef, 2) for _ in 1:d ]
+
+        for s in 1:d
+
+            coefficients[s][1] = [1]
+            coefficients[s][2] = [first_entries[s], - 1]
+
+        end
+
         new(coefficients)
 
     end
@@ -103,7 +111,7 @@ function initial_interval(γ::AbstractArray{T}, β::AbstractArray{T}) where T<:A
     # Given diagonal and subdiagonal entries, compute initial interval that contains all eigenvalues. 
     # Follows from Gershgorin disks theorem and tridiagonal structure of matrix.
 
-    tmp = copy(β)
+    tmp = Vector(copy(β))
     β1 = abs.( push!(tmp, 0.0) )
     β2 = abs.( pushfirst!(tmp[1:end-1], 0.0) )
 
@@ -143,6 +151,38 @@ function bisection(y::T, z::T, n::Int, k::Int, polynomials::AbstractArray{<:Abst
     end
 
     return x
+end
+
+function extremal_tensorized_eigenvalues(A::KronMat{T}, char_poly::CharacteristicPolynomials{T}, k::Int) where T<:AbstractFloat
+
+
+    λ_min = 0.0
+    λ_max = 0.0 
+
+    for s in 1:length(A)
+
+        γ = diag(A[s], 0)
+        β = diag(A[s], 1)
+
+        pₛ = char_poly.coefficients[s]
+
+        next_coefficients!(pₛ, k, γ[end], β[end])
+
+        y, z = initial_interval(γ, β)
+
+        λ_min += bisection(y, z, k, k - 1, pₛ)
+        λ_max += bisection(y, z, k, 1, pₛ)
+
+        if s == 1
+
+            @info "First eigenvalues" λ_min, λ_max
+
+        end
+
+    end
+
+    return λ_min, λ_max
+
 end
 
 # QR-Iterations
