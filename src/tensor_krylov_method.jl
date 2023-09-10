@@ -9,18 +9,6 @@ const LowerTriangle{T} = LowerTriangular{T, <:AbstractMatrix{T}}
 const FMatrices{T}     = Vector{<:AbstractMatrix{T}} 
 
 
-function exponentiate(A::AbstractMatrix{T}) where T <: AbstractFloat
-
-    # Compute eigenvalues. Recall that the considered matrix is the Jacobi
-    # matrix resulting from the Hermitian Lanczos algorithm. Therefore, the 
-    # matrix is not necessarily Toepliz. However, we know that such a matrix
-    # is of the form
-    #   T = UᵀAU, where the eigenvalues of T are also eigenvalues of U. The 
-    # question is then, which ones? The first k?
-
-
-end
-
 function get_subdiagonal_entries(A::KronMat, k::Int) 
 
     entries = [A[s][k + 1, k] for s in 1:length(A)]
@@ -38,11 +26,8 @@ function matrix_exponential_vector!(
 
     for s = 1:length(A)
 
-        #y.fmat[s][:, k] = LinearAlgebra.BLAS.gemv('N' , exp(- γ .*  A[s]), b[s])
-
         tmp = Matrix(copy(A[s]))
 
-        #y.fmat[s][:, k] = γ .* exponential!(tmp) * b[s]
         y.fmat[s][:, k] = expv(γ, tmp, b[s])
 
     end
@@ -374,36 +359,63 @@ function tensor_krylov(
     # Allocate memory for approximate solution
     x = nothing
 
-    tensor_decomposition = initialize!(A, b, b̃, t_orthonormalization)
+    tensor_decomp= initialize!(A, b, b̃, t_orthonormalization)
     
-    coefficients_df = compute_dataframe()
+    #coefficients_df = compute_dataframe()
 
     # Initialize list of characteristic polynomials of Jacobi matrices Tₖ
-    characteristic_polynomials = CharacteristicPolynomials(d)
+    characteristic_polynomials = CharacteristicPolynomials{T}(d, tensor_decomp.H[1, 1])
 
-    initialize_polynomials!(characteristic_polynomials, tensor_decomposition.H[1, 1])
-    
-    orthonormalization = tensor_decomposition.orthonormalization
+    orthonormalization = tensor_decomp.orthonormalization
+
+    coefficients_df = compute_dataframe()
 
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        orthonormal_basis!(tensor_decomposition, b, k, orthonormalization)
+        orthonormal_basis!(tensor_decomp, b, k, orthonormalization)
 
-        H_minors = principal_minors(tensor_decomposition.H, k)
-        V_minors = principal_minors(tensor_decomposition.V, k)
+        H_minors = principal_minors(tensor_decomp.H, k)
+        V_minors = principal_minors(tensor_decomp.V, k)
         b_minors = principal_minors(b̃, k)
 
-        λ_min, λ_max = extremal_tensorized_eigenvalues(H_minors, characteristic_polynomials, k)
 
-        columns = kth_columns(tensor_decomposition.V, k)
+        if k == 2
+
+            @info "Test positive definiteness: " eigvals(Matrix(H_minors[1]))
+
+            poly_sequence = characteristic_polynomials.coefficients[1]
+
+            γ = diag(H_minors[1], 0)
+            β = diag(H_minors[1], 1)
+
+            y, z = initial_interval(γ, β)
+
+            min = bisection(y, z, k, k, poly_sequence)
+            max = bisection(y, z, k, 0, poly_sequence)
+
+            @info "Approximations: " min, max
+
+        end
+
+        λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, characteristic_polynomials, k)
+
+        @info "Eigenvalues" λ_min, λ_max
+
+        columns = kth_columns(tensor_decomp.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b)
 
         b_norm = kronprodnorm(b_minors)
 
-        κ = λ_max / λ_min
+        κ = abs(λ_max / λ_min)
+
+        if κ < 1
+
+            κ = 1.0
+
+        end
 
         @info "Condition: " κ
         #@info "Smallest eigenvalue:" λ_min 
@@ -417,7 +429,7 @@ function tensor_krylov(
 
         𝔎 .= k 
 
-        subdiagonal_entries = [ tensor_decomposition.H[s][k + 1, k] for s in 1:d ]
+        subdiagonal_entries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
 
         # Compute residual norm
         r_norm = residual_norm(H_minors, y, 𝔎, subdiagonal_entries, b_minors)

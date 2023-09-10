@@ -8,28 +8,18 @@ struct CharacteristicPolynomials{T}
 
     function CharacteristicPolynomials{T}(d::Int, first_entries::AbstractArray{T}) where T <: AbstractFloat
 
+        # Initialize vector of coefficients of characteristic polynomials
         coefficients = [ Vector{Vector{T}}(undef, 2) for _ in 1:d ]
 
         for s in 1:d
 
+            # p₀(λ) = 1, p₁(λ) = γ₁ - λ
             coefficients[s][1] = [1]
             coefficients[s][2] = [first_entries[s], - 1]
 
         end
 
         new(coefficients)
-
-    end
-
-end
-
-function initialize_polynomials!(polynomials::CharacteristicPolynomials{T}, first_entries::AbstractVector{T}) where T<:AbstractFloat 
-
-    for s in 1:length(polynomials)
-
-        # p₀(λ) = 1, p₁(λ) = γ₁ - λ
-        polynomials.coefficients[s][1] = [1]
-        polynomials.coefficients[s][2] = [first_entries, -1]
 
     end
 
@@ -153,7 +143,7 @@ function bisection(y::T, z::T, n::Int, k::Int, polynomials::AbstractArray{<:Abst
     return x
 end
 
-function extremal_tensorized_eigenvalues(A::KronMat{T}, char_poly::CharacteristicPolynomials{T}, k::Int) where T<:AbstractFloat
+function extreme_tensorized_eigenvalues(A::KronMat{T}, char_poly::CharacteristicPolynomials{T}, k::Int) where T<:AbstractFloat
 
 
     λ_min = 0.0
@@ -170,14 +160,8 @@ function extremal_tensorized_eigenvalues(A::KronMat{T}, char_poly::Characteristi
 
         y, z = initial_interval(γ, β)
 
-        λ_min += bisection(y, z, k, k - 1, pₛ)
+        λ_min += bisection(y, z, k, k, pₛ)
         λ_max += bisection(y, z, k, 1, pₛ)
-
-        if s == 1
-
-            @info "First eigenvalues" λ_min, λ_max
-
-        end
 
     end
 

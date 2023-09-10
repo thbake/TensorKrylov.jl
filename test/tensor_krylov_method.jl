@@ -234,6 +234,12 @@ end
     A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
 
     b = [ rand(nₛ) for _ in 1:d ]
+    
+    for s in eachindex(b)
+
+        b[s] = inv(LinearAlgebra.norm(b[s])) .* b[s]
+
+    end
 
     #@info "b" b
 

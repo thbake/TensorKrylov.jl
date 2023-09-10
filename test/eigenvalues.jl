@@ -14,7 +14,7 @@ using TensorKrylov: KroneckerMatrix
 # ---------
 
 # eigenvalues.jl functions
-using TensorKrylov: qr_hessenberg, bisection, next_coefficients!, initial_interval, sign_changes, extremal_tensorized_eigenvalues
+using TensorKrylov: qr_hessenberg, bisection, next_coefficients!, initial_interval, sign_changes, extreme_tensorized_eigenvalues
 
 # decompositions.jl functions
 using TensorKrylov: initialize!, orthonormal_basis!
@@ -122,7 +122,7 @@ end
         H_minors = principal_minors(tensor_decomp.H, k)
         b_minors = principal_minors(b̃, k)
 
-        λ_min, λ_max = extremal_tensorized_eigenvalues(H_minors, char_poly, k)
+        λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, k)
 
     end
 
@@ -130,15 +130,15 @@ end
 
     @info "First exact eigenvalues" exact_eigenvalues[1], exact_eigenvalues[end]
 
-    exact_extremal = [d * exact_eigenvalues[1], d * exact_eigenvalues[end]]
+    exact_extreme = [d * exact_eigenvalues[1], d * exact_eigenvalues[end]]
 
-    @info "Exact extremal: " exact_extremal
+    @info "Exact extreme: " exact_extreme
 
     @info "Approximated extremal eigenvalues: " λ_min, λ_max
 
-    approximation_extremal = [λ_min, λ_max]
+    approximation_extreme = [λ_min, λ_max]
 
-    @test exact_extremal ≈ approximation_extremal
+    @test exact_extreme ≈ approximation_extreme
 
 
 
