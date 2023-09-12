@@ -1,4 +1,4 @@
-export qr_hessenberg, qr_decomposition!
+export qr_hessenberg, qr_decomposition!, next_coefficients!, sign_changes, initial_interval, bisection, CharacteristicPolynomials
 
 # Data structure d sets of Sturm sequences of polynomials
 
@@ -129,7 +129,7 @@ function bisection(y::T, z::T, n::Int, k::Int, polynomials::AbstractArray{<:Abst
         # Count number of sign changes in the sequence which is equal to the 
         # number of eigenvalues of T that, by the Sturm sequence property are 
         # less than x.
-        if sign_changes(x, polynomials) >= (n - k)
+        if sign_changes(x, polynomials) > (n - k)
 
             z = x
 
@@ -151,6 +151,7 @@ function extreme_tensorized_eigenvalues(A::KronMat{T}, char_poly::Characteristic
 
     for s in 1:length(A)
 
+        # Extract diagonal and subdiagonal entries of tridiagonal matrices Aₛ
         γ = diag(A[s], 0)
         β = diag(A[s], 1)
 

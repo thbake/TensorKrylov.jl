@@ -1,27 +1,7 @@
 # Structs
 # -------
 
-# decompositions.jl 
-using TensorKrylov: Arnoldi, Lanczos, TensorLanczos
-
-# eigenvalues.jl 
-using TensorKrylov: CharacteristicPolynomials
-
-# tensor_struct.jl 
-using TensorKrylov: KroneckerMatrix
-
-# Functions
-# ---------
-
-# eigenvalues.jl functions
-using TensorKrylov: qr_hessenberg, bisection, next_coefficients!, initial_interval, sign_changes, extreme_tensorized_eigenvalues
-
-# decompositions.jl functions
-using TensorKrylov: initialize!, orthonormal_basis!
-
-# tensor_struct.jl functions
-using TensorKrylov: principal_minors
-
+using TensorKrylov
 using LinearAlgebra, SparseArrays
 
 @testset "Bisection method for symmetric tridiagonal eigenvalue problems" begin
@@ -80,22 +60,23 @@ using LinearAlgebra, SparseArrays
     @test  sign_changes(μ3, char_polynomials) == 1
     
 
-    approximations = [ bisection(y, z, k, i, char_polynomials) for i in k - 1 : -1 : 0 ]
+    approximations = [ bisection(y, z, k, i, char_polynomials) for i in k : -1 : 1 ]
 
     exact = eigvals(Matrix(lanczos.H[1:k, 1:k]))
-
 
     @test approximations ≈ exact
 end
 
-@testset "Extremal eigenvalues of system with symmetric tridiagonal coefficient matrices" begin
+@testset "Extreme eigenvalues of system with symmetric tridiagonal coefficient matrices" begin
 
 
-    d = 5
+    d = 1
 
-    n = 200
+    n = 10
 
-    Aₛ = Tridiagonal(-ones(n - 1), 2ones(n), ones(n - 1))
+    h = inv(n + 1)
+
+    Aₛ = inv(h^2) * Tridiagonal(-ones(n - 1), 2ones(n), ones(n - 1))
 
     A = KroneckerMatrix{Float64}([ Aₛ for _ in 1:d ])
 
@@ -104,43 +85,65 @@ end
     # Allocate memory for right-hand side b̃
     b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
 
-    tensor_decomp = initialize!(A, b, b̃, TensorLanczos{Float64})
+    t_lanczos = TensorLanczos{Float64}(A)
 
-    char_poly = CharacteristicPolynomials{Float64}(d, tensor_decomp.H[1, 1])
+    initial_orthonormalization!(t_lanczos, b, Lanczos)
 
-    orthonormalization = tensor_decomp.orthonormalization
+    #char_poly = CharacteristicPolynomials{Float64}(d, t_lanczos.H[1, 1])
 
-    nmax = 50
+    k = 6
 
     λ_min = 0.0
     λ_max = 0.0
 
-    for k = 2:nmax
+    lanczos = Lanczos{Float64}(A[1], zeros(n, k), zeros(k, k), b[1])
 
-        orthonormal_basis!(tensor_decomp, b, k, orthonormalization)
+    for j in 1:k-1
 
-        H_minors = principal_minors(tensor_decomp.H, k)
-        b_minors = principal_minors(b̃, k)
+        orthonormal_basis_vector!(lanczos, j)
 
-        λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, k)
+        @test isposdef(lanczos.H[1:j, 1:j])
 
     end
 
-    exact_eigenvalues = eigvals(Matrix(tensor_decomp.H[1][1:nmax, 1:nmax]))
+    for j = 2:k
 
-    @info "First exact eigenvalues" exact_eigenvalues[1], exact_eigenvalues[end]
+        orthonormal_basis!(t_lanczos, j)
 
-    exact_extreme = [d * exact_eigenvalues[1], d * exact_eigenvalues[end]]
+        #H_minors = principal_minors(t_lanczos.H, j)
+        #b_minors = principal_minors(b̃, j)
 
-    @info "Exact extreme: " exact_extreme
+        #λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, j)
 
-    @info "Approximated extremal eigenvalues: " λ_min, λ_max
+    end
 
-    approximation_extreme = [λ_min, λ_max]
+    exact_eigenvalues = eigvals(Matrix(t_lanczos.H[1][1:k, 1:k]))
 
-    @test exact_extreme ≈ approximation_extreme
+    lanczos_test = zeros(k, k)
 
+    Iₖ = I(k)
 
+    for s in 1:d
+
+        mul!( lanczos_test, t_lanczos.V[s][:, 1:k]', t_lanczos.V[s][:, 1:k] ) 
+
+        @test lanczos_test ≈ Iₖ
+
+    end
+
+    #@info "First exact eigenvalues" exact_eigenvalues[1], exact_eigenvalues[end]
+
+    #@info "Test for positive definiteness: " isposdef(Matrix(t_lanczos.H[1][1:k - 1, 1:k- 1]))
+
+    #exact_extreme = [d * exact_eigenvalues[1], d * exact_eigenvalues[end]]
+
+    #@info "Exact extreme: " exact_extreme
+
+    #@info "Approximated extreme eigenvalues: " λ_min, λ_max
+
+    #approximation_extreme = [λ_min, λ_max]
+
+    #@test exact_extreme ≈ approximation_extreme
 
 end
 

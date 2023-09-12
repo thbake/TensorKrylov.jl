@@ -1,5 +1,5 @@
 export Arnoldi, Lanczos, TensorArnoldi, TensorLanczos
-export orthonormal_basis!, orthonormal_basis_vector!
+export orthonormal_basis!, orthonormal_basis_vector!, initial_orthonormalization!
 
 const MatrixView{T}    = AbstractMatrix{T}
 const KroneckerProd{T} = AbstractArray{<:AbstractArray{T}}
@@ -26,23 +26,27 @@ mutable struct Arnoldi{T} <: Decomposition{T}
     V::MatrixView{T}
     H::MatrixView{T}
 
-    #function Arnoldi{T}(A::MatrixView{T}, b::AbstractArray{T}) where T<:AbstractFloat
-
-    #end
-
     function Arnoldi{T}(
                 A::MatrixView{T},
                 V::MatrixView{T},
                 H::MatrixView{T},
                 b::AbstractArray{T}) where T<:AbstractFloat
 
-
-        V[:, 1] = inv( LinearAlgebra.norm(b) ) .* b
+        initialize_decomp!(V, b)
 
         new(A, V, H)
 
     end
 
+    function Arnoldi{T}(
+                A::MatrixView{T},
+                V::MatrixView{T},
+                H::MatrixView{T}) where T<:AbstractFloat
+
+        new(A, V, H)
+
+    end
+                       
 end
 
 mutable struct Lanczos{T} <: Decomposition{T}
@@ -59,14 +63,24 @@ mutable struct Lanczos{T} <: Decomposition{T}
                 H::MatrixView{T},
                 b::AbstractArray{T}) where T<:AbstractFloat
 
-
-        # Initialization: perform orthonormalization for second basis vector
-
+        # β₀ = 0, v₀ = 0
         β = 0.0
+        v = zeros(size(A, 1)) # vₖ₋₁
 
-        V[:, 1] = inv( LinearAlgebra.norm(b) ) .* b
+        initialize_decomp!(V, b)
 
-        v = zeros(size(A, 1))
+        new(A, V, H, β, v)
+
+    end
+
+    function Lanczos{T}(
+                A::MatrixView{T},
+                V::MatrixView{T},
+                H::MatrixView{T},
+                k::Int) where T<:AbstractFloat
+
+        β = H[k - 1, k]
+        v = @view(V[:, k - 1])
 
         new(A, V, H, β, v)
 
@@ -74,6 +88,13 @@ mutable struct Lanczos{T} <: Decomposition{T}
 
 end
 
+function initialize_decomp!(V::MatrixView{T}, b::AbstractArray{T}) where T<:AbstractFloat
+
+        # Initialization: perform orthonormalization for second basis vector
+
+        V[:, 1] = inv( LinearAlgebra.norm(b) ) .* b
+
+end
 
 mutable struct TensorArnoldi{T} <: TensorDecomposition{T}
 
@@ -110,7 +131,7 @@ mutable struct TensorLanczos{T} <: TensorDecomposition{T}
         V = KroneckerMatrix{T}(dimensions(A))
         H = KroneckerMatrix{T}(
 
-            [ sparse(Tridiagonal( zeros( size(A[s]) ) ) ) for s in 1:length(A) ]
+            [ Tridiagonal( zeros( size(A[s]) ) )  for s in 1:length(A) ]
 
         )
 
@@ -119,6 +140,7 @@ mutable struct TensorLanczos{T} <: TensorDecomposition{T}
     end
 
 end
+
 
 function update_subdiagonals!(H::AbstractMatrix{T}, k::Int, β::T) where T<:AbstractFloat
 
@@ -152,23 +174,24 @@ function orthonormal_basis_vector!(lanczos::Lanczos{T}, k::Int) where T<:Abstrac
     n = order(lanczos)
     u = zeros(n)
 
-    #LinearAlgebra.mul!(u, lanczos.A, @view(lanczos.V[:, j]))
+    #@info "Orthonormal columns: " lanczos.V
+    # uₖ = Avₖ - βₖ₋₁vₖ₋₁
     LinearAlgebra.mul!(u, lanczos.A, @view(lanczos.V[:, k]))
-
     u -= lanczos.β .* lanczos.v
-    #u -= lanczos.H[j, j-1] .* @view(lanczos.V[:, j - 1])
 
-    #lanczos.H[j, j] = dot( u, @view(lanczos.V[:, j]) )
+    # γₖ = <uₖ, vₖ>
     lanczos.H[k, k] = dot( u, @view(lanczos.V[:, k]) )
 
-    #v = u - lanczos.H[j, j] .* @view(lanczos.V[:, j])
-    v = u - lanczos.H[k, k] .* @view(lanczos.V[:, k])
+    # v̂ₖ₊₁ = uₖ - γₖvₖ
+    v = u - (lanczos.H[k, k] .* @view(lanczos.V[:, k]))
 
+    # βₖ = ||v̂ₖ₊₁||
     lanczos.β = LinearAlgebra.norm(v)
 
     # Update basis vector
     lanczos.β == 0.0 ? lanczos.V[:, k + 1] = zeros(n) : lanczos.V[:, k + 1] = inv(lanczos.β) .* v 
 
+    # Set v to last vector in orthonormalization
     lanczos.v = @view(lanczos.V[:, k])
 
     # Update Jacobi matrix
@@ -176,37 +199,63 @@ function orthonormal_basis_vector!(lanczos::Lanczos{T}, k::Int) where T<:Abstrac
 
 end
 
-function orthonormal_basis!(t_decomp::TensorDecomposition{T}, b::KroneckerProd{T}, k::Int, decomp_type::Type{<:Decomposition}) where T<:AbstractFloat
+
+function initial_orthonormalization!(t_decomp::TensorDecomposition{T}, b::KroneckerProd{T}, decomp_type::Type{<:Decomposition}) where T<:AbstractFloat
+
+    # This method performs the first orthonormalization step of both TensorArnoldi 
+    # and TensorLanczos data structures.
 
     for s in 1:length(t_decomp)
 
+        # Initialize d Arnoldi/Lanczos decompositions
         decomposition = decomp_type{T}(
-                t_decomp.A.𝖳[s], 
-                t_decomp.V.𝖳[s],
-                t_decomp.H.𝖳[s], 
-                b[s])
+            t_decomp.A.𝖳[s],
+            t_decomp.V.𝖳[s],
+            t_decomp.H.𝖳[s], 
+            b[s])
 
-        orthonormal_basis_vector!(decomposition, k)
-
-    end
-
-end
-
-function lanczos_basis!(lanczos::Lanczos{T}, k::Int) where T<:AbstractFloat
-
-    for i in 1:k-1
-
-        orthonormal_basis_vector!(lanczos, i)
+        # First orthonormalization step for each of the coefficient matrices
+        orthonormal_basis_vector!(decomposition, 1)
 
     end
 
 end
 
-function arnoldi_basis!(arnoldi::Arnoldi{T}, k::Int) where T<:AbstractFloat
+function orthonormal_basis!(t_arnoldi::TensorArnoldi{T}, k::Int) where T<:AbstractFloat
 
-    for i in 1:k-1
+    # This method performs not initial orthonormalization steps for the 
+    # TensorArnoldi data structure.
 
-        orthonormal_basis_vector!(lanczos, i)
+    for s in 1:length(t_arnoldi)
+
+        arnoldi = Arnoldi{T}(
+            t_arnoldi.A.𝖳[s],
+            t_arnoldi.V.𝖳[s],
+            t_arnoldi.H.𝖳[s]) 
+
+        orthonormal_basis_vector!(arnoldi, k)
+
+    end
+
+end
+
+function orthonormal_basis!(t_lanczos::TensorLanczos{T}, k::Int) where T<:AbstractFloat
+
+    # This method performs not initial orthonormalization steps for the 
+    # TensorLanczos data structure.
+
+    for s in 1:length(t_lanczos)
+
+        lanczos = Lanczos{T}(
+            t_lanczos.A.𝖳[s],
+            t_lanczos.V.𝖳[s],
+            t_lanczos.H.𝖳[s], 
+            k)
+
+        @info lanczos.β
+
+        orthonormal_basis_vector!(lanczos, k)
+
 
     end
 
