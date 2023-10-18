@@ -1,8 +1,6 @@
-# Structs
-# -------
-
-using TensorKrylov
-using LinearAlgebra, SparseArrays
+using TensorKrylov: CharacteristicPolynomials
+using TensorKrylov: extreme_tensorized_eigenvalues
+using LinearAlgebra
 
 @testset "Bisection method for symmetric tridiagonal eigenvalue problems" begin
 
@@ -14,17 +12,16 @@ using LinearAlgebra, SparseArrays
 
     lanczos = Lanczos{Float64}(A, zeros(n, k + 1), zeros(k + 1, k + 1), v)
 
-    for j in 1:k 
-
-        orthonormal_basis_vector!(lanczos, j)
-
-    end
+    initialize_decomp!(lanczos.V, v)
+    orthonormal_basis_vector!(lanczos, 1)
 
     # Initialize sequence of characteristic polynomials
     char_polynomials = [ [1], [ lanczos.H[1, 1], -1.0] ]
 
+
     for j in 2:k 
 
+        orthonormal_basis_vector!(lanczos, j)
         γⱼ = lanczos.H[j, j]
         βⱼ = lanczos.H[j, j - 1]
         next_coefficients!(char_polynomials, j, γⱼ, βⱼ)
@@ -46,57 +43,51 @@ using LinearAlgebra, SparseArrays
 
     end
 
+    # Test for correct counting of sign change
+    @test  sign_changes(μ1, char_polynomials) == 3
+    @test  sign_changes(μ2, char_polynomials) == 2
+    @test  sign_changes(μ3, char_polynomials) == 1
+
     γ = diag(lanczos.H, 0)[1:k]
     β = diag(lanczos.H, 1)[1:k-1]
 
     # Initial interval
     y, z = initial_interval( γ, β )
 
-    
-
-    # Test for correct counting of sign change
-    @test  sign_changes(μ1, char_polynomials) == 3
-    @test  sign_changes(μ2, char_polynomials) == 2
-    @test  sign_changes(μ3, char_polynomials) == 1
-    
-
     approximations = [ bisection(y, z, k, i, char_polynomials) for i in k : -1 : 1 ]
 
     exact = eigvals(Matrix(lanczos.H[1:k, 1:k]))
 
     @test approximations ≈ exact
+
+    # Again, test for correct generation of characteristic polynomials by evaluating
+    # last one at the eigenvalues of the Lanczos tridiagonal matrix
+
+    last_polynomial = char_polynomials[end]
+
+    for j in 1:length(exact)
+
+        @test @evalpoly(exact[j], last_polynomial...) < 1e-14
+
+    end
 end
 
 @testset "Extreme eigenvalues of system with symmetric tridiagonal coefficient matrices" begin
 
-
     d = 1
-
-    n = 10
+    n = 100
+    k = 50
 
     h = inv(n + 1)
 
-    Aₛ = inv(h^2) * Tridiagonal(-ones(n - 1), 2ones(n), ones(n - 1))
+    #Aₛ = inv(h^2) * Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
+    Aₛ =  Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
 
-    A = KroneckerMatrix{Float64}([ Aₛ for _ in 1:d ])
+    
+    bs = rand(n)
 
-    b = [ rand(n) for _ in 1:d ]
-
-    # Allocate memory for right-hand side b̃
-    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
-
-    t_lanczos = TensorLanczos{Float64}(A)
-
-    initial_orthonormalization!(t_lanczos, b, Lanczos)
-
-    #char_poly = CharacteristicPolynomials{Float64}(d, t_lanczos.H[1, 1])
-
-    k = 6
-
-    λ_min = 0.0
-    λ_max = 0.0
-
-    lanczos = Lanczos{Float64}(A[1], zeros(n, k), zeros(k, k), b[1])
+    A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+    lanczos = Lanczos{Float64}(Aₛ, zeros(n, k), zeros(k, k), bs)
 
     for j in 1:k-1
 
@@ -106,75 +97,68 @@ end
 
     end
 
+    b = [bs for _ in 1:d]
+    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+
+    λ_max = 0.0
+    λ_min = 0.0
+
+    t_lanczos = TensorLanczos{Float64}(A)
+    char_poly = CharacteristicPolynomials{Float64}(d, t_lanczos.H[1, 1])
+
+    initial_orthonormalization!(t_lanczos, b, Lanczos)
+
     for j = 2:k
 
         orthonormal_basis!(t_lanczos, j)
+        H_minors = principal_minors(t_lanczos.H, j)
 
-        #H_minors = principal_minors(t_lanczos.H, j)
-        #b_minors = principal_minors(b̃, j)
-
-        #λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, j)
-
+        λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, j)
+        
     end
 
-    exact_eigenvalues = eigvals(Matrix(t_lanczos.H[1][1:k, 1:k]))
+    Tₖ = t_lanczos.H[1][1:k, 1:k]
 
-    lanczos_test = zeros(k, k)
+    γ = diag(Tₖ, 0)[1:k]
+    β = diag(Tₖ, 1)[1:k-1]
 
-    Iₖ = I(k)
+    # Initial interval
+    y, z = initial_interval( γ, β )
 
-    for s in 1:d
+    lanczos_basis = t_lanczos.V[1][:, 1:k]
 
-        mul!( lanczos_test, t_lanczos.V[s][:, 1:k]', t_lanczos.V[s][:, 1:k] ) 
+    #display(lanczos_basis' * lanczos_basis)
 
-        @test lanczos_test ≈ Iₖ
+    # Get first sequence of characteristic polynomials
+    first_char_poly_seq = char_poly.coefficients[1]
 
-    end
+    a = bisection(y, z, k, k, first_char_poly_seq)
+    b = bisection(y, z, k, 1, first_char_poly_seq)
 
-    #@info "First exact eigenvalues" exact_eigenvalues[1], exact_eigenvalues[end]
+    @info "Small eigenvalues: " a, b 
 
-    #@info "Test for positive definiteness: " isposdef(Matrix(t_lanczos.H[1][1:k - 1, 1:k- 1]))
+    approximate_eigenvalues = [ a, b ]
+    exact_eigenvalues = eigvals(Matrix(Tₖ))
 
-    #exact_extreme = [d * exact_eigenvalues[1], d * exact_eigenvalues[end]]
+    @info @evalpoly(a, first_char_poly_seq[end]...)
 
-    #@info "Exact extreme: " exact_extreme
+    exact_extreme         = [(d * exact_eigenvalues[1]), (d * exact_eigenvalues[end])]
+    approximation_extreme = [λ_min, λ_max]
 
-    #@info "Approximated extreme eigenvalues: " λ_min, λ_max
+    @info "Exact eigenvalues: " exact_extreme
+    @info "Approximated eigenvalues: " approximation_extreme
 
-    #approximation_extreme = [λ_min, λ_max]
+    @info "Relative error: " abs(exact_extreme[end] - approximation_extreme[end]) / exact_extreme[end]
 
-    #@test exact_extreme ≈ approximation_extreme
+    @info "Exact condition number of Tₖ: " cond(Matrix(Tₖ)[1:k, 1:k])
+
+    @info "Condition number of Tₖ given by exact extreme eigenvalues: " exact_eigenvalues[end] / exact_eigenvalues[1]
+    @info "Estimated condition number of Tₖ: " abs(λ_max/ λ_min)
+
+    R = qr_algorithm(Matrix(Tₖ), 1e-5, 100)
+    display(R[1])
+    display(R[end])
+
+
 
 end
-
-
-
-#@testset "QR-algorithm for upper Hessenberg matrices" begin
-#
-#    τ = 1e-5
-#
-#    n_small = 10
-#
-#    k_small = 5
-#
-#    A_small = sparse(Tridiagonal(-ones(n_small - 1), 2ones(n_small), -ones(n_small - 1)))
-#
-#    eigvalssmall = qr_hessenberg(A_small, τ, 8)
-#
-#    @info "Eigenvalues of small matrix " eigvalssmall
-#
-#    sorted_eigenvalues = sort(Vector(eigvalssmall))
-#    @test sorted_eigenvalues ≈ eigvals(Matrix(A_small))
-#
-#    n_large = 200
-#
-#    k_large = 100
-#
-#    A_large = sparse(Tridiagonal(-ones(n_large - 1), 2ones(n_large), -ones(n_large - 1)))
-#
-#    eigvalslarge = qr_hessenberg(A_large, τ, 100)
-#
-#    λ_max = maximum(eigvalslarge)
-#    λ_min = minimum(eigvalslarge)
-#
-#end

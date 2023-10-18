@@ -1,4 +1,4 @@
-export qr_hessenberg, qr_decomposition!, next_coefficients!, sign_changes, initial_interval, bisection, CharacteristicPolynomials
+export qr_algorithm, qr_hessenberg, qr_decomposition!, next_coefficients!, sign_changes, initial_interval, bisection, CharacteristicPolynomials
 
 # Data structure d sets of Sturm sequences of polynomials
 
@@ -15,7 +15,7 @@ struct CharacteristicPolynomials{T}
 
             # p₀(λ) = 1, p₁(λ) = γ₁ - λ
             coefficients[s][1] = [1]
-            coefficients[s][2] = [first_entries[s], - 1]
+            coefficients[s][2] = [first_entries[s], -1.0]
 
         end
 
@@ -23,17 +23,6 @@ struct CharacteristicPolynomials{T}
 
     end
 
-end
-
-# Galerkin projection methods
-
-
-
-function lanczos_method(A::AbstractMatrix{T}) where T<:AbstractFloat
-
-    # We assume that A is HPD
-    
-    # Use result of corollary 8.8 in NLA to check convergence
 end
 
 function sign_changes(x::T, polynomials::AbstractArray{<:AbstractArray{T}})::Int where T<:AbstractFloat
@@ -65,7 +54,7 @@ function next_coefficients!(characteristic_polynomial::AbstractArray{<:AbstractA
 
     # Access coefficients of polynomial at position j - 1 in the sequence (which
     # is j in Julia).
-    p1 = characteristic_polynomial[j]
+    p1 = copy(characteristic_polynomial[j])
 
     α[1]     =  γ * p1[1]
     α[2:j]   =  (γ .* p1[2:j]) - p1[1:j - 1]
@@ -129,7 +118,7 @@ function bisection(y::T, z::T, n::Int, k::Int, polynomials::AbstractArray{<:Abst
         # Count number of sign changes in the sequence which is equal to the 
         # number of eigenvalues of T that, by the Sturm sequence property are 
         # less than x.
-        if sign_changes(x, polynomials) > (n - k)
+        if sign_changes(x, polynomials) >= (n - k)
 
             z = x
 
@@ -152,14 +141,11 @@ function extreme_tensorized_eigenvalues(A::KronMat{T}, char_poly::Characteristic
     for s in 1:length(A)
 
         # Extract diagonal and subdiagonal entries of tridiagonal matrices Aₛ
-        γ = diag(A[s], 0)
-        β = diag(A[s], 1)
-
         pₛ = char_poly.coefficients[s]
 
-        next_coefficients!(pₛ, k, γ[end], β[end])
+        next_coefficients!(pₛ, k, A[s][k, k], A[s][k, k-1])
 
-        y, z = initial_interval(γ, β)
+        y, z = initial_interval(diag(A[s], 0), diag(A[s], 1))
 
         λ_min += bisection(y, z, k, k, pₛ)
         λ_max += bisection(y, z, k, 1, pₛ)
@@ -240,7 +226,7 @@ function qr_algorithm(A::AbstractMatrix, tol, n_max)
 		Q, R = qr(Â)
 		Â = R * Q
 
-		nrm = norm(diag(Â, -1))
+		nrm = LinearAlgebra.norm(diag(Â, -1))
 		
 		if nrm <= tol
 
@@ -248,7 +234,26 @@ function qr_algorithm(A::AbstractMatrix, tol, n_max)
 		end
 	end
 	
-	return Â
+    return sort(diag(Â))
+
+end
+
+function tensor_qr_algorithm(A::KronMat{T}, tol::T, n_max::Int) where T<:AbstractFloat
+
+    λ_min = 0.0
+    λ_max = 0.0
+
+    for s in length(A)
+
+        eigs = qr_algorithm(Matrix(A[s]), tol, n_max)
+
+        λ_min += eigs[1]
+        λ_max += eigs[end]
+
+    end
+
+    return λ_min, λ_max
+
 end
 
 function hessenberg_eigenvalues(H::AbstractMatrix{T}) where T<:AbstractFloat
@@ -277,30 +282,6 @@ function hessenberg_eigenvalues(H::AbstractMatrix{T}) where T<:AbstractFloat
 
 end
 
-function projected_kronecker_eigenvalues(A::KronMat{T}) where T<:AbstractFloat
-
-    λ_min, λ_max = 0.0, 0.0
-
-    for s in 1:length(A)
-
-        #λ_min_s, λ_max_s = hessenberg_eigenvalues(A[s])
-
-        #λ_min += λ_min_s
-
-        #λ_max += λ_max_s
-
-        #eigenvalues = qr_hessenberg(A[s], 1e-5, 100)
-        #eigenvalues = abs.(eigenvalues)
-        eigenvalues = abs.(eigvals(Matrix(A[s])))
-
-        λ_min += minimum(eigenvalues)
-
-        λ_max += maximum(eigenvalues)
-    end
-
-    return λ_min, λ_max
-
-end
 
         
     

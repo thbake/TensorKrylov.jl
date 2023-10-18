@@ -1,5 +1,5 @@
 export KroneckerProduct, KroneckerMatrix
-export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries
+export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, principal_minors
 
 abstract type KroneckerProduct{T} end
 abstract type KroneckerIndex end

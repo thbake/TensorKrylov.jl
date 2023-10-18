@@ -31,24 +31,16 @@ function optimal_coefficients(df::DataFrame, τ::T, κ::T, λ::T, b̃_norm::T) w
     # Compute desired tolerance
     γ = λ * inv(b̃_norm) * τ
 
-    @info "γ = " γ
-
     # Compute order
     condition_order = Int(floor(log10(κ)))
 
     first_digit = Int( floor(κ / (10^condition_order)) )
 
-    @info first_digit * 10^condition_order
-
     # Find row that matches best the condition number 
     closest_row = filter(row -> row.R ≈ first_digit * 10^condition_order, df)[:, 2:end]
 
-    @info closest_row
-
     # Take ranks whose corresponding accuracy is below γ
     mask = γ .<= Vector(closest_row[1, :])
-
-    @info mask
 
     # Extract column headers (represent tensor ranks)
     matching_ranks = parse.(Int, names(closest_row[:, mask]) )
