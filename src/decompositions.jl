@@ -258,3 +258,46 @@ function orthonormal_basis!(t_lanczos::TensorLanczos{T}, k::Int) where T<:Abstra
     end
 
 end
+
+function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) where T<:AbstractFloat
+
+    n = size(A, 1)
+
+    lanczos = Lanczos{T}(A, zeros(n, k), zeros(k, k), b)
+
+    for j in 1:k-1
+
+        orthonormal_basis_vector!(lanczos, j)
+
+    end
+
+    return lanczos
+
+end
+
+function computeconditions(A::AbstractMatrix{U}, b::AbstractVector{U}, k::Int) where U<:AbstractFloat
+
+    n = size(A, 1)
+    
+    lanczos = Lanczos{U}(A, zeros(n, k), zeros(k, k), b)
+
+    # Store condition numbers of different matrices
+    condition_numbers = zeros(k)
+
+    orthonormal_basis_vector!(lanczos, 1)
+
+    condition_numbers[1] = lanczos.H[1, 1]
+
+    for j in 2:k-1
+
+        orthonormal_basis_vector!(lanczos, j)
+        eigenvalues          = eigvals( @view(lanczos.H[1:j, 1:j]) )
+        λ_min                = eigenvalues[1]
+        λ_max                = eigenvalues[end]
+        condition_numbers[j] = λ_max / λ_min
+
+    end
+
+    return condition_numbers
+
+end

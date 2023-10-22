@@ -1,4 +1,4 @@
-using TensorKrylov: compute_lower_outer!, maskprod, compressed_residual, residual_norm
+using TensorKrylov: compute_lower_outer!, maskprod, compressed_residual, residual_norm, TensorDecomposition, kth_columns
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, ProfileView
 
 
@@ -171,58 +171,165 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, Pro
 #
 #end
 
-@testset "Analytic results" begin
+@testset "Residual computations" begin
 
-    d = 2
+    function solvecompressed(H::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}) where T<:AbstractFloat
+    #function solvecompressed(H::KroneckerMatrix{T}, b::Vector{T}) where T<:AbstractFloat
 
-    nₛ = 10
+        H_expanded = Symmetric(kroneckersum(H.𝖳...))
+        #H_expanded = Symmetric(Matrix(H.𝖳...))
+        b_expanded = kron(b...)
+        y          = H_expanded\b_expanded
+        #y          = H_expanded\b
 
+        return y
 
-    h = inv(nₛ + 1)
+    end
 
-    Aₛ= sparse(
+    function exactresidualnorm(A::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}, xₖ::AbstractVector{T}) where T<:AbstractFloat
+        A_expanded = kroneckersum(A.𝖳...)
+        #A_expanded = A.𝖳[1]
+        b_expanded = kron(b...)
+        #b_expanded = b[1]
+        tmp        = zeros(size(A_expanded, 1))
 
-            Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
-        )
+        mul!(tmp, A_expanded, xₖ)
 
-    #Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
+        rₖ = b_expanded - tmp
 
-    #A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
-    A = trikronmat([nₛ for _ in 1:d])
+        return sqrt(dot(rₖ, rₖ)) * inv(LinearAlgebra.norm(b_expanded))
 
-    b = [ rand(nₛ) for _ in 1:d ]
+    end
 
-    τ = 1e-14
+    function Anormerror(A::AbstractMatrix{T}, x::AbstractVector{T}, xₖ::AbstractVector{T}) where T<: AbstractFloat
 
-    #λ_min = (2 / h^2) * (1 - cos( π / (nₛ + 1)))
-    #λ_max = (2 / h^2) * (1 - cos( nₛ * π / (nₛ + 1)))
+        tmp = zeros(size(x)) 
+        diff = x - xₖ
 
-    λ_min = d * 2(1 - cos( π / (nₛ + 1)))
-    λ_max = d * 2(1 - cos( nₛ * π / (nₛ + 1)))
+        mul!(tmp, A, diff)
 
-    A_big = kroneckersum(A.𝖳...)
+        return sqrt(dot(diff, diff))
 
-    julia_eigenvalues = eigvals(A_big)
+    end
 
-    @test λ_min ≈ julia_eigenvalues[1]
-    @test λ_max ≈ julia_eigenvalues[end]
+    function tensor_krylov_exact(
+            A::KroneckerMatrix{T},
+            b::Vector{<:AbstractVector{T}},
+            nmax::Int,
+            t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
 
-    #κ = 4 * (nₛ + 1)^2 / (π^2 * d)
-    #κ = 1 + cos(π / (nₛ + 1)) * inv( d * (1 - cos(π / (nₛ + 1)) ))
+        d = length(A)
+        xₖ = Vector{T}(undef, nentries(A))
+        b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
 
-    κ = λ_max / λ_min
+        A_expanded = kroneckersum(A.𝖳...)
+        #A_expanded = A.𝖳[1]
+        b_expanded = kron(b...)
+        #b_expanded = b[1]
 
-    @test κ ≈ cond(A_big)
+        x = Symmetric(A_expanded)\b_expanded
 
-    @assert issparse(A_big)
+        tensor_decomp      = t_orthonormalization(A)
+        orthonormalization = tensor_decomp.orthonormalization
+
+        initial_orthonormalization!(tensor_decomp, b, orthonormalization)
+        
+        for k = 2:nmax
+
+            orthonormal_basis!(tensor_decomp, k)
+
+            H_minors = principal_minors(tensor_decomp.H, k)
+            V_minors = principal_minors(tensor_decomp.V, n, k)
+            b_minors = principal_minors(b̃, k)
+            #b̃ = zeros(k)
+
+            # Update compressed right-hand side b̃ = Vᵀb
+            update_rhs!(b_minors, V_minors, b, k)
+            #b̃ = transpose(V) * b_expanded
+
+            y = solvecompressed(H_minors, b_minors)
+
+            mul!(xₖ, kron(V_minors.𝖳...), y)
+            #mul!(xₖ, V_minors.𝖳[1], y)
+
+            r_normexact = exactresidualnorm(A, b, xₖ)
+
+            println(r_normexact)
+
+            error = Anormerror(A_expanded, x, xₖ)
+
+            @info "Error x - xₖ" error
+
+            #residual_norm(H_minors, y)
+
+        end
+
+    end
+
+    d    = 2
+    n    = 10
+    h    = inv(n + 1)
+    Tₖ   = inv(h^2) .* (Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1)))
+    A    = KroneckerMatrix{Float64}([Tₖ for _ in 1:d])
+    b    = [ rand(n) for _ in 1:d ]
+    nmax = 9
+
+    tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
 
 end
 
+#@testset "Analytic results" begin
+#
+#    d = 2
+#
+#    nₛ = 10
+#
+#
+#    h = inv(nₛ + 1)
+#
+#    Aₛ= sparse(
+#
+#            Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
+#        )
+#
+#    #Aₛ= sparse( Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ) )
+#
+#    #A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+#    A = trikronmat([nₛ for _ in 1:d])
+#
+#    b = [ rand(nₛ) for _ in 1:d ]
+#
+#    τ = 1e-14
+#
+#    #λ_min = (2 / h^2) * (1 - cos( π / (nₛ + 1)))
+#    #λ_max = (2 / h^2) * (1 - cos( nₛ * π / (nₛ + 1)))
+#
+#    λ_min = d * 2(1 - cos( π / (nₛ + 1)))
+#    λ_max = d * 2(1 - cos( nₛ * π / (nₛ + 1)))
+#
+#    A_big = kroneckersum(A.𝖳...)
+#
+#    julia_eigenvalues = eigvals(A_big)
+#
+#    @test λ_min ≈ julia_eigenvalues[1]
+#    @test λ_max ≈ julia_eigenvalues[end]
+#
+#    #κ = 4 * (nₛ + 1)^2 / (π^2 * d)
+#    #κ = 1 + cos(π / (nₛ + 1)) * inv( d * (1 - cos(π / (nₛ + 1)) ))
+#
+#    κ = λ_max / λ_min
+#
+#    @test κ ≈ cond(A_big)
+#
+#    @assert issparse(A_big)
+#
+#end
+
 @testset "Symmetric example" begin
 
-    d = 3
-    nₛ = 50
-    nmax = 15
+    d = 5
+    nₛ = 200
+    nmax = 190
 
     h = inv(nₛ + 1)
 
@@ -242,7 +349,7 @@ end
 
     @info "Norm of ⨂ b " b_norm
 
-    @profview tensor_krylov(A, b, 1e-9, nmax, TensorLanczos{Float64})
+    tensor_krylov(A, b, 1e-6, nmax, TensorLanczos{Float64})
 
 end
 

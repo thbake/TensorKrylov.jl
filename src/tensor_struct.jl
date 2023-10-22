@@ -214,7 +214,6 @@ end
 function kronprodnorm(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
 
     return sqrt( kronproddot(v) )
-    #return prod( sqrt(dot(v[s], v[s])) for s in 1:length(v) ) 
 
 end
 
@@ -227,6 +226,12 @@ end
 function principal_minors(KM::KroneckerMatrix{T}, i::Int) where T<:AbstractFloat
 
     return KroneckerMatrix{T}( [ @view(KM[s][1:i, 1:i]) for s in 1:length(KM)] )
+
+end
+
+function principal_minors(KM::KroneckerMatrix{T}, i::Int, j::Int) where T<:AbstractFloat
+
+    return KroneckerMatrix{T}( [ @view(KM[s][1:i, 1:j]) for s in 1:length(KM)] )
 
 end
 

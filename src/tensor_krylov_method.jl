@@ -17,7 +17,6 @@ function matrix_exponential_vector!(
         γ::T,
         k::Int) where T<:AbstractFloat
 
-    @info "Start exponentiation"
     for s = 1:length(A)
 
         tmp = Matrix(copy(A[s]))
@@ -26,7 +25,6 @@ function matrix_exponential_vector!(
 
     end
 
-    @info "End exponentiation"
 end
 
 function solve_compressed_system(
@@ -253,14 +251,16 @@ function residual_norm(
 
 end
 
-function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}) where T<:AbstractFloat
+function update_rhs!(b̃::KronProd{T}, V::KronMat{T}, b::KronProd{T}, k::Int) where T<:AbstractFloat
 
     # b̃ = Vᵀb = ⨂ Vₛᵀ ⋅ ⨂ bₛ = ⨂ Vₛᵀbₛ
     
     for s = 1:length(b̃)
 
         # Update one entry of each component of b̃ by performing a single inner product 
-        b̃[s][end] = dot( V[s] , b[s] )
+        #b̃[s][k] = dot( V[s] , b[s] )
+        #mul!(b̃[s][1:k], transpose(V.𝖳[s]), b[s])
+        b̃[s][1:k] = transpose(V.𝖳[s]) * b[s]
      
     end
 
@@ -301,6 +301,8 @@ function initialize!(
 
 end
 
+
+# SPD case
 function tensor_krylov(
         A::KronMat{T},
         b::KronProd{T},
@@ -328,31 +330,84 @@ function tensor_krylov(
     orthonormalization = tensor_decomp.orthonormalization
     initial_orthonormalization!(tensor_decomp, b, orthonormalization)
 
-    if t_orthonormalization == TensorLanczos{T}
+    omega = [
+        0.0000001270914523635023453823152008025368,   
+        0.0000008331874358562597752320087564582775,   
+        0.0000034080672022105782788001866918936589,   
+        0.0000110739933654662785807222409336476269,   
+        0.0000311667995071938174038291518550035722,   
+        0.0000793037753836722995497952373169462531,   
+        0.0001870512355599002836650045670054999525,   
+        0.0004156014090353547126400450014262547005,   
+        0.0008795380745097793068189862279900037567,   
+        0.0017872115492601083069274024803935185801,   
+        0.0035079904326112304643424925519254453654,   
+        0.0066823414684595417136606424445000040890,   
+        0.0123992217962518246942221289766394853871,   
+        0.0224779652765556349558256302861858344500,   
+        0.0399106362824236598495805487807341904727,   
+        0.0695487353045896257146426221174007054060,   
+        0.1191608188830656863852960891669852117047,   
+        0.2010592077384481716302230824844343715085,   
+        0.3346412689951259481163734627040540203780,   
+        0.5505930392537740739348703367106452333246,   
+        0.8989022904885930039193056573232354367065,   
+        1.4686339627311775085649614425165054854006,   
+        2.4576919868563932352820144977556537924102,   
+        4.5959866102993954576315382976048340424313,   
+    ]
 
-        coefficients_df = compute_dataframe()
+    alpha = [
 
-    end
+        0.0000000397972590548516429192696767192358,
+        0.0000004367491128819478938719430765502788,
+        0.0000023090182209582046634003901011960181,
+        0.0000089066906550732628370716519314645703,
+        0.0000285117175356736196462963597113272028,
+        0.0000804187756982368456452923229007406780,
+        0.0002066731175280465565669122562269047205,
+        0.0004942168102835682589995968023739020270,
+        0.0011153306788409162644606638196964620846,
+        0.0023994711022991415183188839170200234996,
+        0.0049578632395921716233139491143699917330,
+        0.0098951272990664324780065320280586504964,
+        0.0191621474132992261945940054221337867091,
+        0.0361348098865640136563917583778504649672,
+        0.0665492040412706367295088069613306913652,
+        0.1199928740446123454391983559341738896364,
+        0.2122553292353875994974031146678150605567,
+        0.3689998821842512652011657203754424472208,
+        0.6314804412918880311398651949961191576222,
+        1.0655364534650591431521812757488021361496,
+        1.7763959759375297358264395031213211950671,
+        2.9361676873642319511234499707086342823459,
+        4.8496969121493506472454770861446604612865,
+        8.2047528053762217824240732255702823749743,
+    ]
 
+    #if t_orthonormalization == TensorLanczos{T}
+
+    #    coefficients_df = compute_dataframe()
+
+    #end
+
+    n = dimensions(A)[1]
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
         orthonormal_basis!(tensor_decomp, k)
 
         H_minors = principal_minors(tensor_decomp.H, k)
-        V_minors = principal_minors(tensor_decomp.V, k)
+        V_minors = principal_minors(tensor_decomp.V, n, k)
         b_minors = principal_minors(b̃, k)
 
         #λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, k)
         λ_min, λ_max = tensor_qr_algorithm(H_minors, 1e-5, 100)
-        
-
-        @info "Eigenvalues" λ_min, λ_max
 
         columns = kth_columns(tensor_decomp.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
-        update_rhs!(b_minors, columns, b)
+        update_rhs!(b_minors, V_minors, b, k)
 
         b_norm = kronprodnorm(b_minors)
 
@@ -368,12 +423,14 @@ function tensor_krylov(
         #@info "Smallest eigenvalue:" λ_min 
         #@info "b_norm: " b_norm
 
-        ω, α, rank = optimal_coefficients_mod(coefficients_df, tol, κ, λ_min, b_norm)
+        #ω, α, rank = optimal_coefficients_mod(coefficients_df, tol, κ, λ_min, b_norm)
 
+        rank = 24
+        
         @info "Chosen tensor rank: " rank
 
         # Approximate solution of compressed system
-        y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
+        y = solve_compressed_system(H_minors, b_minors, omega, alpha, rank, λ_min)
 
         𝔎 .= k 
 
