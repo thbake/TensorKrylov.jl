@@ -1,4 +1,5 @@
-using TensorKrylov: compute_lower_outer!, maskprod, compressed_residual, residual_norm, TensorDecomposition, kth_columns
+using TensorKrylov: compute_lower_outer!, compute_lower_triangles!, compute_coefficients, maskprod, compressed_residual, residual_norm, squared_tensor_entries, kth_columns
+using TensorKrylov: TensorDecomposition
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, ProfileView
 
 
@@ -173,110 +174,145 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, Pro
 
 @testset "Residual computations" begin
 
-    function solvecompressed(H::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}) where T<:AbstractFloat
-    #function solvecompressed(H::KroneckerMatrix{T}, b::Vector{T}) where T<:AbstractFloat
+    d    = 3
+    n    = 2
+    rank = 2
 
-        H_expanded = Symmetric(kroneckersum(H.𝖳...))
-        #H_expanded = Symmetric(Matrix(H.𝖳...))
-        b_expanded = kron(b...)
-        y          = H_expanded\b_expanded
-        #y          = H_expanded\b
+    λ  = ones(rank)
+    Y1 = [2.0 1.0; 1.0 2.0]
+    Y2 = [3.0 4.0; 3.0 4.0]
+    Y3 = [2.0 2.0; 2.0 2.0]
+    A  = [Y1, Y2, Y3]
+    y  = ktensor(A)
 
-        return y
+    v1 = Float64.([22, 22, 22, 22])
+    v2 = Float64.([20, 20, 22, 22])
+    v3 = Float64.([20, 20, 22, 22])
 
-    end
+    manual_norms   = LinearAlgebra.norm.([v1, v2, v3]).^2
+    computed_norms = zeros(d)
 
-    function exactresidualnorm(A::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}, xₖ::AbstractVector{T}) where T<:AbstractFloat
-        A_expanded = kroneckersum(A.𝖳...)
-        #A_expanded = A.𝖳[1]
-        b_expanded = kron(b...)
-        #b_expanded = b[1]
-        tmp        = zeros(size(A_expanded, 1))
+    Ly = [ zeros(rank, rank) for _ in 1:d ]
 
-        mul!(tmp, A_expanded, xₖ)
+    compute_lower_triangles!(Ly, y)
 
-        rₖ = b_expanded - tmp
+    Λ = LowerTriangular(zeros(rank, rank))
 
-        return sqrt(dot(rₖ, rₖ)) * inv(LinearAlgebra.norm(b_expanded))
+    compute_lower_outer!(Λ, y.lambda)
 
-    end
+    Ly = Symmetric.(Ly, :L)
 
-    function Anormerror(A::AbstractMatrix{T}, x::AbstractVector{T}, xₖ::AbstractVector{T}) where T<: AbstractFloat
+    mask = trues(d)
 
-        tmp = zeros(size(x)) 
-        diff = x - xₖ
+    for s in 1:d
 
-        mul!(tmp, A, diff)
-
-        return sqrt(dot(diff, diff))
-
-    end
-
-    function tensor_krylov_exact(
-            A::KroneckerMatrix{T},
-            b::Vector{<:AbstractVector{T}},
-            nmax::Int,
-            t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
-
-        d = length(A)
-        xₖ = Vector{T}(undef, nentries(A))
-        b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
-
-        A_expanded = kroneckersum(A.𝖳...)
-        #A_expanded = A.𝖳[1]
-        b_expanded = kron(b...)
-        #b_expanded = b[1]
-
-        x = Symmetric(A_expanded)\b_expanded
-
-        tensor_decomp      = t_orthonormalization(A)
-        orthonormalization = tensor_decomp.orthonormalization
-
-        initial_orthonormalization!(tensor_decomp, b, orthonormalization)
-        
-        for k = 2:nmax
-
-            orthonormal_basis!(tensor_decomp, k)
-
-            H_minors = principal_minors(tensor_decomp.H, k)
-            V_minors = principal_minors(tensor_decomp.V, n, k)
-            b_minors = principal_minors(b̃, k)
-            #b̃ = zeros(k)
-
-            # Update compressed right-hand side b̃ = Vᵀb
-            update_rhs!(b_minors, V_minors, b, k)
-            #b̃ = transpose(V) * b_expanded
-
-            y = solvecompressed(H_minors, b_minors)
-
-            mul!(xₖ, kron(V_minors.𝖳...), y)
-            #mul!(xₖ, V_minors.𝖳[1], y)
-
-            r_normexact = exactresidualnorm(A, b, xₖ)
-
-            println(r_normexact)
-
-            error = Anormerror(A_expanded, x, xₖ)
-
-            @info "Error x - xₖ" error
-
-            #residual_norm(H_minors, y)
-
-        end
+        Γ                = Symmetric(compute_coefficients(Λ, y.fmat[s][n, :]), :L)
+        mask[s]          = false
+        computed_norms[s] = squared_tensor_entries(Ly[mask], Γ)
+        mask[s]          = true
 
     end
 
-    d    = 2
-    n    = 10
-    h    = inv(n + 1)
-    Tₖ   = inv(h^2) .* (Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1)))
-    A    = KroneckerMatrix{Float64}([Tₖ for _ in 1:d])
-    b    = [ rand(n) for _ in 1:d ]
-    nmax = 9
-
-    tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
+    @test all(manual_norms .≈ computed_norms)
 
 end
+
+#@testset "Monotonic decrease of residual and error in A-norm" begin
+#
+#    function solvecompressed(H::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}) where T<:AbstractFloat
+#
+#        H_expanded = Symmetric(kroneckersum(H.𝖳...))
+#        b_expanded = kron(b...)
+#        y          = H_expanded\b_expanded
+#
+#        return y
+#
+#    end
+#
+#    function exactresidualnorm(A::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}, xₖ::AbstractVector{T}) where T<:AbstractFloat
+#        A_expanded = kroneckersum(A.𝖳...)
+#        b_expanded = kron(b...)
+#        tmp        = zeros(size(A_expanded, 1))
+#
+#        mul!(tmp, A_expanded, xₖ)
+#
+#        rₖ = b_expanded - tmp
+#
+#        return sqrt(dot(rₖ, rₖ)) * inv(LinearAlgebra.norm(b_expanded))
+#
+#    end
+#
+#    function Anormerror(A::AbstractMatrix{T}, x::AbstractVector{T}, xₖ::AbstractVector{T}) where T<: AbstractFloat
+#
+#        tmp = zeros(size(x)) 
+#        diff = x - xₖ
+#
+#        mul!(tmp, A, diff)
+#
+#        return sqrt(dot(diff, diff))
+#
+#    end
+#
+#    function tensor_krylov_exact(
+#            A::KroneckerMatrix{T},
+#            b::Vector{<:AbstractVector{T}},
+#            nmax::Int,
+#            t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+#
+#        d = length(A)
+#        xₖ = Vector{T}(undef, nentries(A))
+#        b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+#
+#        A_expanded = kroneckersum(A.𝖳...)
+#        b_expanded = kron(b...)
+#
+#        x = Symmetric(A_expanded)\b_expanded
+#
+#        tensor_decomp      = t_orthonormalization(A)
+#        orthonormalization = tensor_decomp.orthonormalization
+#
+#        initial_orthonormalization!(tensor_decomp, b, orthonormalization)
+#        
+#        for k = 2:nmax
+#
+#            orthonormal_basis!(tensor_decomp, k)
+#
+#            H_minors = principal_minors(tensor_decomp.H, k)
+#            V_minors = principal_minors(tensor_decomp.V, n, k)
+#            b_minors = principal_minors(b̃, k)
+#
+#            # Update compressed right-hand side b̃ = Vᵀb
+#            update_rhs!(b_minors, V_minors, b, k)
+#
+#            y = solvecompressed(H_minors, b_minors)
+#
+#            mul!(xₖ, kron(V_minors.𝖳...), y)
+#
+#            r_normexact = exactresidualnorm(A, b, xₖ)
+#
+#            println(r_normexact)
+#
+#            error = Anormerror(A_expanded, x, xₖ)
+#
+#            @info "Error x - xₖ" error
+#
+#            #residual_norm(H_minors, y)
+#
+#        end
+#
+#    end
+#
+#    d    = 2
+#    n    = 10
+#    h    = inv(n + 1)
+#    Tₖ   = inv(h^2) .* (Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1)))
+#    A    = KroneckerMatrix{Float64}([Tₖ for _ in 1:d])
+#    b    = [ rand(n) for _ in 1:d ]
+#    nmax = 9
+#
+#    tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
+#
+#end
 
 #@testset "Analytic results" begin
 #
@@ -329,7 +365,7 @@ end
 
     d = 5
     nₛ = 200
-    nmax = 190
+    nmax = 14
 
     h = inv(nₛ + 1)
 
