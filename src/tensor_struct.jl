@@ -1,5 +1,5 @@
 export KroneckerProduct, KroneckerMatrix
-export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, principal_minors
+export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, principal_minors, explicit_kroneckersum, recursivekronecker
 
 abstract type KroneckerProduct{T} end
 abstract type KroneckerIndex end
@@ -88,7 +88,9 @@ function norm(KP::KroneckerProduct)
     return prod( map(norm, KP) )
 end 
 
-function recursivekronecker(A::AbstractMatrix, s::Int, orders::Vector{Int})
+function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T<:AbstractFloat
+
+    # Compute 
 
     d = length(orders)
 
@@ -126,7 +128,7 @@ function recursivekronecker(A::Vector{Matrix{T}}, factor_matrix::Vector{Matrix{T
 
 end
 
-function explicit_kroneckersum(A::Vector{Matrix{T}}) where T <: AbstractFloat
+function explicit_kroneckersum(A::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat
 
     orders = [ size(A[s], 1) for s in eachindex(A) ]
 
@@ -141,6 +143,23 @@ function explicit_kroneckersum(A::Vector{Matrix{T}}) where T <: AbstractFloat
     end
 
     return K
+end
+
+function explicit_kroneckersum(A::Vector{<:SparseMatrixCSC{T, U}}) where {T<:AbstractFloat, U<:Int}
+
+    orders = [ size(A[s], 1) for s in eachindex(A) ]
+
+
+    K = recursivekronecker(A[1], 1, orders)
+
+    for s in 2:length(A)
+
+        K += recursivekronecker(A[s], s, orders)
+
+    end
+
+    return K
+
 end
 			
 struct KroneckerMatrix{T} <: KroneckerProduct{T}
@@ -252,6 +271,12 @@ function Base.getindex(KM::KroneckerMatrix, i::Int, j::Int)
 
     # Return the entry (i, j) of all d coefficient matrices
     return [ KM[s][i, j] for s in 1:length(KM) ]
+
+end
+
+function kth_rows(KM::KroneckerMatrix, k::Int)
+
+    return [ @view(KM[s][k, :]) for s in 1:length(KM) ]
 
 end
 

@@ -111,9 +111,6 @@ function maskprod(x::FMatrices{T}, i::Int) where T <: AbstractFloat
 
 end
 
-
-
-
 function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) where T<:AbstractFloat
 
     for s = 1:length(LowerTriangles)
@@ -148,24 +145,15 @@ function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) w
     #
     # 2 ⋅Σₖ₌₁ Σᵢ₌ₖ₊₁ Γ[i, k] ⋅ Πⱼ≠ ₛ<yᵢ⁽ʲ⁾,yₖ⁽ʲ⁾> + Σᵢ₌₁ Πⱼ≠ ₛ||yᵢ⁽ʲ⁾||²
     
-    #t = size(Y_masked, 1)
     t = size(Γ, 1)
 
     value = 0.0
 
     for k in 1:t
 
-        #value += Γ[k, k] .* maskprod(Y_masked, k, k)
-        
-        #value += maskprod(Y_masked, k, k)
-
-        #for i in k + 1 : t
         for i in 1:t
 
-            #value += 2 * Γ[i, k] * maskprod(Y_masked, i, k)
-            #value += 2 * maskprod(Y_masked, i, k)
             value += Γ[i, k] * maskprod(Y_masked, i, k)
-            #value += prod(prod.(Y_masked))
 
         end
     end
@@ -228,7 +216,6 @@ function residual_norm(
     compute_lower_outer!(Λ, y.lambda)
 
     # Make matrices lower triangular
-    #Ly = LowerTriangular.(Ly)
     Ly = Symmetric.(Ly, :L)
 
     res_norm = 0.0
@@ -250,26 +237,32 @@ function residual_norm(
     end
 
     # Compute squared compressed residual norm
-    #r_compressed = compressed_residual(Ly, Λ, H, y, b)
     r_compressed = compressed_residual(H, y, b)
 
-    #@info r_compressed
+    @info "Residual norm without taking into account compressed residual" res_norm
     
     return sqrt(res_norm + r_compressed)
 
 end
 
-function update_rhs!(b̃::KronProd{T}, V::KronMat{T}, b::KronProd{T}, k::Int) where T<:AbstractFloat
+function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T}) where T<:AbstractFloat
 
+        b̃        = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+        b_minors = principal_minors(b̃, 1)
+        columns  = kth_columns(V, 1)
+        update_rhs!(b_minors, columns, b, 1)
+
+        return b̃
+end
+
+function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) where T<:AbstractFloat
     # b̃ = Vᵀb = ⨂ Vₛᵀ ⋅ ⨂ bₛ = ⨂ Vₛᵀbₛ
     
     for s = 1:length(b̃)
 
         # Update one entry of each component of b̃ by performing a single inner product 
-        #b̃[s][k] = dot( V[s] , b[s] )
-        #mul!(b̃[s][1:k], transpose(V.𝖳[s]), b[s])
-        b̃[s][1:k] = transpose(V.𝖳[s]) * b[s]
-     
+        b̃[s][k] = dot(V[s], b[s])
+
     end
 
 end
@@ -324,8 +317,6 @@ function tensor_krylov(
     # Initialize multiindex 𝔎
     𝔎 = Vector{Int}(undef, d)
 
-    # Allocate memory for right-hand side b̃
-    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
 
     # Allocate memory for approximate solution
     x = nothing
@@ -337,6 +328,9 @@ function tensor_krylov(
 
     orthonormalization = tensor_decomp.orthonormalization
     initial_orthonormalization!(tensor_decomp, b, orthonormalization)
+
+    # Allocate memory for right-hand side b̃
+    b̃ = initialize_compressed_rhs(b, tensor_decomp.V)
 
     #omega = [
     #    0.0000001270914523635023453823152008025368,   
@@ -415,7 +409,7 @@ function tensor_krylov(
         columns = kth_columns(tensor_decomp.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
-        update_rhs!(b_minors, V_minors, b, k)
+        update_rhs!(b_minors, columns, b, k)
 
         b_norm = kronprodnorm(b_minors)
 
