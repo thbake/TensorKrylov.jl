@@ -1,13 +1,8 @@
-export tensor_krylov, update_rhs!, KronMat, KronProd
+export tensor_krylov, update_rhs! 
 
 using ExponentialUtilities: exponential!, expv
 using SparseArrays: mul!
 
-# Aliases
-const KronProd{T}      = Vector{<:AbstractVector{T}} 
-const KronMat{T}       = KroneckerMatrix{T}
-const LowerTriangle{T} = LowerTriangular{T, <:AbstractMatrix{T}} 
-const FMatrices{T}     = Vector{<:AbstractMatrix{T}} 
 
 
 function matrix_exponential_vector!(
@@ -56,194 +51,7 @@ function solve_compressed_system(
     return yₜ
 end
 
-function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T <: AbstractFloat
 
-    # Lower triangular matrix representing the outer product of a vector with itself
-
-    t = size(L, 1)
-
-    for j = 1:t, i = j:t
-
-        L[i, j] = γ[i] * γ[j]
-
-    end
-
-end
-
-function compute_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T <: AbstractFloat
-
-    # Given a collection of lower triangular matrices containing all values of 
-    # λ⁽ˢ⁾corresponding to each factor matrix in the CP-decomposition of the 
-    # tensor y, and an array δ containing the k-th entry of a column of said 
-    # factor matrices, compute the product of both (see section 3.3. bottom).
-
-    t = length(δ)
-
-    Δ = ones(t, t)
-
-    # Lower triangle of outer product
-    compute_lower_outer!(Δ, δ) # ∈ ℝᵗᵗ
-
-    Γ = Δ .* Λ
-
-    return Γ
-
-end
-
-function skipindex(index::Int, range::UnitRange{Int})
-
-    return Iterators.filter(r -> r != index, range)
-
-end
-
-function maskprod(A::FMatrices{T}, i::Int, j::Int) where T <: AbstractFloat
-
-    # Compute product of entries (i,j) of the matrices contained in A.
-
-    return prod(getindex.(A, i, j)) 
-
-end
-
-
-function maskprod(x::FMatrices{T}, i::Int) where T <: AbstractFloat
-
-    return prod(getindex.(x, i)) 
-
-end
-
-function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) where T<:AbstractFloat
-
-    for s = 1:length(LowerTriangles)
-
-        BLAS.syrk!('L', 'T', 1.0, x.fmat[s], 1.0, LowerTriangles[s])
-
-    end
-
-end
-
-function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T}) where T<:AbstractFloat
-
-    for s = 1:length(LowerTriangles)
-
-        BLAS.syrk!('L', 'T', 1.0, x[s], 1.0, LowerTriangles[s])
-
-    end
-
-end
-
-function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) where T <: AbstractFloat
-
-    # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
-    #
-    #   Σ |y_𝔏|² = ||Σᵢ eₖₛᵀ yᵢ⁽ˢ⁾ ⨂ ⱼ≠ ₛ yᵢ⁽ʲ⁾||², 
-    #
-    # where δ represents the vector holding kₛ-th entry of each column of the 
-    # s-th factor matrix of y.
-    #
-    # We use the symmetry of the inner products and only require to iterate in
-    # the correct way:
-    #
-    # 2 ⋅Σₖ₌₁ Σᵢ₌ₖ₊₁ Γ[i, k] ⋅ Πⱼ≠ ₛ<yᵢ⁽ʲ⁾,yₖ⁽ʲ⁾> + Σᵢ₌₁ Πⱼ≠ ₛ||yᵢ⁽ʲ⁾||²
-    
-    t = size(Γ, 1)
-
-    value = 0.0
-
-    for k in 1:t
-
-        for i in 1:t
-
-            value += Γ[i, k] * maskprod(Y_masked, i, k)
-
-        end
-    end
-
-    return value 
-end
-
-function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
-
-    # This variant expands the matrices/tensors
-
-    N = nentries(H)
-
-    H_expanded = sparse(Matrix(kroneckersum(H.𝖳...)))
-    y_expanded = reshape(full(y), N)
-    b_expanded = kronecker(b...)
-
-    x = zeros(N)
-
-    @assert issparse(H_expanded)
-
-    #mul!(x, H_expanded, y_expanded)
-
-    comp_res = (H_expanded * y_expanded) - b_expanded
-    comp_res = x - b_expanded
-    
-    @info "Compressed residual" dot(comp_res, comp_res)
-    return dot(comp_res, comp_res)
-
-end
-
-function residual_norm(
-        H::KronMat{T},
-        y::ktensor,
-        𝔎::Vector{Int},
-        subdiagonal_entries::Vector{T},
-        b::KronProd{T}) where T<:AbstractFloat
-    
-    # Compute squared norm of the residual according to Lemma 3.4 of paper.
-    
-    # Σ |hˢₖ₊₁ₖ|² * Σ |y\_𝔏|² + ||ℋy - b̃||²
-    
-    # Get entries at indices (kₛ+1, kₛ) for each dimension with pair of 
-    # multiindices 𝔎+1, 𝔎
-
-    d = length(H) # Number of dimensions
-
-    t = ncomponents(y) # Tensor rank
-
-    # Allocate memory for (lower triangular) matrices representing inner products
-    Ly = [ zeros(t, t) for _ in 1:d ]
-
-    compute_lower_triangles!(Ly, y)
-
-    # Allocate memory for (lower triangular) matrix representing outer product
-    # of coefficients.
-    
-    Λ = LowerTriangular(zeros(t, t))
-
-    compute_lower_outer!(Λ, y.lambda)
-
-    # Make matrices lower triangular
-    Ly = Symmetric.(Ly, :L)
-
-    res_norm = 0.0
-
-    mask = trues(d)
-
-    for s = 1:d
-
-        Γ = Symmetric(compute_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
-
-        mask[s] = false
-
-        y² = squared_tensor_entries(Ly[mask], Γ)
-
-        res_norm += abs( subdiagonal_entries[s] )^2 * y²
-
-        mask[s] = true
-
-    end
-
-    # Compute squared compressed residual norm
-    r_compressed = compressed_residual(H, y, b)
-
-    @info "Residual norm without taking into account compressed residual" res_norm
-    
-    return sqrt(res_norm + r_compressed)
-
-end
 
 function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T}) where T<:AbstractFloat
 
@@ -394,6 +202,7 @@ function tensor_krylov(
     end
 
     n = dimensions(A)[1]
+
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
