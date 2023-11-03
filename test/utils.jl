@@ -41,16 +41,17 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
 
 end
 
-@testset "Tensor computations" begin
+@testset "Compressed residual computations" begin
 
     d    = 3
     n    = 15
     rank = 4
 
-    Mᵢ= [ Tridiagonal(-ones(n-1), 2ones(n), -ones(n-1)) for _ in 1:d ]
-    M = KroneckerMatrix{Float64}(Mᵢ)
-    X = [ rand(n, rank) for _ in 1:d ]
-    x = ktensor(ones(rank), X)
+    Mᵢ  = [ Tridiagonal(-ones(n-1), 2ones(n), -ones(n-1)) for _ in 1:d ]
+    M   = KroneckerMatrix{Float64}(Mᵢ)
+    mat = rand(n, rank)
+    X   = [ rand() .* mat for _ in 1:d ]
+    x   = ktensor(ones(rank), X)
 
     function initialize_matrix_products(M, x)
 
@@ -98,7 +99,9 @@ end
         value = 0.0 
 
         lowerX = [ zeros(t, t) for _ in 1:d ]
+        
         compute_lower_triangles!(lowerX, x)
+
         X = Symmetric.(lowerX, :L)
 
         for j in 1:t, i in 1:t
@@ -119,134 +122,37 @@ end
 
     end
 
-    MVnorm                 = efficientMVnorm(x, Λ, lowerX, Z)
-    exact_efficient_MVnorm = compute_exactMVnorm(x, Λ, lowerX, Z)
+    # Compute ||Mx||²
+    exact_efficient_MVnorm = MVnorm(x, Λ, lowerX, Z)
 
-    M_kroneckersum = explicit_kroneckersum(Mᵢ)
-    x_explicit     = kroneckervectorize(x)
-    
+    # Compute exact solution
+    M_kroneckersum         = explicit_kroneckersum(Mᵢ)
+    x_explicit             = kroneckervectorize(x)
+    solution               = M_kroneckersum * x_explicit
+    exactMVnorm            = dot(solution, solution)
 
-    tnorm       = tensorsquarednorm(x)
-    ex_norm     = dot(x_explicit, x_explicit)
-    solution    = M_kroneckersum * x_explicit
-    exactMVnorm = dot(solution, solution)
+    @test (exact_efficient_MVnorm - exactMVnorm) / exactMVnorm < 1e-14
 
-    @info (tnorm - ex_norm) / ex_norm
-    @test (exact_efficient_MVnorm - exactMVnorm) / exactMVnorm < 1e-15
-
+    # Generate right-hand side
     b               = [ rand(n) for _ in 1:d ]
     b_explicit      = kron(b...)
-    exactinnerprod  = dot(solution, b_explicit)
-    #approxinnerprod = innerprod_kronsum_tensor!(Z, x, b)
+
+    # Compute <Mx, b>₂
     approxinnerprod = tensorinnerprod(Z, x, b)
+    exactinnerprod  = dot(solution, b_explicit)
 
-    @info abs(exactinnerprod - approxinnerprod) / exactinnerprod
+    # If factor matrices in CP-decomposition are close to being orthogonal the dot product computation is very ill-conditioned.
+    @test abs(exactinnerprod - approxinnerprod) / exactinnerprod < 1e-14
 
+    b_norm = kronproddot(b)
+
+    # Explicit compressed residual norm
+    exp_comp_res_norm    = norm(b_explicit - solution)^2
+    approx_comp_res_norm = compressed_residual(lowerX, Λ, M, x, b)
+
+    @test (exp_comp_res_norm  - approx_comp_res_norm) / exp_comp_res_norm < 1e-14
 
 end
-
-#@testset "(Compressed) residual norm computations" begin
-#    
-#    # We consider tensors of order 4, where each mode is 4 as well.
-#    d = 5
-#    nₛ= 5
-#
-#    Hᵢ        = sparse( Tridiagonal(-ones(nₛ - 1), 2ones(nₛ), -ones(nₛ - 1)) )
-#    H         = KroneckerMatrix{Float64}([Hᵢ for _ in 1:d])
-#    H_kronsum = explicit_kroneckersum( [Hᵢ for _ in 1:d ])
-#
-#    u = rand(nₛ)
-#    v = rand(nₛ)
-#    w = rand(nₛ)
-#    x = rand(nₛ)
-#    z = rand(nₛ)
-#
-#    # In the following we construct b as a rank 1 tensor such that the solution
-#    # of the linear system H * y = b has a good low rank approximation.
-#    b = zeros(nₛ, nₛ, nₛ, nₛ, nₛ)
-#
-#    for m = 1:nₛ, l = 1:nₛ, k = 1:nₛ, j = 1:nₛ, i = 1:nₛ
-#
-#        b[i, j, k, l, m] = u[i] * v[j] * w[k] * x[l] * z[m]
-#
-#    end
-#
-#    N = nₛ^d  
-#
-#    rank = 3
-#
-#    # Create Kruskal tensor such that there is no difference between this and its
-#    # full tensor representation
-#    y = ktensor( ones(rank), [ rand(d, rank) for _ in 1:d] )
-#
-#    Y_vec = reshape(full(y), N)
-#
-#    @assert norm(reshape(full(y), N) - Y_vec) / norm(Y_vec) < 1e-15
-#
-#    # First test ||Hy||²
-#    # Allocate memory for (lower triangular) matrices representing inner products
-#    Y_inner = [ zeros(rank, rank) for _ in 1:d ]
-#
-#    for s = 1:d
-#
-#        LinearAlgebra.BLAS.syrk!('L', 'T', 1.0, y.fmat[s], 1.0, Y_inner[s])
-#
-#    end
-#
-#    Z = matrix_vector(H, y)
-#
-#    Λ = y.lambda * y.lambda'
-#
-#    Ly = [LowerTriangular( zeros(rank, rank) ) for _ in 1:d]
-#
-#    map!(LowerTriangular, Ly, Y_inner)
-#
-#    # Compute squared norm of Kronecker matrix and ktensor ||Hy||²
-#    efficient_norm      = efficientMVnorm(y, Λ, Ly, Z)
-#    exact_matrix_vector = dot( (H_kronsum * Y_vec),  (H_kronsum * Y_vec) )
-#
-#    bY = [ zeros(1, rank) for _ in 1:d ] # bₛᵀyᵢ⁽ˢ⁾
-#    bZ = [ zeros(1, rank) for _ in 1:d ] # bₛᵀzᵢ⁽ˢ⁾, where zᵢ⁽ˢ⁾ = Hₛ⋅yᵢ⁽ˢ⁾
-#
-#    # Right-hand side represented as factors of Kronecker product
-#    b_kronprod = [u, v, w, x, z]
-#
-#    # Vectorization of right-hand side
-#    b_vec = reshape(b, N)
-#
-#    # Compute inner product of Kronecker matrix times ktensor and right-hand side <Hy, b>
-#    innerprod        = innerprod_kronsum_tensor!(bY, bZ, Z, y, b_kronprod)
-#    exact_innerprod  = dot(H_kronsum * Y_vec, b_vec)
-#
-#    @test efficient_norm ≈ exact_matrix_vector 
-#    @test innerprod      ≈ dot(H_kronsum * Y_vec, b_vec) atol = 1e-12 
-#
-#    # Compressed residual norm
-#    r_comp = compressed_residual(Ly, LowerTriangular(Λ), H, y, b_kronprod)
-#
-#    exact_comp_norm = exact_matrix_vector - 2 * dot(H_kronsum * Y_vec, b_vec) + dot(b_vec, b_vec)
-#    
-#    @info norm(r_comp - exact_comp_norm) / norm(exact_comp_norm)
-#    @test r_comp ≈ exact_comp_norm 
-#
-#    𝔎 = [ 3 for _ in 1:d ]
-#
-#    subdiagonal_entries = [ H[s][𝔎[s] + 1, 𝔎[s]] for s in 1:d ]
-#
-#    res_norm = residual_norm(H, y, 𝔎, subdiagonal_entries, b_kronprod)
-#
-#    #@info "Differene between abs(res_norm - exact_comp_norm)
-#    Y = H_kronsum\( reshape(b, N) )
-#
-#    #@info "Exact ||Hy||²: " exact_matrix_vector " exact 2 ⋅<Hy, b>: " 2*dot(H_kronsum*Y_vec, b_vec) " exact ||b||²: " dot(b_vec, b_vec)
-#    
-#    # On the order of the machine precision
-#
-#    # Check that we have indeed constructed a "good" low-rank approximation
-#    #@test norm( reshape(full(y), N) - Y) < 1e-13
-#    @info norm( reshape(full(y), N) - Y)  / norm(Y)
-#
-#end
 
 @testset "Residual computations" begin
 

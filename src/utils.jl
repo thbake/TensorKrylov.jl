@@ -1,5 +1,5 @@
 export KronMat, KronProd, LowerTriangle, FMatrices
-export compute_lower_outer!, compute_coefficients, maskprod, compute_lower_triangles!, matrix_vector, compute_exactMVnorm, efficientMVnorm, innerprod_kronsum_tensor!, compressed_residual, residual_norm, squared_tensor_entries, tensorinnerprod
+export compute_lower_outer!, compute_coefficients, maskprod, compute_lower_triangles!, matrix_vector, MVnorm, efficientMVnorm, compressed_residual, residual_norm, squared_tensor_entries, tensorinnerprod
 
 # Aliases
 const KronProd{T}      = Vector{<:AbstractVector{T}} 
@@ -58,7 +58,7 @@ end
 
 function maskprod(x::FMatrices{T}, i::Int) where T <: AbstractFloat
 
-    return prod(getindex.(x, i)) 
+    return prod(getindex.(x, 1, i)) 
 
 end
 
@@ -109,73 +109,6 @@ function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) w
     return value 
 end
 
-function innerprod_kronsum_tensor!(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T <: AbstractFloat
-
-    # Computes <Ax, y>₂, where A is a matrix (Kronecker sum) and y is a Kruskal tensor.
-    yX =  [ zeros(1, ncomponents(x)) for _ in 1:ndims(x) ]
-    yAx = [ zeros(1, ncomponents(x)) for _ in 1:ndims(x) ]
-
-    mul!(yX, y, x)    
-    mul!(yAx, y, Ax)  
-
-    mask = trues(length(Ax))
-
-    @assert length(Ax) == ndims(x)
-
-    Ax_y = 0.0
-
-    for s = 1:length(Ax)
-
-        mask[s] = false
-
-        yX_mask  = yX[mask]
-        yAx_mask = yAx[.!mask]
-        
-        for i = 1:ncomponents(x)
-
-            # Scale here with lambda
-            Ax_y += x.lambda[i] * maskprod(yX_mask, i) * maskprod(yAx_mask, i)
-
-        end
-
-        mask[s] = true
-
-    end
-
-    return Ax_y
-
-end
-
-function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:AbstractFloat
-
-    d   = ndims(x)
-    yX  = [ zeros(1, ncomponents(x)) for _ in 1:d ]
-    yAx = [ zeros(1, ncomponents(x)) for _ in 1:d ]
-    
-    mul!(yX, y, x)    
-    mul!(yAx, y, Ax)  
-
-    Ax_y = 0.0
-
-    for i in 1:ncomponents(x)
-
-        mask = falses(d)
-
-        for s in 1:d
-
-            mask[s] = true
-
-            Ax_y += maskprod(yAx[mask], i) * maskprod(yX[.!mask], i)
-
-            mask[s] = false
-
-        end
-
-    end
-
-    return Ax_y
-
-end
 
 function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T<:AbstractFloat
 
@@ -204,7 +137,7 @@ function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T<:Abstr
 
 end
 
-function compute_exactMVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMatrices{T}) where T<:AbstractFloat
+function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMatrices{T}) where T<:AbstractFloat
 
     Λ_complete = Symmetric(Λ, :L)
     X          = Symmetric.(lowerX, :L)
@@ -242,6 +175,34 @@ function compute_exactMVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrice
 
     return MVnorm
     
+end
+
+function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:AbstractFloat
+
+    d   = ndims(x)
+    yX  = [ transpose(y[s]) * x.fmat[s] for s in 1:d ]
+    yAx = [ transpose(y[s]) * Ax[s] for s in 1:d ]
+
+    Ax_y = 0.0
+
+    for s in 1:d
+
+        mask = falses(d)
+
+        for i in 1:ncomponents(x)
+
+            mask[s] = true
+
+            Ax_y += maskprod(yAx[mask], i) * maskprod(yX[.!mask], i)
+
+            mask[s] = false
+
+        end
+
+    end
+
+    return Ax_y
+
 end
 
 function efficientMVnorm(x::ktensor, Λ::AbstractMatrix{T}, X_inner::FMatrices{T}, Z::FMatrices{T}) where T <: AbstractFloat
@@ -369,21 +330,18 @@ function compressed_residual(
         b::KronProd{T}) where T <:AbstractFloat
 
     # We know that 
-    #
-    #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
     
-    d = length(H)
-    t = ncomponents(y)
+    #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
 
     # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
     Z = matrix_vector(H, y)
 
     # First we compute ||Hy||²
     #Hy_norm = efficientMVnorm(y, Symmetric(Λ, :L), Ly, Z)
-    Hy_norm = compute_exactMVnorm(y, Symmetric(Λ, :L), Ly, Z)
+    Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z)
 
     # Now we proceed with <Hy, b>₂
-    Hy_b = innerprod_kronsum_tensor!(Z, y, b)
+    Hy_b = tensorinnerprod(Z, y, b)
 
     # Finally we compute the squared 2-norm of b
     b_norm = kronproddot(b)
