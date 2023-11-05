@@ -1,8 +1,7 @@
-export Arnoldi, Lanczos, TensorArnoldi, TensorLanczos
+export Arnoldi, Lanczos, TensorArnoldi, TensorLanczos, TensorDecomposition
 export orthonormal_basis!, orthonormal_basis_vector!, initial_orthonormalization!, initialize_decomp!
 
 const MatrixView{T}    = AbstractMatrix{T}
-const KroneckerProd{T} = AbstractArray{<:AbstractArray{T}}
 
 abstract type Decomposition{T}       end
 abstract type TensorDecomposition{T} end
@@ -200,7 +199,7 @@ function orthonormal_basis_vector!(lanczos::Lanczos{T}, k::Int) where T<:Abstrac
 end
 
 
-function initial_orthonormalization!(t_decomp::TensorDecomposition{T}, b::KroneckerProd{T}, decomp_type::Type{<:Decomposition}) where T<:AbstractFloat
+function initial_orthonormalization!(t_decomp::TensorDecomposition{T}, b::KronProd{T}, decomp_type::Type{<:Decomposition}) where T<:AbstractFloat
 
     # This method performs the first orthonormalization step of both TensorArnoldi 
     # and TensorLanczos data structures.

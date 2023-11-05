@@ -1,46 +1,45 @@
-export KroneckerProduct, KroneckerMatrix
-export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, principal_minors, explicit_kroneckersum, recursivekronecker
+export VectorCollection, MatrixCollection, KroneckerMatrix
+export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, principal_minors, explicit_kroneckersum, recursivekronecker, kth_columns
 
-abstract type KroneckerProduct{T} end
-abstract type KroneckerIndex end
+abstract type VectorCollection{T} end
+abstract type MatrixCollection{T} <: VectorCollection{T} end
 
-struct KroneckerSlice <: KroneckerIndex end
-struct KroneckerEntry <: KroneckerIndex end
+
 # We want to generate an abstract notion of structures that can be represented as Kronecker products
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
 # or matrices
 
-# Basic functions for KroneckerProduct types
+# Basic functions for VectorCollection types
 # ==========================================
-function Base.length(KP::KroneckerProduct)
+function Base.length(collection::VectorCollection{T}) where T
 
-    return length(KP.𝖳)
-
-end
-
-function Base.getindex(KP::KroneckerProduct, i::Int)
-
-    1 <= i <= length(KP.𝖳) || throw(BoundsError(KP, i))
-
-    return KP.𝖳[i]
+    return length(collection.𝖳)
 
 end
 
-function Base.getindex(KP::KroneckerProduct, IMult::Matrix{Int})
+function Base.getindex(collection::VectorCollection{T}, i::Int) where T
+
+    1 <= i <= length(collection.𝖳) || throw(BoundsError(collection, i))
+
+    return collection.𝖳[i]
+
+end
+
+function Base.getindex(collection::VectorCollection{T}, multiindex::Matrix{<:Int}) where T
 
     # Implement multiindexing of KroneckerProduct structures. To be precise
     # index a KroneckerProduct structure with a pair of multiindices ℑ₁, ℑ₂.
-    d = size(IMult, 1)
+    d = size(multiindex, 1)
 
-    length(KP) == d || throw(BoundsError(KP, IMult))
+    length(collection) == d || throw(BoundsError(collection, multiindex))
     
     entries = zeros(d)
 
-    for s = 1:length(KP)
+    for s = 1:length(collection)
 
-        k, l = IMult[s, :]
+        k, l = multiindex[s, :]
         
-        entries[s] = KP[s][k, l]  
+        entries[s] = collection[s][k, l]  
 
     end
 
@@ -48,28 +47,28 @@ function Base.getindex(KP::KroneckerProduct, IMult::Matrix{Int})
 
 end
 
-function Base.setindex!(KP::KroneckerProduct, M::Matrix{T}, i::Int) where T<:AbstractFloat
+function Base.setindex!(collection::VectorCollection{T}, M::Matrix{T}, i::Int) where T<:AbstractFloat
 
-    1 <= i <= length(KP.𝖳) || throw(BoundsError(KP, i))
+    1 <= i <= length(collection.𝖳) || throw(BoundsError(collection, i))
 
-    KP.𝖳[i] = M
-
-end
-
-function Base.eachindex(KP::KroneckerProduct)
-
-    return eachindex(KP.𝖳)
+    collection.𝖳[i] = M
 
 end
 
+function Base.eachindex(collection::VectorCollection{T}) where T
 
-function dimensions(KP::KroneckerProduct)::Array{Int}
+    return eachindex(collection.𝖳)
+
+end
+
+
+function dimensions(collection::VectorCollection{T})::Array{Int} where T
     
-    factor_dimensions = Array{Int}(undef, length(KP))
+    factor_dimensions = Array{Int}(undef, length(collection))
 
-    for s = 1:length(KP)
+    for s = 1:length(collection)
         
-        factor_dimensions[s] = size(KP[s], 1)
+        factor_dimensions[s] = size(collection[s], 1)
 
     end
 
@@ -77,15 +76,15 @@ function dimensions(KP::KroneckerProduct)::Array{Int}
 
 end
 
-function nentries(KP::KroneckerProduct)
+function nentries(collection::VectorCollection{T}) where T
     
-    return prod(dimensions(KP))
+    return prod(dimensions(collection))
     
 end
 
-function norm(KP::KroneckerProduct)
+function norm(collection::VectorCollection{T}) where T
 
-    return prod( map(norm, KP) )
+    return prod( map(norm, collection) )
 end 
 
 function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T<:AbstractFloat
@@ -162,7 +161,7 @@ function explicit_kroneckersum(A::Vector{<:SparseMatrixCSC{T, U}}) where {T<:Abs
 
 end
 			
-struct KroneckerMatrix{T} <: KroneckerProduct{T}
+struct KroneckerMatrix{T} <: MatrixCollection{T}
     
     𝖳::Vector{<:AbstractMatrix{T}} # We only store the d matrices explicitly in a vector.
 
@@ -194,7 +193,7 @@ function trikronmat(orders::Array{Int})
 
 end
 
-function Base.size(KM::KroneckerMatrix)::Array{Tuple{Int, Int}}
+function Base.size(KM::KroneckerMatrix{T})::Array{Tuple{Int, Int}} where T
 
     # Return size of each KroneckerMatrix element
     
@@ -210,7 +209,7 @@ function Base.size(KM::KroneckerMatrix)::Array{Tuple{Int, Int}}
 end
 
 # Linear algebra for KroneckerMatrix
-function norm(KM::KroneckerMatrix)
+function norm(KM::KroneckerMatrix{T}) where T
 
     # This is the best I can think of right now.
     A = kroneckersum(KM)
@@ -218,11 +217,6 @@ function norm(KM::KroneckerMatrix)
     return norm(A)
 
 end
-
-#function kronmatttm(KM::KroneckerMatrix, ktensor)::ktensor
-#
-#
-#end
 
 function kronproddot(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
 
@@ -236,7 +230,7 @@ function kronprodnorm(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFlo
 
 end
 
-function principal_minors(v::Vector{Vector{T}}, i::Int) where T<:AbstractFloat
+function principal_minors(v::AbstractArray{<:AbstractArray{T}}, i::Int) where T<:AbstractFloat
 
     return [ @view(v[s][1:i]) for s in 1:length(v)]
 
@@ -260,13 +254,6 @@ function principal_minors(x::ktensor, i::Int)
 
 end
 
-
-function Base.getindex(KM, j::Int, ::KroneckerSlice)
-
-    return [ @view(KM[s][1:j, 1:j]) for s in 1:length(KM) ]
-
-end
-
 function Base.getindex(KM::KroneckerMatrix, i::Int, j::Int)
 
     # Return the entry (i, j) of all d coefficient matrices
@@ -283,6 +270,12 @@ end
 function kth_columns(KM::KroneckerMatrix, k::Int)
 
     return [ @view(KM[s][:, k]) for s in 1:length(KM) ]
+
+end
+
+function kth_columns(A, k::Int)
+
+    return [ @view(A[s][:, k]) for s in 1:length(A) ]
 
 end
 

@@ -1,5 +1,4 @@
 export KronMat, KronProd, LowerTriangle, FMatrices
-export compute_lower_outer!, compute_coefficients, maskprod, compute_lower_triangles!, matrix_vector, MVnorm, efficientMVnorm, compressed_residual, residual_norm, squared_tensor_entries, tensorinnerprod
 
 # Aliases
 const KronProd{T}      = Vector{<:AbstractVector{T}} 
@@ -322,6 +321,43 @@ function efficientMVnorm(x::ktensor, Λ::AbstractMatrix{T}, X_inner::FMatrices{T
 
 end
 
+function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
+
+    d = ndims(y)
+    Z = matrix_vector(H, y)
+
+    vec     = zeros(prod(size(y)))
+    indices = collect(1:d)
+
+    for i in 1:ncomponents(y)
+
+        mask = trues(d)
+
+        for s in 1:d
+
+            tmp = [ zeros(size(y)[s]) for s in 1:d ]
+
+            mask[s] = false
+
+            tmp[s]             = @view(Z[s][:, i])
+            columns            = kth_columns(y.fmat[mask], i)
+            tmp[indices[mask]] = columns
+
+            vec += kron(tmp...)
+
+            mask[s] = true
+
+        end
+
+    end
+
+    comp_res      = vec - kron(b...)
+    comp_res_norm = dot(comp_res, comp_res)
+
+    return comp_res_norm
+
+end
+
 function compressed_residual(
         Ly::FMatrices{T},
         Λ::AbstractMatrix{T},
@@ -337,7 +373,6 @@ function compressed_residual(
     Z = matrix_vector(H, y)
 
     # First we compute ||Hy||²
-    #Hy_norm = efficientMVnorm(y, Symmetric(Λ, :L), Ly, Z)
     Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z)
 
     # Now we proceed with <Hy, b>₂
@@ -346,33 +381,35 @@ function compressed_residual(
     # Finally we compute the squared 2-norm of b
     b_norm = kronproddot(b)
 
+    @info Hy_norm, Hy_b, b_norm
+
     return Hy_norm - 2 * Hy_b + b_norm
     
 end
 
-function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
-
-    # This variant expands the matrices/tensors
-
-    N = nentries(H)
-
-    H_expanded = sparse(Matrix(kroneckersum(H.𝖳...)))
-    y_expanded = reshape(full(y), N)
-    b_expanded = kronecker(b...)
-
-    x = zeros(N)
-
-    @assert issparse(H_expanded)
-
-    #mul!(x, H_expanded, y_expanded)
-
-    comp_res = (H_expanded * y_expanded) - b_expanded
-    comp_res = x - b_expanded
-    
-    @info "Compressed residual" dot(comp_res, comp_res)
-    return dot(comp_res, comp_res)
-
-end
+#function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
+#
+#    # This variant expands the matrices/tensors
+#
+#    N = nentries(H)
+#
+#    H_expanded = sparse(Matrix(kroneckersum(H.𝖳...)))
+#    y_expanded = reshape(full(y), N)
+#    b_expanded = kronecker(b...)
+#
+#    x = zeros(N)
+#
+#    @assert issparse(H_expanded)
+#
+#    #mul!(x, H_expanded, y_expanded)
+#
+#    comp_res = (H_expanded * y_expanded) - b_expanded
+#    comp_res = x - b_expanded
+#    
+#    @info "Compressed residual" dot(comp_res, comp_res)
+#    return dot(comp_res, comp_res)
+#
+#end
 
 function residual_norm(
         H::KronMat{T},
@@ -426,11 +463,11 @@ function residual_norm(
     end
 
     # Compute squared compressed residual norm
-    r_compressed = compressed_residual(Ly, Λ, H, y, b)
-    #r_compressed = compressed_residual(H, y, b)
+    #r_compressed = compressed_residual(Ly, Λ, H, y, b)
+    r_compressed = compressed_residual(H, y, b)
+    @info r_compressed
+    @info res_norm
 
-    @info "Residual norm without taking into account compressed residual" res_norm
-    
     return sqrt(res_norm + r_compressed)
 
 end

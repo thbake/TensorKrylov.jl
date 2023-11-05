@@ -1,4 +1,10 @@
 using TensorKrylov, Test
+
+import TensorKrylov: compute_lower_outer!, compute_lower_triangles!, 
+                     compute_coefficients, maskprod, matrix_vector, MVnorm, 
+                     efficientMVnorm, compressed_residual, residual_norm,
+                     squared_tensor_entries, tensorinnerprod
+
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
 
 @testset "Masked products" begin
