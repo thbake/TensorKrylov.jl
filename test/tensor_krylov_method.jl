@@ -123,7 +123,7 @@ end
 
     @info "Norm of ⨂ b " b_norm
 
-    tensor_krylov(A, b, 1e-6, nmax, TensorLanczos{Float64})
+    tensor_krylov(A, b, 1e-9, nmax, TensorLanczos{Float64})
 
 end
 

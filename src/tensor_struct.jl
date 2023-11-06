@@ -61,7 +61,6 @@ function Base.eachindex(collection::VectorCollection{T}) where T
 
 end
 
-
 function dimensions(collection::VectorCollection{T})::Array{Int} where T
     
     factor_dimensions = Array{Int}(undef, length(collection))
@@ -179,6 +178,37 @@ struct KroneckerMatrix{T} <: MatrixCollection{T}
     end
 
 end
+
+struct KroneckerMatrixIter{T} 
+
+    matrix::KroneckerMatrix{T}
+    index::Int
+
+end
+
+# TODO: Find out how to implement these damn iterators. 
+#function Base.iterate(iter::KroneckerMatrixIter{T}, state=1) where T
+#
+#    if iter.index <= length(iter.matrix)
+#
+#        value       = iter.matrix[iter.index]
+#        iter.index += 1
+#
+#        return (value, state)
+#
+#    else 
+#        return nothing
+#    end
+#
+#end
+#
+#function Base.iterate(kronmat::KroneckerMatrix{T}) where T
+#
+#    return KroneckerMatrixIter(kronmat, 1)
+#
+#end
+
+
 
 function randkronmat(orders::Array{Int})
 

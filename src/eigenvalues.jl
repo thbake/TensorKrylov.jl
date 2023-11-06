@@ -1,4 +1,8 @@
-export qr_algorithm, qr_hessenberg, qr_decomposition!, next_coefficients!, sign_changes, initial_interval, bisection, CharacteristicPolynomials
+export qr_algorithm, qr_hessenberg, qr_decomposition!, next_coefficients!, 
+       sign_changes, initial_interval, bisection, analytic_eigenvalues
+
+
+export CharacteristicPolynomials
 
 # Data structure d sets of Sturm sequences of polynomials
 
@@ -277,6 +281,25 @@ function hessenberg_eigenvalues(H::AbstractMatrix{T}) where T<:AbstractFloat
 
     λ_min = eigenvalues[1]
     λ_max = eigenvalues[end]
+
+    return λ_min, λ_max
+
+end
+
+function analytic_eigenvalues(A::KronMat{T}) where T<:AbstractFloat
+
+    λ_min = 0.0
+    λ_max = 0.0
+
+    for Aₛ in A.𝖳
+
+        n = size(Aₛ, 1)
+        h = inv(n + 1)
+
+        λ_min += (2 * inv(h^2)) * (1 - cos(π *     inv(n + 1)))
+        λ_max += (2 * inv(h^2)) * (1 - cos(π * n * inv(n + 1)))
+
+    end
 
     return λ_min, λ_max
 

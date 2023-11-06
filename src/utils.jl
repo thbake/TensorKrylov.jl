@@ -172,6 +172,8 @@ function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMat
 
     end
 
+    @assert MVnorm > 0.0
+
     return MVnorm
     
 end
@@ -184,9 +186,9 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
 
     Ax_y = 0.0
 
+    mask = falses(d)
+    
     for s in 1:d
-
-        mask = falses(d)
 
         for i in 1:ncomponents(x)
 
@@ -199,6 +201,8 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
         end
 
     end
+
+    @assert Ax_y > 0.0
 
     return Ax_y
 
@@ -326,7 +330,7 @@ function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<
     d = ndims(y)
     Z = matrix_vector(H, y)
 
-    vec     = zeros(prod(size(y)))
+    vec     = zeros(prod(size(y))) # Here I run out of memory
     indices = collect(1:d)
 
     for i in 1:ncomponents(y)
@@ -372,6 +376,8 @@ function compressed_residual(
     # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
     Z = matrix_vector(H, y)
 
+    Ly = Symmetric.(Ly, :L)
+
     # First we compute ||Hy||²
     Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z)
 
@@ -381,9 +387,11 @@ function compressed_residual(
     # Finally we compute the squared 2-norm of b
     b_norm = kronproddot(b)
 
-    @info Hy_norm, Hy_b, b_norm
+    comp_res = Hy_norm - 2* Hy_b + b_norm
 
-    return Hy_norm - 2 * Hy_b + b_norm
+    @assert comp_res > 0.0
+
+    return comp_res
     
 end
 
@@ -463,8 +471,9 @@ function residual_norm(
     end
 
     # Compute squared compressed residual norm
-    #r_compressed = compressed_residual(Ly, Λ, H, y, b)
-    r_compressed = compressed_residual(H, y, b)
+    r_compressed = compressed_residual(Ly, Λ, H, y, b)
+    
+    #r_compressed = compressed_residual(H, y, b)
     @info r_compressed
     @info res_norm
 
