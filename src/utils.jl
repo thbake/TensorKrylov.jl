@@ -194,7 +194,7 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
 
             mask[s] = true
 
-            Ax_y += maskprod(yAx[mask], i) * maskprod(yX[.!mask], i)
+            Ax_y += x.lambda[i] * maskprod(yAx[mask], i) * maskprod(yX[.!mask], i)
 
             mask[s] = false
 
@@ -362,12 +362,7 @@ function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<
 
 end
 
-function compressed_residual(
-        Ly::FMatrices{T},
-        Λ::AbstractMatrix{T},
-        H::KronMat{T},
-        y::ktensor,
-        b::KronProd{T}) where T <:AbstractFloat
+function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat{T}, y::ktensor, b::KronProd{T}) where T <:AbstractFloat
 
     # We know that 
     
@@ -473,10 +468,6 @@ function residual_norm(
     # Compute squared compressed residual norm
     r_compressed = compressed_residual(Ly, Λ, H, y, b)
     
-    #r_compressed = compressed_residual(H, y, b)
-    @info r_compressed
-    @info res_norm
-
     return sqrt(res_norm + r_compressed)
 
 end

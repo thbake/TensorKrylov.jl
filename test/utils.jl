@@ -57,6 +57,7 @@ end
     M   = KroneckerMatrix{Float64}(Mᵢ)
     mat = rand(n, rank)
     X   = [ rand() .* mat for _ in 1:d ]
+    #X   = [ rand(n, rank) for _ in 1:d ]
     x   = ktensor(ones(rank), X)
 
     function initialize_matrix_products(M, x)

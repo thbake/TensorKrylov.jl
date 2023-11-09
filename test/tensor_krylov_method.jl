@@ -103,7 +103,7 @@ end
 
     d = 50
     nₛ = 200
-    nmax = 100
+    nmax = 150
 
     h = inv(nₛ + 1)
 
@@ -113,17 +113,7 @@ end
 
     b = [ rand(nₛ) for _ in 1:d ]
     
-    #for s in eachindex(b)
-
-    #    b[s] = inv(LinearAlgebra.norm(b[s])) .* b[s]
-
-    #end
-
-    b_norm = kronprodnorm(b)
-
-    @info "Norm of ⨂ b " b_norm
-
-    tensor_krylov(A, b, 1e-9, nmax, TensorLanczos{Float64})
+    tensor_krylov(A, b, 1e-9, nmax, TensorArnoldi{Float64})
 
 end
 

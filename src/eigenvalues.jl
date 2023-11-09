@@ -286,18 +286,17 @@ function hessenberg_eigenvalues(H::AbstractMatrix{T}) where T<:AbstractFloat
 
 end
 
-function analytic_eigenvalues(A::KronMat{T}) where T<:AbstractFloat
+function analytic_eigenvalues(d::Int, k::Int)
 
     λ_min = 0.0
     λ_max = 0.0
 
-    for Aₛ in A.𝖳
+    for _ in 1:d
 
-        n = size(Aₛ, 1)
-        h = inv(n + 1)
+        h = inv(k + 1)
 
-        λ_min += (2 * inv(h^2)) * (1 - cos(π *     inv(n + 1)))
-        λ_max += (2 * inv(h^2)) * (1 - cos(π * n * inv(n + 1)))
+        λ_min += (2 * inv(h^2)) * (1 - cos(π *     inv(k + 1)))
+        λ_max += (2 * inv(h^2)) * (1 - cos(π * k * inv(k + 1)))
 
     end
 

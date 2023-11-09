@@ -8,7 +8,7 @@ function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, �
 
         tmp = Matrix(copy(A[s]))
 
-        y.fmat[s][:, k] = expv(γ, tmp, b[s])
+        y.fmat[s][:, k] = expv(γ, tmp, b[s]) # Update kth column
 
     end
 
@@ -23,18 +23,18 @@ function solve_compressed_system(
         λ::T,
     ) where T <: AbstractFloat
 
-    reciprocal = inv(λ)
-
     # Since we are considering a canonical decomposition the tensor rank of yₜ
     # is equal to 
 
     k = dimensions(H)
-    
-    yₜ = ktensor(reciprocal .* ω, [ ones(k[s], t) for s in 1:length(H)] )
+
+    λ_inv = inv(λ)
+    yₜ    = ktensor(λ_inv * ω, [ ones(k[s], t) for s in 1:length(H)] )
+
 
     for k = 1:t
 
-        γ = -α[k] * reciprocal
+        γ = -α[k] * λ_inv
 
         matrix_exponential_vector!(yₜ, H, b, γ, k)
 
@@ -104,11 +104,7 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_ortho
     # Allocate memory for right-hand side b̃
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V)
 
-    if t_orthonormalization == TensorLanczos{T}
-
-        coefficients_df = compute_dataframe()
-
-    end
+    coefficients_df = compute_dataframe()
 
     n = dimensions(A)[1]
 
@@ -121,8 +117,7 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_ortho
         V_minors = principal_minors(tensor_decomp.V, n, k)
         b_minors = principal_minors(b̃, k)
 
-        #λ_min, λ_max = tensor_qr_algorithm(H_minors, 1e-5, 100)
-        λ_min, λ_max = analytic_eigenvalues(A)
+        λ_min, λ_max = analytic_eigenvalues(d, k)
 
         columns = kth_columns(tensor_decomp.V, k)
 
@@ -140,17 +135,15 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_ortho
         end
 
         @info "Condition: " κ
-        #@info "Smallest eigenvalue:" λ_min 
-        #@info "b_norm: " b_norm
 
-        ω, α, rank = optimal_coefficients_mod(coefficients_df, tol, κ, λ_min, b_norm)
+        ω, α, rank = optimal_coefficients(coefficients_df, tol, κ, λ_min, b_norm)
         
-        #rank = 24
+        #ω, α, rank = obtain_coefficients(λ_min, κ, b_norm, tol)
+        
         
         @info "Chosen tensor rank: " rank
 
         # Approximate solution of compressed system
-        #y = solve_compressed_system(H_minors, b_minors, omega, alpha, rank, λ_min)
         y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
 
         𝔎 .= k 
@@ -183,95 +176,3 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_ortho
     println("No convergence")
 
 end
-
-#function tensor_krylov(
-#        A::KronMat{T},
-#        b::KronProd{T},
-#        tol::T,
-#        nmax::Int,
-#        t_orthonormalization::Type{TensorArnoldi{T}}) where T <: AbstractFloat
-#
-#	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
-#    d = length(A)
-#
-#    # Initialize multiindex 𝔎
-#    𝔎 = Vector{Int}(undef, d)
-#
-#    # Allocate memory for right-hand side b̃
-#    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
-#
-#    # Allocate memory for approximate solution
-#    x = nothing
-#
-#    t_arnoldi = t_orthonormalization(A)
-#
-#    initial_orthonormalization!(t_arnoldi, b, Arnoldi)
-#
-#    for k = 2:nmax
-#
-#        # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-#        orthonormal_basis!(t_arnoldi, k)
-#
-#        H_minors = principal_minors(t_arnoldi.H, k)
-#        V_minors = principal_minors(t_arnoldi.V, k)
-#        b_minors = principal_minors(b̃, k)
-#
-#        #λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, k)
-#        λ_min, λ_max = tensor_qr_algorithm(H_minors, 1e-5, 100)
-#        
-#
-#        @info "Eigenvalues" λ_min, λ_max
-#
-#        columns = kth_columns(t_arnoldi.V, k)
-#
-#        # Update compressed right-hand side b̃ = Vᵀb
-#        update_rhs!(b_minors, columns, b)
-#
-#        b_norm = kronprodnorm(b_minors)
-#
-#        κ = abs(λ_max / λ_min)
-#
-#        @info "Condition: " κ
-#        #@info "Smallest eigenvalue:" λ_min 
-#        #@info "b_norm: " b_norm
-#
-#        ω, α, rank = optimal_coefficients_mod(coefficients_df, tol, κ, λ_min, b_norm)
-#
-#        @info "Chosen tensor rank: " rank
-#
-#        # Approximate solution of compressed system
-#        y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
-#
-#        𝔎 .= k 
-#
-#        subdiagonal_entries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
-#
-#        # Compute residual norm
-#        r_norm = residual_norm(H_minors, y, 𝔎, subdiagonal_entries, b_minors)
-#
-#        rel_res_norm = (r_norm / kronprodnorm(b_minors))
-#
-#        @info "Iteration: " k "relative residual norm:" rel_res_norm
-#
-#
-#        if rel_res_norm < tol
-#
-#            x = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ])
-#
-#            x_minors = principal_minors(x, k)
-#
-#            basis_tensor_mul!(x_minors, V_minors, y)
-#
-#            println("Convergence")
-#
-#            return x
-#
-#        end
-#
-#    end
-#
-#    println("No convergence")
-#
-#    return x
-#
-#end

@@ -4,13 +4,98 @@ using CSV
 function compute_dataframe()
 
     # Read csv file into dataframe
-    data = "../coefficients_data/output_data/k_R_accuracy_sorted.csv"
+    #data = "../coefficients_data/output_data/k_R_accuracy_sorted.csv"
+    data = "../coefficients_data/output_data/tabelle_complete.csv"
 
     column_types = [ fill(Float64, 64)... ]
 
     df = CSV.read(data, DataFrame, delim = ',', types = column_types)
 
     return df
+
+end
+
+function bound(λ_min::T, κ::T, b_norm::T, tol::T) where T<:AbstractFloat
+
+    prefactor   = 16 * inv(λ_min)
+    denominator = log(8 * κ)
+    t           = collect(1:63)
+    nominator   = -π^2 .* t 
+    
+    values =  prefactor .* exp.(nominator .* inv(denominator)) .* b_norm
+
+    valid_ranks = t[tol .>= values]
+
+    return valid_ranks
+
+end
+
+function set_filename(t_min::Int, condition_digit, condition_order)
+
+    filename = "../coefficients_data/" 
+
+    t_string = string(t_min)
+
+    if length(t_string) == 1
+
+        filename = filename * "1_xk0" 
+
+    else 
+        
+        filename = filename * "1_xk" 
+
+    end
+
+    filename = filename * string(t_min) * "." * string(condition_digit) * "_" * string(condition_order)
+
+    return filename
+
+end
+
+function obtain_coefficients(λ_min::T, κ::T, b_norm::T, tol::T) where T<:AbstractFloat 
+
+    valid_ranks     = bound(λ_min, κ, b_norm, tol)
+    println(valid_ranks)
+    condition_order = Int(floor(log10(κ)))
+    condition_digit = Int(floor(κ * inv(10^condition_order)))
+    
+    t_min = valid_ranks[1]
+
+    # Construct file name
+    filename = set_filename(t_min, condition_digit, condition_order)
+    println(filename)
+    println(isfile(filename))
+
+    while (t_min <= valid_ranks[end]) && (!isfile(filename))
+
+        t_min   += 1
+        filename = set_filename(t_min, condition_digit, condition_order)
+
+    end
+
+    if t_min > valid_ranks[end]
+
+        println("No valid rank was found")
+
+        return
+    end
+
+    # Use three spaces to delimit the file(s)
+    coeffs_df = CSV.read(
+                    filename, 
+                    DataFrame,
+                    delim = "{",
+                    header = ["number", "id"]
+                )
+
+
+    #ω = parse.(Float64, coeffs_df[1:t_min, 1])
+    #α = parse.(Float64, coeffs_df[t_min + 1 : 2t_min, 1])
+
+    ω = coeffs_df[1:t_min, 1]
+    α = coeffs_df[t_min + 1 : 2t_min, 1]
+
+    return ω, α, t_min
 
 end
 
@@ -37,13 +122,17 @@ function optimal_coefficients(df::DataFrame, τ::T, κ::T, λ::T, b̃_norm::T) w
     first_digit = Int( floor(κ / (10^condition_order)) )
 
     # Find row that matches best the condition number 
-    closest_row = filter(row -> row.R ≈ first_digit * 10^condition_order, df)[:, 2:end]
+    #closest_row = filter(row -> row.R ≈ first_digit * 10^condition_order, df)[:, 2:end]
+    closest_row = filter(row -> row.R == first_digit * 10^condition_order, df)[:, 2:end]
 
     # Take ranks whose corresponding accuracy is below γ
-    mask = γ .<= Vector(closest_row[1, :])
+    #mask      = γ .>= Vector(closest_row[1, :])
+    
+    mask      = τ   .>= Vector(closest_row[1, :])
+    zero_mask = 0.0 .!= Vector(closest_row[1, :])
 
     # Extract column headers (represent tensor ranks)
-    matching_ranks = parse.(Int, names(closest_row[:, mask]) )
+    matching_ranks = parse.(Int, names(closest_row[:, mask .&& zero_mask]) )
 
     # Take smallest rank that satisfies the bounds.
     t_min = minimum(matching_ranks)
@@ -69,14 +158,16 @@ function optimal_coefficients(df::DataFrame, τ::T, κ::T, λ::T, b̃_norm::T) w
     coeffs_df = CSV.read(
                     filename, 
                     DataFrame,
-                    delim = "   ",
+                    delim = "{",
                     header = ["number", "id"]
                 )
 
 
-    ω = parse.(Float64, coeffs_df[1:t_min, 1])
-    α = parse.(Float64, coeffs_df[t_min + 1 : 2t_min, 1])
+    #ω = parse.(Float64, coeffs_df[1:t_min, 1])
+    #α = parse.(Float64, coeffs_df[t_min + 1 : 2t_min, 1])
 
+    ω = coeffs_df[1:t_min, 1]
+    α = coeffs_df[t_min + 1 : 2t_min, 1]
     return ω, α, t_min
 
 end
@@ -115,8 +206,6 @@ function optimal_coefficients_mod(df::DataFrame, τ::T, κ::T, λ::T, b̃_norm::
     # Take ranks whose corresponding accuracy is below γ
     #@info "Vector with closest_row data " Vector(closest_row[1, :])
     mask = (τ .<= Vector(closest_row[1, :]))
-
-    #@info "mask: " mask
 
     # Extract column headers (represent tensor ranks)
     matching_ranks = parse.(Int, names(closest_row[:, mask]) )
