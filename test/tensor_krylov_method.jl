@@ -53,9 +53,8 @@ using TensorKrylov: compute_dataframe, optimal_coefficients
         initial_orthonormalization!(tensor_decomp, b, orthonormalization)
 
         n = size(A[1], 1)
-        println(n)
 
-        b̃               = initialize_compressed_rhs(b, tensor_decomp.V)
+        b̃         = initialize_compressed_rhs(b, tensor_decomp.V)
         coeffs_df = compute_dataframe()
         
         for k = 2:nmax
@@ -89,7 +88,7 @@ using TensorKrylov: compute_dataframe, optimal_coefficients
 
             error = Anormerror(A_expanded, x, xₖ)
 
-            @info "Error x - xₖ" error
+            #@info "Error x - xₖ" error
 
             #residual_norm(H_minors, y)
 
@@ -103,7 +102,7 @@ using TensorKrylov: compute_dataframe, optimal_coefficients
     Tₖ   = sparse(inv(h^2) .* (Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1))))
     A    = KroneckerMatrix{Float64}([Tₖ for _ in 1:d])
     b    = [ rand(n) for _ in 1:d ]
-    nmax = 10
+    nmax = 90
 
     tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
 

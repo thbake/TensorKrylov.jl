@@ -1,6 +1,8 @@
 using DataFrames
 using CSV
 
+export bound
+
 function compute_dataframe()
 
     # Read csv file into dataframe
@@ -15,18 +17,17 @@ function compute_dataframe()
 
 end
 
-function bound(λ_min::T, κ::T, b_norm::T, tol::T) where T<:AbstractFloat
+function bound(λ_min::T, κ::T, b_norm::T, t::Int) where T<:AbstractFloat
 
     prefactor   = 16 * inv(λ_min)
     denominator = log(8 * κ)
-    t           = collect(1:63)
-    nominator   = -π^2 .* t 
-    
-    values =  prefactor .* exp.(nominator .* inv(denominator)) .* b_norm
+    #t           = collect(1:63)
+    nominator   = -(π^2 * t)
 
-    valid_ranks = t[tol .>= values]
+    #values      =  prefactor .* exp.(nominator .* inv(denominator)) .* b_norm
+    #valid_ranks = t[tol .>= values]
 
-    return valid_ranks
+    return prefactor * exp(nominator * inv(denominator)) * b_norm
 
 end
 
@@ -80,7 +81,6 @@ function obtain_coefficients(λ_min::T, κ::T, b_norm::T, tol::T) where T<:Abstr
         return
     end
 
-    # Use three spaces to delimit the file(s)
     coeffs_df = CSV.read(
                     filename, 
                     DataFrame,
@@ -123,11 +123,16 @@ function optimal_coefficients(df::DataFrame, τ::T, κ::T, λ::T, b̃_norm::T) w
     #mask      = γ .>= Vector(closest_row[1, :])
     mask = τ .>= Vector(closest_row[1, :])
 
+    #masked_row = closest_row[:, mask]
+    masked_row = Vector(closest_row[1, :])[mask]
+
     # Extract column headers (represent tensor ranks)
-    matching_ranks = parse.(Int, names(closest_row[:, mask]) )
+    matching_ranks = parse.(Int, names(closest_row[:, mask]))
 
     # Take smallest rank that satisfies the bounds.
-    t_min = minimum(matching_ranks)
+    #t_min = minimum(matching_ranks)
+    index = Int(floor(length(matching_ranks) / 2))
+    t_min = matching_ranks[index]
 
     # Construct file name
     filename = "../coefficients_data/" 

@@ -8,7 +8,8 @@ function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, �
 
         tmp = Matrix(copy(A[s]))
 
-        y.fmat[s][:, k] = expv(γ, tmp, b[s]) # Update kth column
+        #y.fmat[s][:, k] = expv(γ, tmp, b[s]) # Update kth column
+        y.fmat[s][:, k] =  exp(γ * tmp) * b[s] # Update kth column
 
     end
 
@@ -29,7 +30,7 @@ function solve_compressed_system(
     k = dimensions(H)
 
     λ_inv = inv(λ)
-    yₜ    = ktensor(λ_inv * ω, [ ones(k[s], t) for s in 1:length(H)] )
+    yₜ    = ktensor(λ_inv .* ω, [ ones(k[s], t) for s in 1:length(H)] )
 
 
     for k = 1:t
@@ -123,6 +124,12 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_ortho
         ω, α, rank = optimal_coefficients(coefficients_df, tol, κ, λ_min, b̃_norm)
         
         @info "Chosen tensor rank: " rank
+
+
+        error_upperbound = bound(λ_min, κ, b̃_norm, rank)
+        
+        #@info error_upperbound
+    
 
         # Approximate solution of compressed system
         y  = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)

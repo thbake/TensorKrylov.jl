@@ -159,18 +159,15 @@ function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMat
 
     for j = 1:rank, i = 1:rank
 
-        for s in 1:d
+        for s in 1:d, r in 1:d
 
             mask_s[s] = true
 
-            for r in 1:d
+            mask_r[r] = true
 
-                mask_r[r] = true
+            MVnorm += Λ_complete[i, j] * maskprod( X[.!(mask_s .|| mask_r)], i, j ) *  maskprod(XZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
 
-                MVnorm += Λ_complete[i, j] * maskprod( X[.!(mask_s .|| mask_r)], i, j ) *  maskprod(XZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
-
-                mask_r[r] = false
-            end
+            mask_r[r] = false
 
             mask_s[s] = false
 
@@ -219,6 +216,174 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
     @assert Ax_y > 0.0
 
     return Ax_y
+
+end
+
+
+function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat{T}, y::ktensor, b::KronProd{T}) where T <:AbstractFloat
+
+    # We know that 
+    
+    #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
+
+    # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
+    Z = matrix_vector(H, y)
+
+    Ly = Symmetric.(Ly, :L)
+
+    # First we compute ||Hy||²
+    Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z)
+
+    # Now we proceed with <Hy, b>₂
+    Hy_b = tensorinnerprod(Z, y, b)
+
+    # Finally we compute the squared 2-norm of b
+    b_norm = kronproddot(b)
+
+    comp_res = Hy_norm - 2* Hy_b + b_norm
+
+    @assert comp_res > 0.0
+
+    return comp_res
+    
+end
+
+function evalmvnorm(Λ::AbstractMatrix{T}, Y::FMatrices{T}, YZ::FMatrices{T}, Z_inner::FMatrices{T}, i::Int, j::Int, mask_s, mask_r) where T<:AbstractFloat
+
+    return Λ[i, j] * maskprod( Y[.!(mask_s .|| mask_r)], i, j ) *  maskprod(YZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
+
+end
+
+function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T<:AbstractFloat
+
+    return y.lambda[i] * maskprod(bZ[mask], i) * maskprod(bY[.!mask], i)
+
+end
+
+#function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
+#
+#    d   = ndims(y)
+#    t   = ncomponents(y)
+#
+#    Z = matrix_vector(H, y)
+#
+#    Y = Symmetric.(Ly, :L)
+#    Λ_complete = Symmetric(Λ, :L)
+#    Z_inner    = [ Z[s]'Z[s] for s in 1:length(Z) ]
+#    YZ         = [ y.fmat[s]'Z[s] for s in 1:ndims(y) ]
+#
+#    bY = [ zeros(t) for _ in 1:d ]
+#    bZ = [ zeros(t) for _ in 1:d ]
+#
+#    for s in 1:d
+#
+#        bY[s] = BLAS.gemv!('T', 1.0, y.fmat[s], b[s], 0.0, bY[s])
+#        bZ[s] = BLAS.gemv!('T', 1.0, Z[s],      b[s], 0.0, bZ[s])
+#
+#    end
+#
+#    #b_prods = [ dot(b[s], b[s]) for s in 1:d ]
+#
+#    mask_s = falses(d)
+#    mask_r = falses(d)
+#
+#    value = 0.0
+#
+#    for j = 1:t, i = 1:t
+#
+#        for s in 1:d
+#
+#            mask_s[s] = true
+#
+#                for r in 1:d
+#                    
+#                    mask_r[r] = true
+#
+#                    mv_norm = evalmvnorm(Λ_complete, Y, YZ, Z_inner, i, j, mask_s, mask_r)
+#
+#                    value += mv_norm 
+#
+#                    mask_r[r] = false
+#
+#                end
+#
+#            innerprod = evalinnerprod(y, bY, bZ, j, mask_s)
+#
+#            mask_s[s] = false
+#
+#            value -= innerprod
+#            
+#        end
+#
+#    end
+#
+#    comp_res = value + kronproddot(b)
+#
+#    @assert comp_res > 0.0
+#
+#    return comp_res
+#
+#end
+
+function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal_entries::Vector{T}, b::KronProd{T}) where T<:AbstractFloat
+    
+    # Compute squared norm of the residual according to Lemma 3.4 of paper.
+    
+    # Σ |hˢₖ₊₁ₖ|² * Σ |y\_𝔏|² + ||ℋy - b̃||²
+    
+    # Get entries at indices (kₛ+1, kₛ) for each dimension with pair of 
+    # multiindices 𝔎+1, 𝔎
+
+    d  = length(H)                    # Number of dimensions
+    t  = ncomponents(y)               # Tensor rank
+    Ly = [ zeros(t, t) for _ in 1:d ] # Allocate memory for matrices representing inner products
+    Λ  = LowerTriangular(zeros(t, t)) # Allocate memory for matrix representing outer product of coefficients.
+
+    compute_lower_triangles!(Ly, y)
+    compute_lower_outer!(Λ, y.lambda)
+
+    Ly       = Symmetric.(Ly, :L) # Symmetrize (momentarily abandon the use of symmetry)
+    res_norm = 0.0
+    mask     = trues(d)
+
+    for s = 1:d
+
+        Γ = Symmetric(compute_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
+
+        mask[s]   = false
+        y²        = squared_tensor_entries(Ly[mask], Γ)
+        res_norm += abs( subdiagonal_entries[s] )^2 * y²
+        mask[s]   = true
+
+    end
+
+    r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
+
+    return sqrt(res_norm + r_compressed)
+
+end
+
+function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
+
+    # This variant expands the matrices/tensors
+
+    N = nentries(H)
+
+    H_expanded = sparse(Matrix(kroneckersum(H.𝖳...)))
+    y_expanded = reshape(full(y), N)
+    b_expanded = kronecker(b...)
+
+    x = zeros(N)
+
+    @assert issparse(H_expanded)
+
+    #mul!(x, H_expanded, y_expanded)
+
+    comp_res = (H_expanded * y_expanded) - b_expanded
+    comp_res = x - b_expanded
+    
+    @info "Compressed residual" dot(comp_res, comp_res)
+    return dot(comp_res, comp_res)
 
 end
 
@@ -336,95 +501,5 @@ function efficientMVnorm(x::ktensor, Λ::AbstractMatrix{T}, X_inner::FMatrices{T
     end
 
     return result
-
-end
-
-function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat{T}, y::ktensor, b::KronProd{T}) where T <:AbstractFloat
-
-    # We know that 
-    
-    #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
-
-    # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
-    Z = matrix_vector(H, y)
-
-    Ly = Symmetric.(Ly, :L)
-
-    # First we compute ||Hy||²
-    Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z)
-
-    # Now we proceed with <Hy, b>₂
-    Hy_b = tensorinnerprod(Z, y, b)
-
-    # Finally we compute the squared 2-norm of b
-    b_norm = kronproddot(b)
-
-    comp_res = Hy_norm - 2* Hy_b + b_norm
-
-    @assert comp_res > 0.0
-
-    return comp_res
-    
-end
-
-#function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
-#
-#    # This variant expands the matrices/tensors
-#
-#    N = nentries(H)
-#
-#    H_expanded = sparse(Matrix(kroneckersum(H.𝖳...)))
-#    y_expanded = reshape(full(y), N)
-#    b_expanded = kronecker(b...)
-#
-#    x = zeros(N)
-#
-#    @assert issparse(H_expanded)
-#
-#    #mul!(x, H_expanded, y_expanded)
-#
-#    comp_res = (H_expanded * y_expanded) - b_expanded
-#    comp_res = x - b_expanded
-#    
-#    @info "Compressed residual" dot(comp_res, comp_res)
-#    return dot(comp_res, comp_res)
-#
-#end
-
-function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal_entries::Vector{T}, b::KronProd{T}) where T<:AbstractFloat
-    
-    # Compute squared norm of the residual according to Lemma 3.4 of paper.
-    
-    # Σ |hˢₖ₊₁ₖ|² * Σ |y\_𝔏|² + ||ℋy - b̃||²
-    
-    # Get entries at indices (kₛ+1, kₛ) for each dimension with pair of 
-    # multiindices 𝔎+1, 𝔎
-
-    d  = length(H)                    # Number of dimensions
-    t  = ncomponents(y)               # Tensor rank
-    Ly = [ zeros(t, t) for _ in 1:d ] # Allocate memory for matrices representing inner products
-    Λ  = LowerTriangular(zeros(t, t)) # Allocate memory for matrix representing outer product of coefficients.
-
-    compute_lower_triangles!(Ly, y)
-    compute_lower_outer!(Λ, y.lambda)
-
-    Ly       = Symmetric.(Ly, :L) # Symmetrize (momentarily abandon the use of symmetry)
-    res_norm = 0.0
-    mask     = trues(d)
-
-    for s = 1:d
-
-        Γ = Symmetric(compute_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
-
-        mask[s]   = false
-        y²        = squared_tensor_entries(Ly[mask], Γ)
-        res_norm += abs( subdiagonal_entries[s] )^2 * y²
-        mask[s]   = true
-
-    end
-
-    r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
-
-    return sqrt(res_norm + r_compressed)
 
 end
