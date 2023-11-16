@@ -83,27 +83,20 @@ end
 # SPD case
 function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
 
-	# Initilialize implicit tensorized Krylov subspace basis and upper Hessenberg 
-    d = length(A)
-
-    # Initialize multiindex 𝔎
-    𝔎 = Vector{Int}(undef, d)
-
-
-    # Allocate memory for approximate solution
-    x = nothing
+    d      = length(A)
+    𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
+    b_norm = kronprodnorm(b)
+    x      = nothing # Declare approximate solution
 
     tensor_decomp = t_orthonormalization(A)
 
     # Initialize list of characteristic polynomials of Jacobi matrices Tₖ
-    char_poly = CharacteristicPolynomials{T}(d, tensor_decomp.H[1, 1])
-
+    char_poly          = CharacteristicPolynomials{T}(d, tensor_decomp.H[1, 1])
     orthonormalization = tensor_decomp.orthonormalization
     initial_orthonormalization!(tensor_decomp, b, orthonormalization)
 
-    # Allocate memory for right-hand side b̃
-    b̃ = initialize_compressed_rhs(b, tensor_decomp.V)
 
+    b̃               = initialize_compressed_rhs(b, tensor_decomp.V) 
     coefficients_df = compute_dataframe()
 
     n = dimensions(A)[1]
@@ -116,44 +109,28 @@ function tensor_krylov(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_ortho
         H_minors = principal_minors(tensor_decomp.H, k)
         V_minors = principal_minors(tensor_decomp.V, n, k)
         b_minors = principal_minors(b̃, k)
-
-        λ_min, λ_max = analytic_eigenvalues(d, k)
-
-        columns = kth_columns(tensor_decomp.V, k)
+        columns  = kth_columns(tensor_decomp.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
 
-        b_norm = kronprodnorm(b_minors)
-
-        κ = abs(λ_max / λ_min)
-
-        if κ < 1
-
-            κ = 2.0
-
-        end
+        b̃_norm       = kronprodnorm(b_minors)
+        λ_min, λ_max = analytic_eigenvalues(d, k)
+        κ            = abs(λ_max / λ_min)
 
         @info "Condition: " κ
 
-        ω, α, rank = optimal_coefficients(coefficients_df, tol, κ, λ_min, b_norm)
-        
-        #ω, α, rank = obtain_coefficients(λ_min, κ, b_norm, tol)
-        
+        ω, α, rank = optimal_coefficients(coefficients_df, tol, κ, λ_min, b̃_norm)
         
         @info "Chosen tensor rank: " rank
 
         # Approximate solution of compressed system
-        y = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
-
+        y  = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
         𝔎 .= k 
 
-        subdiagonal_entries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
-
-        # Compute residual norm
-        r_norm = residual_norm(H_minors, y, 𝔎, subdiagonal_entries, b_minors)
-
-        rel_res_norm = (r_norm / kronprodnorm(b_minors))
+        subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
+        r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+        rel_res_norm   = (r_norm / b_norm)
 
         @info "Iteration: " k "relative residual norm:" rel_res_norm
 

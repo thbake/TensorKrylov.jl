@@ -1,5 +1,7 @@
 export VectorCollection, MatrixCollection, KroneckerMatrix
-export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, principal_minors, explicit_kroneckersum, recursivekronecker, kth_columns
+export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, 
+       principal_minors, explicit_kroneckersum, recursivekronecker, kth_columns,
+       kroneckervectorize
 
 abstract type VectorCollection{T} end
 abstract type MatrixCollection{T} <: VectorCollection{T} end
@@ -330,6 +332,29 @@ function mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{<:AbstractVector{T}
        result[s] = transpose(y[s]) * x.fmat[s]
 
    end
+
+end
+
+function kroneckervectorize(x::ktensor)
+
+    N    = prod(size(x))
+    vecx = zeros(N)
+
+    for i in 1:ncomponents(x) 
+
+        tmp = @view(x.fmat[end][:, i])
+
+        for j in ndims(x) - 1 : - 1 : 1
+
+            tmp = kron(tmp, @view(x.fmat[j][:, i]))
+
+        end
+
+        vecx += tmp
+
+    end
+
+    return vecx
 
 end
 

@@ -55,6 +55,12 @@ function maskprod(A::FMatrices{T}, i::Int, j::Int) where T <: AbstractFloat
 end
 
 
+function maskprod(x::AbstractVector{<:AbstractVector{T}}, i::Int) where T<:AbstractFloat
+
+    return prod(getindex.(x, i))
+
+end
+
 function maskprod(x::FMatrices{T}, i::Int) where T <: AbstractFloat
 
     return prod(getindex.(x, 1, i)) 
@@ -181,8 +187,17 @@ end
 function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:AbstractFloat
 
     d   = ndims(x)
-    yX  = [ transpose(y[s]) * x.fmat[s] for s in 1:d ]
-    yAx = [ transpose(y[s]) * Ax[s] for s in 1:d ]
+    t   = ncomponents(x)
+
+    yX  = [ zeros(t) for _ in 1:d ]
+    yAx = [ zeros(t) for _ in 1:d ]
+
+    for s in 1:d
+
+        yX[s]  = BLAS.gemv!('T', 1.0, x.fmat[s], y[s], 0.0,  yX[s])
+        yAx[s] = BLAS.gemv!('T', 1.0, Ax[s],     y[s], 0.0, yAx[s])
+
+    end
 
     Ax_y = 0.0
 
@@ -190,16 +205,15 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
     
     for s in 1:d
 
-        for i in 1:ncomponents(x)
+        mask[s] = true
 
-            mask[s] = true
+        for i in 1:ncomponents(x)
 
             Ax_y += x.lambda[i] * maskprod(yAx[mask], i) * maskprod(yX[.!mask], i)
 
-            mask[s] = false
-
         end
 
+        mask[s] = false
     end
 
     @assert Ax_y > 0.0
@@ -325,43 +339,6 @@ function efficientMVnorm(x::ktensor, Λ::AbstractMatrix{T}, X_inner::FMatrices{T
 
 end
 
-function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
-
-    d = ndims(y)
-    Z = matrix_vector(H, y)
-
-    vec     = zeros(prod(size(y))) # Here I run out of memory
-    indices = collect(1:d)
-
-    for i in 1:ncomponents(y)
-
-        mask = trues(d)
-
-        for s in 1:d
-
-            tmp = [ zeros(size(y)[s]) for s in 1:d ]
-
-            mask[s] = false
-
-            tmp[s]             = @view(Z[s][:, i])
-            columns            = kth_columns(y.fmat[mask], i)
-            tmp[indices[mask]] = columns
-
-            vec += kron(tmp...)
-
-            mask[s] = true
-
-        end
-
-    end
-
-    comp_res      = vec - kron(b...)
-    comp_res_norm = dot(comp_res, comp_res)
-
-    return comp_res_norm
-
-end
-
 function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat{T}, y::ktensor, b::KronProd{T}) where T <:AbstractFloat
 
     # We know that 
@@ -414,12 +391,7 @@ end
 #
 #end
 
-function residual_norm(
-        H::KronMat{T},
-        y::ktensor,
-        𝔎::Vector{Int},
-        subdiagonal_entries::Vector{T},
-        b::KronProd{T}) where T<:AbstractFloat
+function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal_entries::Vector{T}, b::KronProd{T}) where T<:AbstractFloat
     
     # Compute squared norm of the residual according to Lemma 3.4 of paper.
     
@@ -428,46 +400,31 @@ function residual_norm(
     # Get entries at indices (kₛ+1, kₛ) for each dimension with pair of 
     # multiindices 𝔎+1, 𝔎
 
-    d = length(H) # Number of dimensions
-
-    t = ncomponents(y) # Tensor rank
-
-    # Allocate memory for (lower triangular) matrices representing inner products
-    Ly = [ zeros(t, t) for _ in 1:d ]
+    d  = length(H)                    # Number of dimensions
+    t  = ncomponents(y)               # Tensor rank
+    Ly = [ zeros(t, t) for _ in 1:d ] # Allocate memory for matrices representing inner products
+    Λ  = LowerTriangular(zeros(t, t)) # Allocate memory for matrix representing outer product of coefficients.
 
     compute_lower_triangles!(Ly, y)
-
-    # Allocate memory for (lower triangular) matrix representing outer product
-    # of coefficients.
-    
-    Λ = LowerTriangular(zeros(t, t))
-
     compute_lower_outer!(Λ, y.lambda)
 
-    # Make matrices lower triangular
-    Ly = Symmetric.(Ly, :L)
-
+    Ly       = Symmetric.(Ly, :L) # Symmetrize (momentarily abandon the use of symmetry)
     res_norm = 0.0
-
-    mask = trues(d)
+    mask     = trues(d)
 
     for s = 1:d
 
         Γ = Symmetric(compute_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
 
-        mask[s] = false
-
-        y² = squared_tensor_entries(Ly[mask], Γ)
-
+        mask[s]   = false
+        y²        = squared_tensor_entries(Ly[mask], Γ)
         res_norm += abs( subdiagonal_entries[s] )^2 * y²
-
-        mask[s] = true
+        mask[s]   = true
 
     end
 
-    # Compute squared compressed residual norm
-    r_compressed = compressed_residual(Ly, Λ, H, y, b)
-    
+    r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
+
     return sqrt(res_norm + r_compressed)
 
 end

@@ -49,17 +49,6 @@ end
 
 @testset "Compressed residual computations" begin
 
-    d    = 3
-    n    = 15
-    rank = 4
-
-    Mᵢ  = [ Tridiagonal(-ones(n-1), 2ones(n), -ones(n-1)) for _ in 1:d ]
-    M   = KroneckerMatrix{Float64}(Mᵢ)
-    mat = rand(n, rank)
-    X   = [ rand() .* mat for _ in 1:d ]
-    #X   = [ rand(n, rank) for _ in 1:d ]
-    x   = ktensor(ones(rank), X)
-
     function initialize_matrix_products(M, x)
 
         d      = length(M)
@@ -75,28 +64,6 @@ end
 
     end
 
-    function kroneckervectorize(x::ktensor)
-
-        N    = prod(size(x))
-        vecx = zeros(N)
-
-        for i in 1:ncomponents(x) 
-
-            tmp = @view(x.fmat[end][:, i])
-
-            for j in ndims(x) - 1 : - 1 : 1
-
-                tmp = kron(tmp, @view(x.fmat[j][:, i]))
-
-            end
-
-            vecx += tmp
-
-        end
-
-        return vecx
-
-    end
 
     function tensorsquarednorm(x::ktensor)
 
@@ -121,45 +88,78 @@ end
 
     end
 
-    Λ, lowerX, Z = initialize_matrix_products(M, x)
+    @testset "Residual computation of linearly dependent factor matrices" begin
 
-    for s in 1:d
+        d    = 3
+        n    = 15
+        rank = 4
 
-        @test Mᵢ[s] * X[s] ≈ Z[s]
+        # Example of linearly dependent factor matrices in CP-decomposition
+        Mᵢ  = [ Tridiagonal(-ones(n-1), 2ones(n), -ones(n-1)) for _ in 1:d ]
+        M   = KroneckerMatrix{Float64}(Mᵢ)
+        mat = rand(n, rank)
+        X   = [ rand() .* mat for _ in 1:d ]
+        #X   = [ rand(n, rank) for _ in 1:d ]
+        x   = ktensor(ones(rank), X)
+
+        Λ, lowerX, Z = initialize_matrix_products(M, x)
+
+        for s in 1:d
+
+            @test Mᵢ[s] * X[s] ≈ Z[s]
+
+        end
+
+        # Compute ||Mx||²
+        exact_efficient_MVnorm = MVnorm(x, Λ, lowerX, Z)
+
+        # Compute exact solution
+        M_kroneckersum         = explicit_kroneckersum(Mᵢ)
+        x_explicit             = kroneckervectorize(x)
+        solution               = M_kroneckersum * x_explicit
+        exactMVnorm            = dot(solution, solution)
+
+        @test (exact_efficient_MVnorm - exactMVnorm) / exactMVnorm < 1e-14
+
+        # Generate right-hand side
+        b               = [ rand(n) for _ in 1:d ]
+        b_explicit      = kron(b...)
+
+        # Compute <Mx, b>₂
+        approxinnerprod = tensorinnerprod(Z, x, b)
+        exactinnerprod  = dot(solution, b_explicit)
+
+        # If factor matrices in CP-decomposition are close to being orthogonal the dot product computation is very ill-conditioned.
+        @test abs(exactinnerprod - approxinnerprod) / exactinnerprod < 1e-14
+
+        b_norm = kronproddot(b)
+
+        # Explicit compressed residual norm
+        exp_comp_res_norm    = norm(b_explicit - solution)^2
+        approx_comp_res_norm = compressed_residual(lowerX, Λ, M, x, b)
+        relative_error       = (exp_comp_res_norm - approx_comp_res_norm) * inv(exp_comp_res_norm)
+        @test relative_error  < 1e-15
 
     end
 
-    # Compute ||Mx||²
-    exact_efficient_MVnorm = MVnorm(x, Λ, lowerX, Z)
+    @testset "Residual computation simulating method scenario" begin
 
-    # Compute exact solution
-    M_kroneckersum         = explicit_kroneckersum(Mᵢ)
-    x_explicit             = kroneckervectorize(x)
-    solution               = M_kroneckersum * x_explicit
-    exactMVnorm            = dot(solution, solution)
+        d = 3
+        n = 15
+        h = inv(n + 1)
 
-    @test (exact_efficient_MVnorm - exactMVnorm) / exactMVnorm < 1e-14
+        # Example of linearly dependent factor matrices in CP-decomposition
+        Mᵢ  = [ sparse(inv(h^2) .* Tridiagonal(-ones(n-1), 2ones(n), -ones(n-1))) for _ in 1:d ]
+        M   = KroneckerMatrix{Float64}(Mᵢ)
+        b   = [ rand(n) for _ in 1:d ]
+        nmax = 10
 
-    # Generate right-hand side
-    b               = [ rand(n) for _ in 1:d ]
-    b_explicit      = kron(b...)
+        #tensor_krylov_exact(M, b, 1e-9, nmax, TensorLanczos{Float64})
 
-    # Compute <Mx, b>₂
-    approxinnerprod = tensorinnerprod(Z, x, b)
-    exactinnerprod  = dot(solution, b_explicit)
-
-    # If factor matrices in CP-decomposition are close to being orthogonal the dot product computation is very ill-conditioned.
-    @test abs(exactinnerprod - approxinnerprod) / exactinnerprod < 1e-14
-
-    b_norm = kronproddot(b)
-
-    # Explicit compressed residual norm
-    exp_comp_res_norm    = norm(b_explicit - solution)^2
-    approx_comp_res_norm = compressed_residual(lowerX, Λ, M, x, b)
-
-    @test (exp_comp_res_norm  - approx_comp_res_norm) / exp_comp_res_norm < 1e-14
+    end
 
 end
+
 
 @testset "Residual computations" begin
 
@@ -182,15 +182,12 @@ end
     computed_norms = zeros(d)
 
     Ly = [ zeros(rank, rank) for _ in 1:d ]
+    Λ  = LowerTriangular( zeros(rank, rank) )
 
     compute_lower_triangles!(Ly, y)
-
-    Λ = LowerTriangular( zeros(rank, rank) )
-
     compute_lower_outer!(Λ, y.lambda)
 
-    Ly = Symmetric.(Ly, :L)
-
+    Ly   = Symmetric.(Ly, :L)
     mask = trues(d)
 
     for s in 1:d

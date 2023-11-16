@@ -1,5 +1,6 @@
 using TensorKrylov, Test
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, ProfileView
+using TensorKrylov: compute_dataframe, optimal_coefficients
 
 @testset "Monotonic decrease of residual and error in A-norm" begin
 
@@ -37,7 +38,7 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, Pro
 
     end
 
-    function tensor_krylov_exact(A::KronMat{T}, b::KronProd{T}, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+    function tensor_krylov_exact(A::KronMat{T}, b::KronProd{T}, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}, tol = 1e-9) where T <: AbstractFloat
 
         xₖ = Vector{T}(undef, nentries(A))
 
@@ -54,7 +55,8 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, Pro
         n = size(A[1], 1)
         println(n)
 
-        b̃  = initialize_compressed_rhs(b, tensor_decomp.V)
+        b̃               = initialize_compressed_rhs(b, tensor_decomp.V)
+        coeffs_df = compute_dataframe()
         
         for k = 2:nmax
 
@@ -69,7 +71,15 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, Pro
 
             update_rhs!(b_minors, columns, b, k)
 
+            b̃_norm       = kronprodnorm(b_minors)
+            λ_min, λ_max = analytic_eigenvalues(d, k)
+            κ            = abs(λ_max / λ_min)
+            ω, α, t      = optimal_coefficients(coeffs_df, tol, κ, λ_min, b̃_norm)
+
             y  = solvecompressed(H_minors, b_minors)
+            yₜ = solve_compressed_system(H_minors, b_minors, ω, α, t, λ_min)
+
+            @info "Relative error of solving compressed system: " norm(y - kroneckervectorize(yₜ)) * inv(norm(y))
 
             mul!(xₖ, kron(V_minors.𝖳...), y)
 
@@ -93,27 +103,23 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, Pro
     Tₖ   = sparse(inv(h^2) .* (Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1))))
     A    = KroneckerMatrix{Float64}([Tₖ for _ in 1:d])
     b    = [ rand(n) for _ in 1:d ]
-    nmax = 190
+    nmax = 10
 
-    #tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
+    tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
 
 end
 
 @testset "Symmetric example" begin
 
-    d = 50
-    nₛ = 200
+    d    = 50
+    nₛ   = 200
     nmax = 150
-
-    h = inv(nₛ + 1)
-
-    Aₛ= sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
-
-    A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
-
-    b = [ rand(nₛ) for _ in 1:d ]
+    h    = inv(nₛ + 1)
+    Aₛ   = sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
+    A    = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+    b    = [ rand(nₛ) for _ in 1:d ]
     
-    tensor_krylov(A, b, 1e-9, nmax, TensorArnoldi{Float64})
+    tensor_krylov(A, b, 1e-9, nmax, TensorLanczos{Float64})
 
 end
 

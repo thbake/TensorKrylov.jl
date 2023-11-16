@@ -1,5 +1,5 @@
-export qr_algorithm, qr_hessenberg, qr_decomposition!, next_coefficients!, 
-       sign_changes, initial_interval, bisection, analytic_eigenvalues
+export qr_algorithm,  next_coefficients!, sign_changes, initial_interval, 
+       bisection, analytic_eigenvalues
 
 
 export CharacteristicPolynomials
@@ -162,61 +162,6 @@ end
 
 # QR-Iterations
 
-function qr_decomposition!(H::AbstractMatrix, rotations::AbstractVector)
-
-	n = size(H, 1)
-	
-	for j = 1:(n - 1)
-
-		# Compute Givens rotations to zero out each subdiagonal entry
-		Gⱼ = givens(H[j, j], H[j + 1, j], j, j + 1)[1]
-
-		rotations[j] = Gⱼ
-
-		# After applying n-1 Givens rotations H becomes an upper triangular matrix
-		H = Gⱼ * H
-
-	end
-
-	for j = 1:n - 1
-		
-		# Apply the conjugate transpose Givens rotations from the right to
-        # upper triangular matrix
-		H = H * rotations[j]'
-	end
-
-	
-		
-	return H
-end
-
-function qr_hessenberg(A, tol, n_max)
-	
-	# Keep track of rotations since we want to apply them in reverse order afterwards
-	rotations = Vector{LinearAlgebra.Givens}(undef, size(A, 1) - 1)
-	
-	Hⱼ = copy(A)
-
-	for _ in 1:n_max
-		
-		# Build QR-decomposition implicitly, with O(n) Givens rotations and compute Aᵢ
-		Hⱼ = qr_decomposition!(Hⱼ, rotations)
-
-		nrm = LinearAlgebra.norm(diag(Hⱼ, -1))
-
-		if nrm <= tol
-
-            @info "Convergence of eigenvalues"
-
-            return sort(diag(Hⱼ))
-		end
-		
-	end
-
-    @info "No convergence of eigenvalues"
-	
-    return sort(diag(Hⱼ))
-end
 
 function qr_algorithm(A::AbstractMatrix, tol, n_max)
 	
@@ -260,31 +205,6 @@ function tensor_qr_algorithm(A::KronMat{T}, tol::T, n_max::Int) where T<:Abstrac
 
 end
 
-function hessenberg_eigenvalues(H::AbstractMatrix{T}) where T<:AbstractFloat
-
-    H_tmp = copy(H)
-    
-	k = size(H, 1)
-	
-	for j = 1:(k - 1)
-
-		# Compute Givens rotations to zero out each subdiagonal entry
-		Gⱼ = givens(H_tmp[j, j], H_tmp[j + 1, j], j, j + 1)[1]
-
-		# After applying n-1 Givens rotations H becomes an upper triangular matrix
-		H_tmp = Gⱼ * H_tmp
-
-	end
-
-    # Choose eigenvalues with maximal and minimal magnitude
-    eigenvalues = sort( map(abs, diag(H_tmp)) )
-
-    λ_min = eigenvalues[1]
-    λ_max = eigenvalues[end]
-
-    return λ_min, λ_max
-
-end
 
 function analytic_eigenvalues(d::Int, k::Int)
 
