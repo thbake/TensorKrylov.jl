@@ -6,6 +6,8 @@ export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries,
 abstract type VectorCollection{T} end
 abstract type MatrixCollection{T} <: VectorCollection{T} end
 
+const Core{T} = Vector{Vector{Vector{Vector{T}}}}
+
 
 # We want to generate an abstract notion of structures that can be represented as Kronecker products
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
@@ -373,3 +375,38 @@ function mul!(
     end
 
 end
+
+struct TTCore{T} 
+
+    core_tensor::Core{T}
+
+    function TTCore{T}(orders::AbstractVector{Int}) where T
+
+        @assert length(orders) == 4
+
+        new(zeros(orders...))
+
+    end
+
+    function TTCore{T}(core::Core{T}) where T
+
+        @assert length(core) == 4
+
+        new(core_tensor)
+
+    end
+
+end
+
+function Base.length(core::TTCore{T}) where T
+
+    return length(core.core_tensor)
+
+end
+
+function Base.size(core::TTCore{T}) where T
+
+    return [ size(core[s]) for s in 1:length(core) ]
+
+end
+

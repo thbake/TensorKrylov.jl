@@ -1,3 +1,4 @@
+using PyCall
 export KronMat, KronProd, LowerTriangle, FMatrices
 
 # Aliases
@@ -5,6 +6,126 @@ const KronProd{T}      = Vector{<:AbstractVector{T}}
 const KronMat{T}       = KroneckerMatrix{T}
 const LowerTriangle{T} = LowerTriangular{T, <:AbstractMatrix{T}} 
 const FMatrices{T}     = Vector{<:AbstractMatrix{T}} 
+
+tensor_train = pyimport("scikit_tt.tensor_train")
+TT           = pytype_query(tensor_train.TT)
+TT_solvers   = pyimport("scikit_tt.solvers.sle")
+
+function initialize_cores(d::Int, m::Int, n::Int, r1::Int, r2::Int)
+
+    first_core   = zeros(1,  m, n, r2)
+    middle_cores = [ zeros(r1, m, n, r2) for _ in 1:d - 2 ]
+    final_core   = zeros(r1, m, n, 1)
+    cores        = collect( (first_core, middle_cores..., final_core) )
+
+    return cores 
+
+end
+
+function initializeTToperator(Aₛ::AbstractMatrix{T}, d::Int) where T<:AbstractFloat
+
+    n = size(Aₛ, 1)
+
+    cores = initialize_cores(d, n, n, 2, 2)
+
+    cores[1][1, :, :, 1] = Aₛ
+    cores[1][1, :, :, 2] = I(n)
+
+    for s in 2:d-1
+        
+        cores[s][1,:, :, 1] = I(n)
+        cores[s][2,:, :, 1] = Aₛ
+        cores[s][2,:, :, 2] = I(n)
+
+    end
+
+    cores[end][1, :, :, 1] = I(n)
+    cores[end][2, :, :, 1] = Aₛ
+
+    return TT(cores)
+
+end
+
+function initialize_rhs(b::KronProd{T}, d::Int) where T<:AbstractFloat
+
+    
+    cores = [ zeros(1, size(b[s], 1), 1, 1) for s in 1:d ]
+
+    for s in 1:d
+
+        cores[s][1, :, 1, 1] = b[s]
+
+    end
+
+    return TT(cores)
+
+end
+
+function canonicaltoTT(x::ktensor)
+
+    d     = ndims(x)
+    rank  = ncomponents(x)
+    n     = size(x, 1)
+    cores = initialize_cores(d, n, 1, rank, rank) 
+
+    tmp = redistribute(x, 1) # Redistribute weights
+    #
+
+    for i in 1:rank
+
+        #cores[1][1, :, 1, i] = x.lambda[i] .* @view(x.fmat[1][:, i]) # Fill first core
+        #cores[1][1, :, 1, i] = @view(x.fmat[1][:, i]) # Fill first core
+        cores[1][1, :, 1, i] = @view(tmp.fmat[1][:, i]) # Fill first core
+
+    end
+
+    for s in 2:d-1, i in 1:rank
+
+        #cores[s][i, :, 1, i] = x.lambda[i] * @view(x.fmat[s][:, i]) # Fill middle cores
+        #cores[s][i, :, 1, i] = @view(x.fmat[s][:, i]) # Fill middle cores
+        cores[s][i, :, 1, i] = @view(tmp.fmat[s][:, i]) # Fill middle cores
+
+    end
+
+    for i in 1:rank
+
+        #cores[end][i, :, 1, 1] = x.lambda[i] * @view(x.fmat[end][:, i])
+        #cores[end][i, :, 1, 1] = @view(x.fmat[end][:, i])
+        cores[end][i, :, 1, 1] = @view(tmp.fmat[end][:, i])
+
+    end
+
+    return TT(cores)
+
+end
+
+function TTcompressedresidual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
+
+    py"""
+
+    import scikit_tt.tensor_train as tensor_train
+
+    """
+
+    TT = py"tensor_train".TT
+
+    d = length(H)
+
+    H_TT = TT(initializeTToperator(H.𝖳[1], d))
+    y_TT = TT(canonicaltoTT(y))
+    b_TT = TT(initialize_rhs(b, d))
+
+    TT_multiplication = py"tensor_train.TT.__matmul__"
+    TT_subtraction    = py"tensor_train.TT.__sub__"
+    TT_norm           = py"tensor_train.TT.norm"
+
+    product    = TT_multiplication(H_TT, y_TT)
+    difference = TT_subtraction(product, b_TT)
+
+    return TT_norm(difference)^2
+end
+
+
 
 function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T <: AbstractFloat
 
@@ -142,6 +263,18 @@ function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T<:Abstr
 
 end
 
+function evalmvnorm(Λ::AbstractMatrix{T}, Y::FMatrices{T}, YZ::FMatrices{T}, Z_inner::FMatrices{T}, i::Int, j::Int, mask_s, mask_r) where T<:AbstractFloat
+
+    return Λ[i, j] * maskprod( Y[.!(mask_s .|| mask_r)], i, j ) *  maskprod(YZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
+
+end
+
+function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T<:AbstractFloat
+
+    return y.lambda[i] * maskprod(bZ[mask], i) * maskprod(bY[.!mask], i)
+
+end
+
 function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMatrices{T}) where T<:AbstractFloat
 
     Λ_complete = Symmetric(Λ, :L)
@@ -165,7 +298,7 @@ function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMat
 
             mask_r[r] = true
 
-            MVnorm += Λ_complete[i, j] * maskprod( X[.!(mask_s .|| mask_r)], i, j ) *  maskprod(XZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
+            MVnorm += evalmvnorm(Λ_complete, X, XZ, Z_inner, i, j, mask_s, mask_r)
 
             mask_r[r] = false
 
@@ -206,7 +339,7 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
 
         for i in 1:ncomponents(x)
 
-            Ax_y += x.lambda[i] * maskprod(yAx[mask], i) * maskprod(yX[.!mask], i)
+            Ax_y += evalinnerprod(x, yX, yAx, i, mask)
 
         end
 
@@ -248,82 +381,7 @@ function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat
     
 end
 
-function evalmvnorm(Λ::AbstractMatrix{T}, Y::FMatrices{T}, YZ::FMatrices{T}, Z_inner::FMatrices{T}, i::Int, j::Int, mask_s, mask_r) where T<:AbstractFloat
 
-    return Λ[i, j] * maskprod( Y[.!(mask_s .|| mask_r)], i, j ) *  maskprod(YZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
-
-end
-
-function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T<:AbstractFloat
-
-    return y.lambda[i] * maskprod(bZ[mask], i) * maskprod(bY[.!mask], i)
-
-end
-
-#function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
-#
-#    d   = ndims(y)
-#    t   = ncomponents(y)
-#
-#    Z = matrix_vector(H, y)
-#
-#    Y = Symmetric.(Ly, :L)
-#    Λ_complete = Symmetric(Λ, :L)
-#    Z_inner    = [ Z[s]'Z[s] for s in 1:length(Z) ]
-#    YZ         = [ y.fmat[s]'Z[s] for s in 1:ndims(y) ]
-#
-#    bY = [ zeros(t) for _ in 1:d ]
-#    bZ = [ zeros(t) for _ in 1:d ]
-#
-#    for s in 1:d
-#
-#        bY[s] = BLAS.gemv!('T', 1.0, y.fmat[s], b[s], 0.0, bY[s])
-#        bZ[s] = BLAS.gemv!('T', 1.0, Z[s],      b[s], 0.0, bZ[s])
-#
-#    end
-#
-#    #b_prods = [ dot(b[s], b[s]) for s in 1:d ]
-#
-#    mask_s = falses(d)
-#    mask_r = falses(d)
-#
-#    value = 0.0
-#
-#    for j = 1:t, i = 1:t
-#
-#        for s in 1:d
-#
-#            mask_s[s] = true
-#
-#                for r in 1:d
-#                    
-#                    mask_r[r] = true
-#
-#                    mv_norm = evalmvnorm(Λ_complete, Y, YZ, Z_inner, i, j, mask_s, mask_r)
-#
-#                    value += mv_norm 
-#
-#                    mask_r[r] = false
-#
-#                end
-#
-#            innerprod = evalinnerprod(y, bY, bZ, j, mask_s)
-#
-#            mask_s[s] = false
-#
-#            value -= innerprod
-#            
-#        end
-#
-#    end
-#
-#    comp_res = value + kronproddot(b)
-#
-#    @assert comp_res > 0.0
-#
-#    return comp_res
-#
-#end
 
 function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal_entries::Vector{T}, b::KronProd{T}) where T<:AbstractFloat
     
@@ -357,7 +415,8 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal
 
     end
 
-    r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
+    #r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
+    r_compressed = TTcompressedresidual(H, y, b)
 
     return sqrt(res_norm + r_compressed)
 

@@ -104,7 +104,7 @@ using TensorKrylov: compute_dataframe, optimal_coefficients
     b    = [ rand(n) for _ in 1:d ]
     nmax = 90
 
-    tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
+    #tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
 
 end
 

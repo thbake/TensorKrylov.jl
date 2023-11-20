@@ -23,9 +23,9 @@ Random.seed!(12345)
     #    include("tensor_struct.jl")
     #end
 
-    #@testset "Utils tests" begin
-    #    include("utils.jl")
-    #end
+    @testset "Utils tests" begin
+        include("utils.jl")
+    end
 
     @testset "Tensor Krylov subspace method tests" begin
         include("tensor_krylov_method.jl")
