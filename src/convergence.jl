@@ -1,16 +1,14 @@
-function spd_error_bound(
-        A::KroneckerMatrix{T},
-        b::AbstractVector,
-        λ,
-        κ::Vector{T})::T where T<:AbstractFloat
+export ConvergenceData
 
-    # Compute the 2-norm  of A
-    #max_singular_values = [ norm(A[s]) for s in eachindex(A) ]
-    
-    A_norm = norm(A)
+struct ConvergenceData{T} 
 
-    b_norm = prod( map(norm, b) )
+    iterations::Vector{Int}
+    relative_residualnorm::Vector{T}
 
+    function ConvergenceData{T}(nmax::Int) where T<:AbstractFloat
 
+        new(collect(1:nmax), zeros(nmax))
+
+    end
 
 end

@@ -415,8 +415,8 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal
 
     end
 
-    #r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
-    r_compressed = TTcompressedresidual(H, y, b)
+    r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
+    #r_compressed = TTcompressedresidual(H, y, b)
 
     return sqrt(res_norm + r_compressed)
 

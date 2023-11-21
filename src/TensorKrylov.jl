@@ -5,6 +5,8 @@ module TensorKrylov
     # Tensor approximations
     include("tensor_struct.jl")
 
+    include("convergence.jl")
+
     include("utils.jl")
 
     # Preprocessing
@@ -22,10 +24,5 @@ module TensorKrylov
 
     # Eigenvalue solvers
     include("eigenvalues.jl")
-
-    # Convergence bounds
-    include("convergence.jl")
-
-
 
 end # module TensorKrylov

@@ -118,7 +118,7 @@ end
     A    = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
     b    = [ rand(nₛ) for _ in 1:d ]
     
-    tensor_krylov(A, b, 1e-9, nmax, TensorLanczos{Float64})
+    tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64})
 
 end
 
@@ -143,7 +143,7 @@ end
 #
 #    end
 #    
-#    x = tensor_krylov(A, b, 1e-9, nmax, TensorArnoldi{Float64})
+#    x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
 #
 #
 #    
