@@ -107,3 +107,49 @@ function optimal_coefficients(coefficients_dir::AbstractString, df::DataFrame, �
     return ω, α, t_min
 
 end
+
+function nonsymmetric_bound(β::T, γ::T, κ::T, rank::Int, b_norm::T) where T<:AbstractFloat
+
+    #return κ * inv(β) * exp(γ * π) * exp(-π * sqrt(rank)) * b_norm
+    return inv(β) * exp(γ * π) * exp(-π * sqrt(rank)) 
+
+end
+
+function get_nonsymmetric_rank(A::AbstractMatrix{T}, b::KronProd{T}, tol::T) where T<:AbstractFloat
+
+    d    = length(b)
+    Λ, P = eigen(Matrix(A))
+    κ    = cond(P)^d
+
+    β = minimum(real.(Λ))
+    γ = maximum(imag.(Λ))
+
+    b_norm = kronprodnorm(b)
+
+    rank  = 1
+    bound = nonsymmetric_bound(β, γ, κ, rank, b_norm) 
+
+    while bound > tol
+
+        rank += 1
+
+        bound = nonsymmetric_bound(β, γ, κ, rank, b_norm)
+
+    end
+
+    return rank
+
+end
+
+function nonsymmetric_coefficients(rank::Int)
+
+    h_st = π * inv(rank)
+
+    α = [ log(exp(j * h_st) + sqrt(1 + exp(2 * j * h_st))) for j in -rank : rank ]
+    ω = [ h_st * inv(sqrt((1 + exp(-2 * j * h_st))))       for j in -rank : rank ]
+
+    return α, ω 
+
+end
+
+#function approximate_minreciprocal(α::Array{T}, ω::Array{T}, )

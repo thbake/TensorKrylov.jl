@@ -5,9 +5,9 @@ module TensorKrylov
     # Tensor approximations
     include("tensor_struct.jl")
 
-    include("convergence.jl")
-
     include("utils.jl")
+
+    include("convergence.jl")
 
     # Preprocessing
     include("preprocessing.jl")

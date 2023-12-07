@@ -80,8 +80,18 @@ function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:Abstr
 
 end
 
+function compute_minors(tensor_decomp::TensorDecomposition{T}, rhs::KronProd{T}, n::Int, k::Int) where T<:AbstractFloat
+
+        H_minors = principal_minors(tensor_decomp.H, k)
+        V_minors = principal_minors(tensor_decomp.V, n, k)
+        b_minors = principal_minors(rhs, k)
+
+        return H_minors, V_minors, b_minors
+    
+end
+
 # SPD case no convergence data
-function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{TensorLanczos{T}}) where T <: AbstractFloat
 
     d      = length(A)
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
@@ -107,10 +117,8 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
         orthonormal_basis!(tensor_decomp, k)
 
-        H_minors = principal_minors(tensor_decomp.H, k)
-        V_minors = principal_minors(tensor_decomp.V, n, k)
-        b_minors = principal_minors(b̃, k)
-        columns  = kth_columns(tensor_decomp.V, k)
+        H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
+        columns                      = kth_columns(tensor_decomp.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
@@ -139,8 +147,7 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
 
         if rel_res_norm < tol
 
-            x = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ])
-
+            x        = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ])
             x_minors = principal_minors(x, k)
 
             basis_tensor_mul!(x_minors, V_minors, y)
@@ -184,10 +191,8 @@ function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::K
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
         orthonormal_basis!(tensor_decomp, k)
 
-        H_minors = principal_minors(tensor_decomp.H, k)
-        V_minors = principal_minors(tensor_decomp.V, n, k)
-        b_minors = principal_minors(b̃, k)
-        columns  = kth_columns(tensor_decomp.V, k)
+        H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
+        columns                      = kth_columns(tensor_decomp.V, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
@@ -217,8 +222,73 @@ function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::K
 
         if rel_res_norm < tol
 
-            x = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ])
+            x        = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ])
+            x_minors = principal_minors(x, k)
 
+            basis_tensor_mul!(x_minors, V_minors, y)
+
+            println("Convergence")
+
+            return x
+
+        end
+
+    end
+
+    println("No convergence")
+
+end
+
+# Non-symmetric case, no convergence data
+function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{TensorArnoldi{T}}) where T <: AbstractFloat
+
+    d      = length(A)
+    𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
+    b_norm = kronprodnorm(b)
+    x      = nothing # Declare approximate solution
+
+    tensor_decomp = t_orthonormalization(A)
+
+    # Initialize list of characteristic polynomials of Jacobi matrices Tₖ
+    orthonormalization = tensor_decomp.orthonormalization
+    initial_orthonormalization!(tensor_decomp, b, orthonormalization)
+
+    b̃                = initialize_compressed_rhs(b, tensor_decomp.V) 
+
+    n = dimensions(A)[1]
+
+    λ_min = minimum(eigvals(Matrix(A[1]))) * d
+
+    for k = 2:nmax
+
+        # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
+        orthonormal_basis!(tensor_decomp, k)
+
+        H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
+        columns                      = kth_columns(tensor_decomp.V, k)
+
+        # Update compressed right-hand side b̃ = Vᵀb
+        update_rhs!(b_minors, columns, b, k)
+
+        rank = get_nonsymmetric_rank(A[1], b, tol)
+        α, ω = nonsymmetric_coefficients(rank)
+        
+        @info "Chosen tensor rank: " rank
+
+        # Approximate solution of compressed system
+        y  = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
+        𝔎 .= k 
+
+        subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
+        r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+        rel_res_norm   = (r_norm / b_norm)
+
+
+        @info "Iteration: " k "relative residual norm:" rel_res_norm
+
+        if rel_res_norm < tol
+
+            x        = ktensor( ones(rank), [ zeros(size(A[s], 1), rank) for s in 1:d ])
             x_minors = principal_minors(x, k)
 
             basis_tensor_mul!(x_minors, V_minors, y)
