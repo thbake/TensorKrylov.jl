@@ -205,20 +205,41 @@ function tensor_qr_algorithm(A::KronMat{T}, tol::T, n_max::Int) where T<:Abstrac
 
 end
 
+function laplace_eigenvector(n::Int, j::Int)
 
-function analytic_eigenvalues(d::Int, k::Int)
+    vⱼ = sort([ sqrt(2 * inv(n + 1)) * sin( (i * j)π * inv(n + 1)) for i in 1:n ])
 
-    λ_min = 0.0
-    λ_max = 0.0
+    return vⱼ
 
-    for _ in 1:d
+end
 
-        h = inv(k + 1)
+function laplace_eigenspace(n::Int)
 
-        λ_min += (2 * inv(h^2)) * (1 - cos(π *     inv(k + 1)))
-        λ_max += (2 * inv(h^2)) * (1 - cos(π * k * inv(k + 1)))
+    V = zeros(n, n)
+
+    for j in 1:n
+
+        V[:, j] = laplace_eigenvector(n, j) 
 
     end
+
+    return V
+end
+
+function laplace_eigenvalue(n::Int, j::Int)
+
+    h = inv(n + 1)
+
+    λⱼ = 2inv(h^2) * (1 - cos(π * j * inv(n + 1)))
+
+    return λⱼ
+
+end 
+
+function analytic_eigenvalues(d::Int, n::Int)
+
+    λ_min = laplace_eigenvalue(n, 1) * d 
+    λ_max = laplace_eigenvalue(n, n) * d
 
     return λ_min, λ_max
 

@@ -15,12 +15,48 @@ function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, �
 
 end
 
+function exponentiate(A::AbstractMatrix{T}, γ::T) where T<:AbstractFloat
+
+    tmp    = zeros(size(A))
+    result = zeros(size(A))
+
+    λ, V = LinearAlgebra.eigen(A)
+
+    Λ = Diagonal(exp.(γ .* λ))
+
+    LinearAlgebra.mul!(tmp, V, Λ)
+
+    LinearAlgebra.mul!(result, tmp, transpose(V))
+#    result = V * Λ * transpose(V)
+
+    return result
+
+end
+
+#function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, γ::T, k::Int) where T<:AbstractFloat
+#
+#    tmp1 = Matrix(copy(A[1]))
+#    tmp  = SymTridiagonal(tmp1)
+#    expA = exponentiate(tmp, γ)
+#    
+#    julia_exp = exp(γ * tmp1)  
+#
+#    error = LinearAlgebra.norm(julia_exp - expA) / LinearAlgebra.norm(julia_exp)
+#    println(error)
+#
+#    for s in 1:length(A)
+#
+#        y.fmat[s][:, k] = expA * b[s]
+#
+#    end
+#
+#end
+
 function solve_compressed_system(
         H::KronMat{T}, 
         b::Vector{<:AbstractVector{T}}, 
         ω::Array{T},
         α::Array{T},
-        t::Int,
         λ::T,
     ) where T <: AbstractFloat
 
@@ -28,6 +64,8 @@ function solve_compressed_system(
     # is equal to 
 
     k = dimensions(H)
+
+    t = length(α)
 
     λ_inv = inv(λ)
     yₜ    = ktensor(λ_inv .* ω, [ ones(k[s], t) for s in 1:length(H)] )
@@ -124,7 +162,7 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
         update_rhs!(b_minors, columns, b, k)
 
         b̃_norm       = kronprodnorm(b_minors)
-        λ_min, λ_max = analytic_eigenvalues(d, k)
+        λ_min, λ_max = analytic_eigenvalues(d, k) # Taking eigenvalues of principal minors of A not of H
         κ            = abs(λ_max / λ_min)
 
         @info "Condition: " κ
@@ -135,7 +173,7 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
 
 
         # Approximate solution of compressed system
-        y  = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
+        y  = solve_compressed_system(H_minors, b_minors, ω, α, λ_min)
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
@@ -198,7 +236,7 @@ function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::K
         update_rhs!(b_minors, columns, b, k)
 
         b̃_norm       = kronprodnorm(b_minors)
-        λ_min, λ_max = analytic_eigenvalues(d, k)
+        λ_min, λ_max = analytic_eigenvalues(d, k) # Taking eigenvalues of principal minors of A and not of H
         κ            = abs(λ_max / λ_min)
 
         @info "Condition: " κ
@@ -209,7 +247,7 @@ function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::K
 
 
         # Approximate solution of compressed system
-        y  = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
+        y  = solve_compressed_system(H_minors, b_minors, ω, α, λ_min)
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
@@ -257,7 +295,6 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
 
     n = dimensions(A)[1]
 
-    λ_min = minimum(eigvals(Matrix(A[1]))) * d
 
     for k = 2:nmax
 
@@ -270,13 +307,14 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
 
-        rank = get_nonsymmetric_rank(A[1], b, tol)
+
+        rank, λ_min = get_nonsymmetric_rank(H_minors[1], b̃, tol)
         α, ω = nonsymmetric_coefficients(rank)
         
         @info "Chosen tensor rank: " rank
 
         # Approximate solution of compressed system
-        y  = solve_compressed_system(H_minors, b_minors, ω, α, rank, λ_min)
+        y  = solve_compressed_system(H_minors, b_minors, ω, α, λ_min)
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]

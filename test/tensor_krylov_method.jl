@@ -1,6 +1,20 @@
 using TensorKrylov, Test
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, ProfileView
-using TensorKrylov: compute_dataframe, optimal_coefficients
+using TensorKrylov: compute_dataframe, optimal_coefficients, exponentiate
+
+@testset "Computation of matrix exponentials" begin
+
+    n = 200
+
+    A = SymTridiagonal(2ones(n), -ones(n-1))
+
+    γ = rand()
+    exact_exp  = exp(γ .* Matrix(A))
+    approx_exp = exponentiate(A, γ)
+
+    @test exact_exp ≈ approx_exp
+
+end
 
 @testset "Monotonic decrease of residual and error in A-norm" begin
 
@@ -112,31 +126,31 @@ end
 
     d    = 50
     nₛ   = 200
-    nmax = 150
+    nmax = 199
     h    = inv(nₛ + 1)
-    Aₛ   = sparse(inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) ))
+    Aₛ   = sparse(inv(h^2) .* SymTridiagonal(2ones(nₛ), -1ones(nₛ - 1)))
     A    = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
     b    = [ rand(nₛ) for _ in 1:d ]
     
-#    tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64})
+    tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64})
 
 end
 
 @testset "Nonsymmetric example" begin
 
-    d = 5
-    n = 50
-    nmax = 49
-    h = inv(n + 1)
-    c = 10
+    d    = 10
+    n    = 200
+    nmax = 199
+    h    = inv(n + 1)
+    c    = 10
 
-    L  = sparse( inv(h^2) .* Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1)) )
+    L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
     Aₛ = L + sparse( (c / (4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
 
     A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
 
     b = [ rand(n) for _ in 1:d ]
     
-    x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
+    #x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
 
 end

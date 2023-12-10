@@ -110,8 +110,8 @@ end
 
 function nonsymmetric_bound(β::T, γ::T, κ::T, rank::Int, b_norm::T) where T<:AbstractFloat
 
-    #return κ * inv(β) * exp(γ * π) * exp(-π * sqrt(rank)) * b_norm
-    return inv(β) * exp(γ * π) * exp(-π * sqrt(rank)) 
+    return κ * inv(β) * exp(γ / π) * exp(-π * sqrt(rank)) * b_norm
+    #return inv(β) * exp(γ * π) * exp(-π * sqrt(rank)) 
 
 end
 
@@ -121,8 +121,8 @@ function get_nonsymmetric_rank(A::AbstractMatrix{T}, b::KronProd{T}, tol::T) whe
     Λ, P = eigen(Matrix(A))
     κ    = cond(P)^d
 
-    β = minimum(real.(Λ))
-    γ = maximum(imag.(Λ))
+    β = minimum(real.(Λ)) * d
+    γ = maximum(imag.(Λ)) * d
 
     b_norm = kronprodnorm(b)
 
@@ -137,16 +137,16 @@ function get_nonsymmetric_rank(A::AbstractMatrix{T}, b::KronProd{T}, tol::T) whe
 
     end
 
-    return rank
+    return rank, β
 
 end
 
 function nonsymmetric_coefficients(rank::Int)
 
-    h_st = π * inv(rank)
+    h_st = π * inv(sqrt(rank))
 
-    α = [ log(exp(j * h_st) + sqrt(1 + exp(2 * j * h_st))) for j in -rank : rank ]
-    ω = [ h_st * inv(sqrt((1 + exp(-2 * j * h_st))))       for j in -rank : rank ]
+    α = [ log(exp(j * h_st) + sqrt(1 + exp(2 * j * h_st))) for j in 1: rank ]
+    ω = [ h_st * inv(sqrt((1 + exp(-2 * j * h_st))))       for j in 1 : rank ]
 
     return α, ω 
 

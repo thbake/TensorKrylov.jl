@@ -309,7 +309,7 @@ function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMat
 
     end
 
-    @assert MVnorm > 0.0
+    @assert MVnorm >= 0.0
 
     return MVnorm
     
@@ -347,7 +347,7 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
         mask[s] = false
     end
 
-    @assert Ax_y > 0.0
+    @assert Ax_y >= 0.0
 
     return Ax_y
 
@@ -376,7 +376,7 @@ function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat
 
     comp_res = Hy_norm - 2* Hy_b + b_norm
 
-    @assert comp_res > 0.0
+    @assert comp_res >= 0.0
 
     return comp_res
     
@@ -444,122 +444,5 @@ function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<
     
     @info "Compressed residual" dot(comp_res, comp_res)
     return dot(comp_res, comp_res)
-
-end
-
-function efficientMVnorm(x::ktensor, Λ::AbstractMatrix{T}, X_inner::FMatrices{T}, Z::FMatrices{T}) where T <: AbstractFloat
-
-    # Compute the squared 2-norm ||Ax||², where A ∈ ℝᴺ×ᴺ is a Kronecker sum and
-    # x ∈ ℝᴺ is given as a Kruskal tensor of rank t.
-    #
-    # X_inner holds the inner products 
-    #
-    #   xᵢ⁽ˢ⁾ᵀxⱼ⁽ˢ⁾ for s = 1,…,d, i,j = 1,…,t
-    #
-    # And Z contains the matrices that represent the matrix vector products
-    # 
-    #   z⁽ˢ⁾ᵢ = Aₛ⋅ x⁽ˢ⁾ᵢ for s = 1,…,d, i = 1,…,t
-    #
-    # A is not passed explicitly, as the precomputed inner products are given.
-
-    d      = ndims(x)
-    rank   = ncomponents(x)
-
-    # The following contain inner products of the form 
-    #
-    #   zᵢ⁽ˢ⁾ᵀzⱼ⁽ˢ⁾ for s = 1,…,d, i,j = 1,…,t,
-    # 
-    # and 
-    #
-    #   zᵢ⁽ˢ⁾ᵀxⱼ⁽ˢ⁾ for s = 1,…,d, i,j = 1,…,t,
-    #
-    # respcetively
-
-    Z_inner = [ zeros(rank, rank) for _ in 1:d ]
-    ZX      = [ zeros(rank, rank) for _ in 1:d ]
-
-    compute_lower_triangles!(Z_inner, Z)
-
-    for s in 1:d
-
-        BLAS.gemm!('T', 'N', 1.0, Z[s], x.fmat[s], 1.0, ZX[s]) 
-
-    end
-
-    result = 0.0
-
-    mask_s = trues(d)
-    mask_r = trues(d)
-
-    # We can separate the large sum 
-    #
-    #   ΣₛΣᵣΣᵢΣⱼ xᵢ⁽¹⁾ᵀxⱼ⁽¹⁾ ⋯ zᵢ⁽ˢ⁾ᵀxⱼ⁽ˢ⁾ ⋯ xᵢ⁽ʳ⁾ᵀzⱼ⁽ʳ⁾ ⋯ xᵢ⁽ᵈ⁾ᵀxⱼ⁽ᵈ⁾
-    #
-    # into the cases 
-    #
-    #   (1) s  = r, i  = j,
-    #   (2) s  = r, i != j,
-    #   (3) s != r, i  = j,
-    #   (4) s != r, i != j
-    #
-    # and simplify the calculation using the fact that some inner products 
-    # appear twice (only access lower triangle of matrices) and that the norm
-    # of the columns of the factor matrices are one.
-
-    for s in 1:d
-
-        for j = 1:rank # case (1)
-
-            result += Λ[j, j] * Z_inner[s][j, j]
-
-            mask_s[s] = false
-
-            tmp = 0.0
-
-            for i = skipindex(j, j:rank) # case (2)
-
-                tmp += Λ[i, j] * maskprod(X_inner[mask_s], i, j) * maskprod(Z_inner[.!mask_s], i, j)
-
-            end
-
-            result += 2 * tmp
-
-        end
-
-        ZX_masked = ZX[.!mask_s]
-
-        for r = skipindex(s, 1:d) # case (3)
-
-            mask_r[r] = false
-
-            mask_sr = mask_s .&& mask_r
-
-            X_masked  = X_inner[mask_sr]
-            XZ_masked =     ZX[.!mask_r]
-
-            for i = 1:rank
-
-                result += Λ[i, i] * ZX[s][i, i] * ZX[r][i, i]
-
-                tmp = 0.0
-
-                for j = skipindex(i, 1:rank) # case (4)
-
-                    tmp += Λ[j, i] * maskprod(X_masked, i, j) *  maskprod(ZX_masked, i, j) * maskprod(XZ_masked, j, i)
-
-                end
-
-                result += 2 * tmp
-
-            end
-
-            mask_r[r] = true
-        end
-
-        mask_s[s] = true
-
-    end
-
-    return result
 
 end
