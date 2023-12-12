@@ -1,6 +1,6 @@
 using TensorKrylov, Test
-using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays, ProfileView
-using TensorKrylov: compute_dataframe, optimal_coefficients, exponentiate
+using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
+using TensorKrylov: compute_dataframe, optimal_coefficients, exponentiate, normalize!
 
 @testset "Computation of matrix exponentials" begin
 
@@ -124,13 +124,17 @@ end
 
 @testset "Symmetric example" begin
 
-    d    = 50
+    BLAS.set_num_threads(30)
+
+    d    = 100
     nₛ   = 200
     nmax = 199
     h    = inv(nₛ + 1)
     Aₛ   = sparse(inv(h^2) .* SymTridiagonal(2ones(nₛ), -1ones(nₛ - 1)))
     A    = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
     b    = [ rand(nₛ) for _ in 1:d ]
+
+    normalize!(b)
     
     tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64})
 

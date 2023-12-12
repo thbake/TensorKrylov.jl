@@ -131,6 +131,8 @@ end
 # SPD case no convergence data
 function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{TensorLanczos{T}}) where T <: AbstractFloat
 
+    println(BLAS.get_num_threads())
+
     d      = length(A)
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
     b_norm = kronprodnorm(b)

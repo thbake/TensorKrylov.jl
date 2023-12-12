@@ -446,3 +446,15 @@ function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<
     return dot(comp_res, comp_res)
 
 end
+
+function normalize!(rhs::KronProd{T}) where T<:AbstractFloat
+
+    for i in 1:length(rhs)
+
+        rhs[i] *= inv(LinearAlgebra.norm(rhs[i]))
+
+    end
+
+end
+
+    
