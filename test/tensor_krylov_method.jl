@@ -126,7 +126,7 @@ end
 
     BLAS.set_num_threads(30)
 
-    d    = 100
+    d    = 50
     nₛ   = 200
     nmax = 199
     h    = inv(nₛ + 1)

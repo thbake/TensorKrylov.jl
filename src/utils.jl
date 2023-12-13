@@ -1,13 +1,5 @@
 using PyCall
 
-export KronMat, KronProd, LowerTriangle, FMatrices
-
-# Aliases
-const KronProd{T}      = Vector{<:AbstractVector{T}} 
-const KronMat{T}       = KroneckerMatrix{T}
-const LowerTriangle{T} = LowerTriangular{T, <:AbstractMatrix{T}} 
-const FMatrices{T}     = Vector{<:AbstractMatrix{T}} 
-
 tensor_train = pyimport("scikit_tt.tensor_train")
 TT           = pytype_query(tensor_train.TT)
 TT_solvers   = pyimport("scikit_tt.solvers.sle")
@@ -457,4 +449,76 @@ function normalize!(rhs::KronProd{T}) where T<:AbstractFloat
 
 end
 
+function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T}) where T<:AbstractFloat
+
+        b̃        = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+        b_minors = principal_minors(b̃, 1)
+        columns  = kth_columns(V, 1)
+        update_rhs!(b_minors, columns, b, 1)
+
+        return b̃
+end
+
+function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) where T<:AbstractFloat
+    # b̃ = Vᵀb = ⨂ Vₛᵀ ⋅ ⨂ bₛ = ⨂ Vₛᵀbₛ
     
+    for s = 1:length(b̃)
+
+        # Update one entry of each component of b̃ by performing a single inner product 
+        b̃[s][k] = dot(V[s], b[s])
+
+    end
+
+end
+
+function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:AbstractFloat
+
+    x.lambda = copy(y.lambda)
+
+    for s in eachindex(V)
+
+        LinearAlgebra.mul!(x.fmat[s], V[s], y.fmat[s])
+
+    end
+
+end
+
+function compute_minors(tensor_decomp::TensorDecomposition{T}, rhs::KronProd{T}, n::Int, k::Int) where T<:AbstractFloat
+
+        H_minors = principal_minors(tensor_decomp.H, k)
+        V_minors = principal_minors(tensor_decomp.V, n, k)
+        b_minors = principal_minors(rhs, k)
+
+        return H_minors, V_minors, b_minors
+    
+end
+
+function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, γ::T, k::Int) where T<:AbstractFloat
+
+    for s = 1:length(A)
+
+        tmp = Matrix(copy(A[s]))
+
+        #y.fmat[s][:, k] = expv(γ, tmp, b[s]) # Update kth column
+        y.fmat[s][:, k] =  exp(γ * tmp) * b[s] # Update kth column
+
+    end
+
+end
+
+function exponentiate(A::AbstractMatrix{T}, γ::T) where T<:AbstractFloat
+
+    tmp    = zeros(size(A))
+    result = zeros(size(A))
+
+    λ, V = LinearAlgebra.eigen(A)
+
+    Λ = Diagonal(exp.(γ .* λ))
+
+    LinearAlgebra.mul!(tmp, V, Λ)
+
+    LinearAlgebra.mul!(result, tmp, transpose(V))
+
+    return result
+
+end

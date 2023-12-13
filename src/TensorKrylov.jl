@@ -5,7 +5,7 @@ module TensorKrylov
     # Tensor approximations
     include("tensor_struct.jl")
 
-    include("utils.jl")
+    include("alias.jl")
 
     include("convergence.jl")
 
@@ -14,6 +14,8 @@ module TensorKrylov
     
     # Matrix decompositions
     include("decompositions.jl")
+    
+    include("utils.jl")
 
     include("orthogonal_bases.jl")
 
