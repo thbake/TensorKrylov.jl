@@ -7,7 +7,7 @@ using LinearAlgebra
     k = 500
     h = inv(n + 1)
 
-    A = inv(h^2) * Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
+    A = inv(h^2) * SymTridiagonal( 2ones(n), -1ones(n - 1) )
     b = rand(n)
 
     # Initialize Arnoldi and Lanczos decompositions
@@ -30,17 +30,8 @@ using LinearAlgebra
 
     end
 
-    test_arnoldi = zeros(k, k)
-    test_lanczos = zeros(k-1, k-1)
-
-    arnoldi_basis = @view(arnoldi.V[:, 1:k])
-    lanczos_basis = @view(lanczos.V[:, 1:k-1])
-
-    LinearAlgebra.mul!(test_arnoldi, transpose(arnoldi_basis), arnoldi_basis)
-    LinearAlgebra.mul!(test_lanczos, transpose(lanczos_basis), lanczos_basis)
-
-    @test test_arnoldi[1:k, 1:k] ≈ I(k)
-    @test test_lanczos[1:k-1, 1:k-1] ≈ I(k-1)
+    @test isorthonormal(arnoldi, k)
+    @test isorthonormal(lanczos, k-1)
 
 end
 
@@ -74,11 +65,6 @@ end
 
     end
 
-    arnoldi_test = zeros(k, k)
-    lanczos_test = zeros(k, k)
-
-    Iₖ = I(k)
-
     # Test for positive definiteness
     for s in 1:d
 
@@ -86,14 +72,7 @@ end
 
     end
 
-    for s in 1:d
-
-        mul!( arnoldi_test, t_arnoldi.V[s][:, 1:k]', t_arnoldi.V[s][:, 1:k] ) 
-        mul!( lanczos_test, t_lanczos.V[s][:, 1:k]', t_lanczos.V[s][:, 1:k] ) 
-
-        @test arnoldi_test ≈ Iₖ 
-        @test lanczos_test ≈ Iₖ
-
-    end
+    @test isorthonormal(t_arnoldi, k)
+    @test isorthonormal(t_lanczos, k)
 
 end

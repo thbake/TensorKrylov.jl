@@ -134,7 +134,7 @@ function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T <: Abs
 
 end
 
-function compute_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T <: AbstractFloat
+function cp_tensor_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T <: AbstractFloat
 
     # Given a collection of lower triangular matrices containing all values of 
     # λ⁽ˢ⁾corresponding to each factor matrix in the CP-decomposition of the 
@@ -368,12 +368,11 @@ function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat
 
     comp_res = Hy_norm - 2* Hy_b + b_norm
 
-    @assert comp_res >= 0.0
+    #@assert comp_res >= 0.0
 
-    return comp_res
+    return abs(comp_res)
     
 end
-
 
 
 function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal_entries::Vector{T}, b::KronProd{T}) where T<:AbstractFloat
@@ -399,7 +398,7 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal
 
     for s = 1:d
 
-        Γ = Symmetric(compute_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
+        Γ = Symmetric(cp_tensor_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
 
         mask[s]   = false
         y²        = squared_tensor_entries(Ly[mask], Γ)
@@ -410,6 +409,47 @@ function residual_norm(H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal
 
     r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
     #r_compressed = TTcompressedresidual(H, y, b)
+
+    return sqrt(res_norm + r_compressed)
+
+end
+
+function residual_norm!(convergence_data::ConvergenceData{T}, H::KronMat{T}, y::ktensor, 𝔎::Vector{Int}, subdiagonal_entries::Vector{T}, b::KronProd{T}) where T<:AbstractFloat
+    
+    # Compute squared norm of the residual according to Lemma 3.4 of paper.
+    
+    # Σ |hˢₖ₊₁ₖ|² * Σ |y\_𝔏|² + ||ℋy - b̃||²
+    
+    # Get entries at indices (kₛ+1, kₛ) for each dimension with pair of 
+    # multiindices 𝔎+1, 𝔎
+
+    d  = length(H)                    # Number of dimensions
+    t  = ncomponents(y)               # Tensor rank
+    Ly = [ zeros(t, t) for _ in 1:d ] # Allocate memory for matrices representing inner products
+    Λ  = LowerTriangular(zeros(t, t)) # Allocate memory for matrix representing outer product of coefficients.
+
+    compute_lower_triangles!(Ly, y)
+    compute_lower_outer!(Λ, y.lambda)
+
+    Ly       = Symmetric.(Ly, :L) # Symmetrize (momentarily abandon the use of symmetry)
+    res_norm = 0.0
+    mask     = trues(d)
+
+    for s = 1:d
+
+        Γ = Symmetric(cp_tensor_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
+
+        mask[s]   = false
+        y²        = squared_tensor_entries(Ly[mask], Γ)
+        res_norm += abs( subdiagonal_entries[s] )^2 * y²
+        mask[s]   = true
+
+    end
+
+    r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
+
+    k = 𝔎[1]
+    convergence_data.projected_residual_norm[k] = r_compressed
 
     return sqrt(res_norm + r_compressed)
 

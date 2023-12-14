@@ -1,5 +1,5 @@
 export Arnoldi, Lanczos, TensorArnoldi, TensorLanczos, TensorDecomposition
-export orthonormal_basis!, orthonormal_basis_vector!, initial_orthonormalization!, initialize_decomp!
+export orthonormal_basis!, orthonormal_basis_vector!, initial_orthonormalization!, initialize_decomp!, isorthonormal
 
 const MatrixView{T}    = AbstractMatrix{T}
 
@@ -130,7 +130,7 @@ mutable struct TensorLanczos{T} <: TensorDecomposition{T}
         V = KroneckerMatrix{T}(dimensions(A))
         H = KroneckerMatrix{T}(
 
-            [ sparse(Tridiagonal( zeros( size(A[s]) ) ))  for s in 1:length(A) ]
+            [ sparse(SymTridiagonal( zeros( size(A[s]) ) ))  for s in 1:length(A) ]
 
         )
 
@@ -274,29 +274,34 @@ function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) w
 
 end
 
-function computeconditions(A::AbstractMatrix{U}, b::AbstractVector{U}, k::Int) where U<:AbstractFloat
+function isorthonormal(V::AbstractMatrix{T}, k::Int)::Bool where T<:AbstractFloat
 
-    n = size(A, 1)
-    
-    lanczos = Lanczos{U}(A, zeros(n, k), zeros(k, k), b)
+    result = zeros(k, k)
 
-    # Store condition numbers of different matrices
-    condition_numbers = zeros(k)
+    decomposition_basis = @view(V[:, 1:k])
 
-    orthonormal_basis_vector!(lanczos, 1)
+    LinearAlgebra.mul!(result, transpose(decomposition_basis), decomposition_basis)
 
-    condition_numbers[1] = lanczos.H[1, 1]
+    return result ≈ I(k)
 
-    for j in 2:k-1
+end
 
-        orthonormal_basis_vector!(lanczos, j)
-        eigenvalues          = eigvals( @view(lanczos.H[1:j, 1:j]) )
-        λ_min                = eigenvalues[1]
-        λ_max                = eigenvalues[end]
-        condition_numbers[j] = λ_max / λ_min
+function isorthonormal(decomposition::Decomposition{T}, k::Int)::Bool where T<:AbstractFloat
+
+    return isorthonormal(decomposition.V, k)
+
+end
+
+function isorthonormal(tensor_decomp::TensorDecomposition{T}, k::Int)::Bool where T<:AbstractFloat
+
+    boolean = true
+
+    for s in 1:length(tensor_decomp)
+
+        boolean = boolean && isorthonormal(tensor_decomp.V[s], k)
 
     end
 
-    return condition_numbers
-
+    return boolean
 end
+

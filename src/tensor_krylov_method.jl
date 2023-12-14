@@ -22,24 +22,15 @@ using ExponentialUtilities: exponential!, expv
 #
 #end
 
-function solve_compressed_system(
-        H::KronMat{T}, 
-        b::Vector{<:AbstractVector{T}}, 
-        ω::Array{T},
-        α::Array{T},
-        λ::T,
-    ) where T <: AbstractFloat
+function solve_compressed_system( H::KronMat{T}, b::KronProd{T}, ω::Array{T}, α::Array{T}, λ::T) where T <: AbstractFloat
 
     # Since we are considering a canonical decomposition the tensor rank of yₜ
     # is equal to 
 
-    k = dimensions(H)
-
-    t = length(α)
-
+    k     = dimensions(H)
+    t     = length(α)
     λ_inv = inv(λ)
     yₜ    = ktensor(λ_inv .* ω, [ ones(k[s], t) for s in 1:length(H)] )
-
 
     for k = 1:t
 
@@ -57,8 +48,6 @@ end
 
 # SPD case no convergence data
 function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{TensorLanczos{T}}) where T <: AbstractFloat
-
-    println(BLAS.get_num_threads())
 
     d      = length(A)
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
@@ -96,7 +85,8 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
 
         @info "Condition: " κ
 
-        ω, α, rank = optimal_coefficients(coefficients_dir, coefficients_df, tol, κ, λ_min, b̃_norm)
+        rank = compute_rank(coefficients_df, κ, tol)
+        α, ω = exponential_sum_parameters(coefficients_dir, rank, κ)
         
         @info "Chosen tensor rank: " rank
 
@@ -132,7 +122,8 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
 end
 
 # SPD case convergence data
-function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+#function tensor_krylov!(convergencedata::Bool, A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+function tensor_krylov!(convergence_data::ConvergenceData{T}, A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
 
     d      = length(A)
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
@@ -142,7 +133,7 @@ function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::K
     tensor_decomp = t_orthonormalization(A)
 
     # Initialize list of characteristic polynomials of Jacobi matrices Tₖ
-    char_poly          = CharacteristicPolynomials{T}(d, tensor_decomp.H[1, 1])
+    #char_poly          = CharacteristicPolynomials{T}(d, tensor_decomp.H[1, 1])
     orthonormalization = tensor_decomp.orthonormalization
     initial_orthonormalization!(tensor_decomp, b, orthonormalization)
 
@@ -170,7 +161,8 @@ function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::K
 
         @info "Condition: " κ
 
-        ω, α, rank = optimal_coefficients(coefficients_dir, coefficients_df, tol, κ, λ_min, b̃_norm)
+        rank = compute_rank(coefficients_df, κ, tol)
+        α, ω = exponential_sum_parameters(coefficients_dir, rank, κ)
         
         @info "Chosen tensor rank: " rank
 
@@ -180,10 +172,10 @@ function tensor_krylov!(convergencedata::ConvergenceData{T}, A::KronMat{T}, b::K
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
-        r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+        r_norm         = residual_norm!(convergence_data, H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
         rel_res_norm   = (r_norm / b_norm)
 
-        convergencedata.relative_residualnorm[k] = rel_res_norm
+        convergence_data.relative_residual_norm[k]  = rel_res_norm
 
         @info "Iteration: " k "relative residual norm:" rel_res_norm
 
@@ -220,10 +212,11 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
     orthonormalization = tensor_decomp.orthonormalization
     initial_orthonormalization!(tensor_decomp, b, orthonormalization)
 
-    b̃                = initialize_compressed_rhs(b, tensor_decomp.V) 
+    b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
 
     n = dimensions(A)[1]
 
+    #λ_min = minimum(abs.(eigvals(Matrix(A[1])))) * d
 
     for k = 2:nmax
 
@@ -232,13 +225,14 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
 
         H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
         columns                      = kth_columns(tensor_decomp.V, k)
+        A_minors = principal_minors(A, k)
 
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
 
-
-        rank, λ_min = get_nonsymmetric_rank(H_minors[1], b̃, tol)
-        α, ω = nonsymmetric_coefficients(rank)
+        λ_min = minimum(abs.(eigvals(Matrix(A_minors[1])))) * d
+        rank = compute_rank(λ_min, b, tol)
+        α, ω = exponential_sum_parameters(rank)
         
         @info "Chosen tensor rank: " rank
 

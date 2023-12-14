@@ -1,7 +1,7 @@
 using TensorKrylov, Test
 
 import TensorKrylov: compute_lower_outer!, compute_lower_triangles!, 
-                     compute_coefficients, maskprod, matrix_vector, MVnorm, 
+                     cp_tensor_coefficients, maskprod, matrix_vector, MVnorm, 
                      efficientMVnorm, compressed_residual, residual_norm,
                      squared_tensor_entries, tensorinnerprod
 
@@ -192,7 +192,7 @@ end
 
     for s in 1:d
 
-        Γ                 = Symmetric(compute_coefficients(Λ, y.fmat[s][n, :]), :L)
+        Γ                 = Symmetric(cp_tensor_coefficients(Λ, y.fmat[s][n, :]), :L)
         mask[s]           = false
         computed_norms[s] = squared_tensor_entries(Ly[mask], Γ)
         mask[s]           = true

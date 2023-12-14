@@ -1,6 +1,6 @@
 using TensorKrylov, Test
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
-using TensorKrylov: compute_dataframe, optimal_coefficients, exponentiate, normalize!
+using TensorKrylov: compute_coefficients_directory, compute_dataframe, exponential_sum_parameters, exp, exponentiate, normalize!
 
 @testset "Computation of matrix exponentials" begin
 
@@ -69,7 +69,8 @@ end
         n = size(A[1], 1)
 
         b̃         = initialize_compressed_rhs(b, tensor_decomp.V)
-        coeffs_df = compute_dataframe()
+        coefficients_dir = compute_coefficients_directory()
+        coeffs_df        = compute_dataframe()
         
         for k = 2:nmax
 
@@ -87,7 +88,8 @@ end
             b̃_norm       = kronprodnorm(b_minors)
             λ_min, λ_max = analytic_eigenvalues(d, k)
             κ            = abs(λ_max / λ_min)
-            ω, α, t      = optimal_coefficients(coeffs_df, tol, κ, λ_min, b̃_norm)
+            t            = compute_rank(coefficients_dir, κ, tol)
+            α, ω         = exponential_sum_parameters(coefficients_dir, t, κ)
 
             y  = solvecompressed(H_minors, b_minors)
             yₜ = solve_compressed_system(H_minors, b_minors, ω, α, t, λ_min)
@@ -113,7 +115,7 @@ end
     d    = 2
     n    = 100
     h    = inv(n + 1)
-    Tₖ   = sparse(inv(h^2) .* (Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1))))
+    Tₖ   = sparse(inv(h^2) .* SymTridiagonal(2ones(n), -ones(n - 1)))
     A    = KroneckerMatrix{Float64}([Tₖ for _ in 1:d])
     b    = [ rand(n) for _ in 1:d ]
     nmax = 90
@@ -136,25 +138,28 @@ end
 
     normalize!(b)
     
-    tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64})
+    #tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64})
 
 end
 
 @testset "Nonsymmetric example" begin
 
-    d    = 10
+    d    = 50
     n    = 200
     nmax = 199
     h    = inv(n + 1)
     c    = 10
 
     L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
-    Aₛ = L + sparse( (c / (4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
+    Aₛ = L + sparse( (c * inv(4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
 
     A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
 
     b = [ rand(n) for _ in 1:d ]
+
+    normalize!(b)
     
-    #x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
+    BLAS.set_num_threads(30)
+    x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
 
 end

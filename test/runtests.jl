@@ -11,10 +11,10 @@ Random.seed!(12345)
     #    include("preprocessing.jl")
     #end
 
-    #@testset "Decomposition tests" begin
-    #   include("decompositions.jl")
-    #end
-
+#    @testset "Decomposition tests" begin
+#       include("decompositions.jl")
+#    end
+#
     #@testset "Eigenvalue tests" begin
     #    include("eigenvalues.jl")
     #end
