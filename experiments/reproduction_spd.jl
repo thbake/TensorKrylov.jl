@@ -3,6 +3,8 @@ using LinearAlgebra
 using SparseArrays
 using TensorKrylov
 using Plots
+using DataFrames
+using CSV
 
 abstract type Problem end
 struct SPDProblem    <: Problem end
@@ -15,11 +17,17 @@ mutable struct Experiment{T}
 
     function Experiment{T}(problem_dimensions::Vector{Int}, nmax::Int) where T<:AbstractFloat
 
-        convergence_data = [ ConvergenceData{T}(nmax) for _ in 1:length(problem_dimensions) ]
+        convergence_results = [ ConvergenceData{T}(nmax) for _ in 1:length(problem_dimensions) ]
 
-        new(problem_dimensions, convergence_data)
+        new(problem_dimensions, convergence_results)
 
     end
+
+end
+
+function Base.length(experiment::Experiment{T}) where T
+
+    return length(experiment.dimensions)
 
 end
     
@@ -78,42 +86,28 @@ function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Ty
 
     end
 
-    return experiment.conv_data_vector
+    return experiment
 
 end
 
-function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, ::NonSymProblem, c::T = 10.0, tol::T = 1e-9, normalize_rhs::Bool = true) where T<:AbstractFloat
+function exportresults(exportdir::AbstractString, experiment::Experiment{T}) where T<:AbstractFloat
 
-    h  = inv(n + 1)
-    L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
-    Aₛ = L + sparse( (c * inv(4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
+    for i in 1:length(experiment)
 
-    experiment = Experiment{T}(dimensions, nmax)
-    
-    for i in 1:length(dimensions)
+        d    = experiment.dimensions[i]
+        data = experiment.conv_data_vector[i]
 
-        d = dimensions[i]
-        A = KroneckerMatrix{T}([Aₛ for s in 1:d])
-        b = [ rand(n) for _ in 1:d ]
+        df = DataFrame(
 
-        if normalize_rhs
+            data.iterations,
+            data.relative_residual_norm,
+            data.projected_residual_norm,
 
-            normalize!(b)
+        )
 
-        end
-
-
-        tensor_krylov!(experiment.conv_data_vector[i], A, b, tol, nmax, TensorLanczos{Float64}) 
+        output = joinpath(exportdir, "data_d" * string(d) * ".csv")
+        CSV.write(output, string.(df))
 
     end
 
-    return experiment.conv_data_vector
-
 end
-
-
-
-
-
-
-
