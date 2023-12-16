@@ -102,19 +102,19 @@ function assemble_matrix(n::Int, ::Type{NonSymProblem}, c::AbstractFloat = 10.0)
 
 end
 
-function get_orthonormalization(::SPDProblem) 
+function get_orthonormalization(::Type{SPDProblem}, ::Type{T}) where T<:AbstractFloat
 
-    return TensorLanczos
-
-end
-
-function get_orthonormalization(::NonSymProblem) 
-
-    return TensorArnoldi
+    return TensorLanczos{T}
 
 end
 
-function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Type{Problem}, tol::T = 1e-9, normalize_rhs::Bool = true) where T<:AbstractFloat
+function get_orthonormalization(::Type{NonSymProblem}, ::Type{T}) where T<:AbstractFloat
+
+    return TensorArnoldi{T}
+
+end
+
+function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Type{<:Problem}, tol::T = 1e-9, normalize_rhs::Bool = true) where T<:AbstractFloat
 
     Aₛ = assemble_matrix(n, problem)
 
@@ -132,7 +132,7 @@ function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Ty
 
         end
 
-        orthonormalization_type = get_orthonormalization(problem)
+        orthonormalization_type = get_orthonormalization(problem, T)
 
         tensor_krylov!(experiment.conv_data_vector[i], A, b, tol, nmax, orthonormalization_type) 
 
@@ -151,9 +151,9 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
 
         df = DataFrame(
 
-            data.iterations,
-            data.relative_residual_norm,
-            data.projected_residual_norm,
+            iterations              = data.iterations,
+            relative_residual_norm  = data.relative_residual_norm,
+            projected_residual_norm = data.projected_residual_norm,
 
         )
 
