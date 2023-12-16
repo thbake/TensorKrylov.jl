@@ -23,11 +23,63 @@ mutable struct Experiment{T}
 
     end
 
+    function Experiment{T}(datadir::AbstractString = "experiments/spd_data") where T<:AbstractFloat
+
+        files               = cd(readdir, datadir)
+        nfiles              = length(files)
+        problem_dimensions  = Vector{Int}(undef, nfiles)
+        convergence_results = Vector{ConvergenceData{T}}(undef, nfiles)
+
+        regex   = r"[0-9]+"
+        matches = match.(regex, files)
+
+        dimensions     = [ parse(Int, matches[i].match) for i in 1:length(files) ]
+        sorted_indices = sortperm(dimensions)
+
+        sorted_dims    = dimensions[sorted_indices]
+        sorted_files   = files[sorted_indices]
+        column_types   = [Int, T, T]
+
+        for i in 1:length(sorted_files)
+
+            df = CSV.read(
+                joinpath(datadir, sorted_files[i]),
+                DataFrame,
+                delim = ',',
+                types = column_types
+            )
+
+            convergence_data = ConvergenceData{T}( nrow(df) )
+
+            convergence_data.iterations              = df[:, 1]
+            convergence_data.relative_residual_norm  = df[:, 2]
+            convergence_data.projected_residual_norm = df[:, 3]
+
+            convergence_results[i] = convergence_data
+
+        end
+
+        new(sorted_dims, convergence_results)
+
+    end
+
 end
 
 function Base.length(experiment::Experiment{T}) where T
 
     return length(experiment.dimensions)
+
+end
+
+function get_iterations(experiment::Experiment{T}) where T<:AbstractFloat
+
+    return [ experiment.conv_data_vector[i].iterations for i in 1:length(experiment) ]
+
+end
+
+function get_relative_residuals(experiment::Experiment{T}) where T<:AbstractFloat
+
+    return [ experiment.conv_data_vector[i].relative_residual_norm for i in 1:length(experiment) ]
 
 end
     
@@ -50,15 +102,15 @@ function assemble_matrix(n::Int, ::Type{NonSymProblem}, c::AbstractFloat = 10.0)
 
 end
 
-function get_orthonormalization(::SPDProblem) where T<:AbstractFloat
+function get_orthonormalization(::SPDProblem) 
 
-    return TensorLanczos{T}
+    return TensorLanczos
 
 end
 
-function get_orthonormalization(::NonSymProblem) where T<:AbstractFloat
+function get_orthonormalization(::NonSymProblem) 
 
-    return TensorArnoldi{T}
+    return TensorArnoldi
 
 end
 
@@ -109,5 +161,20 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
         CSV.write(output, string.(df))
 
     end
+
+end
+
+function plotexperiment(experiment::Experiment{T}) where T<:AbstractFloat
+
+    labels         = "d = " .* string.(experiment.dimensions)
+    total_iterations         = get_iterations(experiment)
+    total_relative_residuals = get_relative_residuals(experiment)
+
+    plot(total_iterations, total_relative_residuals, labels = permutedims(labels))
+
+    plot!(yscale=:log10)
+    ylims!(1e-8, 1e+2)
+    xlabel!("k")
+    ylabel!("Relative residual norm")
 
 end

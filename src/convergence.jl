@@ -1,6 +1,6 @@
 export ConvergenceData
 
-struct ConvergenceData{T} 
+mutable struct ConvergenceData{T} 
 
     iterations::Vector{Int}
     relative_residual_norm::Vector{T}
