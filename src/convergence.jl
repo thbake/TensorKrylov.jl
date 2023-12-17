@@ -2,6 +2,7 @@ export ConvergenceData
 
 mutable struct ConvergenceData{T} 
 
+    niterations::Int
     iterations::Vector{Int}
     relative_residual_norm::Vector{T}
     projected_residual_norm::Vector{T}
@@ -9,7 +10,7 @@ mutable struct ConvergenceData{T}
 
     function ConvergenceData{T}(nmax::Int) where T<:AbstractFloat
 
-        new(collect(1:nmax), zeros(nmax), zeros(nmax))
+        new(nmax, collect(1:nmax), zeros(nmax), zeros(nmax))
 
     end
 

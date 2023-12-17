@@ -5,6 +5,7 @@ using TensorKrylov
 using Plots
 using DataFrames
 using CSV
+using LaTeXStrings
 
 abstract type Problem end
 struct SPDProblem    <: Problem end
@@ -13,13 +14,14 @@ struct NonSymProblem <: Problem end
 mutable struct Experiment{T} 
 
     dimensions::Vector{Int}
+    niterations::Int
     conv_data_vector::Vector{ConvergenceData{T}}
 
     function Experiment{T}(problem_dimensions::Vector{Int}, nmax::Int) where T<:AbstractFloat
 
         convergence_results = [ ConvergenceData{T}(nmax) for _ in 1:length(problem_dimensions) ]
 
-        new(problem_dimensions, convergence_results)
+        new(problem_dimensions, nmax, convergence_results)
 
     end
 
@@ -59,7 +61,9 @@ mutable struct Experiment{T}
 
         end
 
-        new(sorted_dims, convergence_results)
+        niterations = convergence_results[1].niterations
+
+        new(sorted_dims, niterations, convergence_results)
 
     end
 
@@ -80,6 +84,12 @@ end
 function get_relative_residuals(experiment::Experiment{T}) where T<:AbstractFloat
 
     return [ experiment.conv_data_vector[i].relative_residual_norm for i in 1:length(experiment) ]
+
+end
+
+function get_projected_residuals(experiment::Experiment{T}) where T<:AbstractFloat
+
+    return [ experiment.conv_data_vector[i].projected_residual_norm for i in 1:length(experiment) ]
 
 end
     
@@ -164,17 +174,53 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
 
 end
 
+# Define Type Recipe for a vector of ConvergenceData{T}
+@recipe function f(::Type{Vector{ConvergenceData{T}}}, conv_data_vec::Vector{ConvergenceData{T}}) where T<:AbstractFloat
+
+    return [ conv_data_vec[i].relative_residual_norm[1:2:end] for i in 1:length(conv_data_vec)]
+
+end
+
+# Define Type Recipe for Experiment{T} 
+@recipe function f(::Type{Experiment{T}}, experiment::Experiment{T}) where T<:AbstractFloat
+    
+    # type recipe for vector of ConvergenceData{T} is called recursively
+    return experiment.conv_data_vector
+
+end
+
+# Define Plot Recipe for displaying experiments
+@recipe function f(::Type{Val{:experimentseries}}, plt::AbstractPlot) 
+    x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
+    xlabel     --> L"k"
+    ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
+    xlims      --> (0, 200)
+    ylims      --> (1e-8, 1e+2)
+    yscale     --> :log10
+    labels     --> permutedims(z)
+    ls         --> :solid
+    lw         --> 1.5
+    marker     --> :circle
+    markersize --> 1.5
+
+    x := x
+    y := y
+    seriestype := :path
+
+end
+@shorthands(experimentseries)
+
+function compute_labels(experiment::Experiment{T}) where T<:AbstractFloat
+
+    return "d = " .* string.(experiment.dimensions)
+
+end
+
 function plotexperiment(experiment::Experiment{T}) where T<:AbstractFloat
 
-    labels         = "d = " .* string.(experiment.dimensions)
-    total_iterations         = get_iterations(experiment)
-    total_relative_residuals = get_relative_residuals(experiment)
+    x      = collect(1:2:199)            # Display every second iteration
+    labels = compute_labels(experiment)  # Add labels
 
-    plot(total_iterations, total_relative_residuals, labels = permutedims(labels))
-
-    plot!(yscale=:log10)
-    ylims!(1e-8, 1e+2)
-    xlabel!("k")
-    ylabel!("Relative residual norm")
+    experimentseries(x, experiment, labels)
 
 end
