@@ -128,7 +128,7 @@ end
 
     BLAS.set_num_threads(30)
 
-    d    = 50
+    d    = 10
     nₛ   = 200
     nmax = 199
     h    = inv(nₛ + 1)
@@ -138,7 +138,7 @@ end
 
     normalize!(b)
     
-    #tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64})
+    tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64}, true)
 
 end
 
@@ -160,6 +160,6 @@ end
     normalize!(b)
     
     BLAS.set_num_threads(30)
-    x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
+    #x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
 
 end

@@ -4,6 +4,14 @@ tensor_train = pyimport("scikit_tt.tensor_train")
 TT           = pytype_query(tensor_train.TT)
 TT_solvers   = pyimport("scikit_tt.solvers.sle")
 
+struct CompressedNormBreakdown{T} <: Exception 
+    
+    r_comp::T
+
+end
+
+Base.showerror(io::IO, e::CompressedNormBreakdown{T}) where T = print(io, e.r_comp, " is strictly negative.")
+
 function initialize_cores(d::Int, m::Int, n::Int, r1::Int, r2::Int)
 
     first_core   = zeros(1,  m, n, r2)
@@ -368,9 +376,7 @@ function compressed_residual(Ly::FMatrices{T}, Λ::AbstractMatrix{T}, H::KronMat
 
     comp_res = Hy_norm - 2* Hy_b + b_norm
 
-    #@assert comp_res >= 0.0
-
-    return abs(comp_res)
+    comp_res < 0.0 ? throw( CompressedNormBreakdown{T}(comp_res) ) : return comp_res
     
 end
 

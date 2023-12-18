@@ -25,11 +25,11 @@ mutable struct Experiment{T}
 
     end
 
+    # For plotting, due to reliance on ssh connection for running experiments.
     function Experiment{T}(datadir::AbstractString = "experiments/spd_data") where T<:AbstractFloat
 
         files               = cd(readdir, datadir)
         nfiles              = length(files)
-        problem_dimensions  = Vector{Int}(undef, nfiles)
         convergence_results = Vector{ConvergenceData{T}}(undef, nfiles)
 
         regex   = r"[0-9]+"
@@ -126,6 +126,8 @@ end
 
 function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Type{<:Problem}, tol::T = 1e-9, normalize_rhs::Bool = true) where T<:AbstractFloat
 
+    println("Performing experiments")
+
     Aₛ = assemble_matrix(n, problem)
 
     experiment = Experiment{T}(dimensions, nmax)
@@ -143,6 +145,8 @@ function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Ty
         end
 
         orthonormalization_type = get_orthonormalization(problem, T)
+
+        println("d = " * string(d))
 
         tensor_krylov!(experiment.conv_data_vector[i], A, b, tol, nmax, orthonormalization_type) 
 

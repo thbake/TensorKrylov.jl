@@ -67,24 +67,7 @@ function compute_rank(λ::T, b::KronProd{T}, tol::T) where T<:AbstractFloat
 
     end
 
-    @info "Non-symmetric bound afer" bound
-
     return rank
-
-end
-
-
-function bound(λ_min::T, κ::T, b_norm::T, t::Int) where T<:AbstractFloat
-
-    prefactor   = 16 * inv(λ_min)
-    denominator = log(8 * κ)
-    #t           = collect(1:63)
-    nominator   = -(π^2 * t)
-
-    #values      =  prefactor .* exp.(nominator .* inv(denominator)) .* b_norm
-    #valid_ranks = t[tol .>= values]
-
-    return prefactor * exp(nominator * inv(denominator)) * b_norm
 
 end
 

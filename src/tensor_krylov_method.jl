@@ -1,26 +1,19 @@
 export tensor_krylov!, solve_compressed_system
 
 using ExponentialUtilities: exponential!, expv
+using Logging
 
+function enable_logger(convergencelogger::ConsoleLogger, κ::T, rank::Int, k::Int, rel_res_norm::T) where T<:AbstractFloat
 
-#function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, γ::T, k::Int) where T<:AbstractFloat
-#
-#    tmp1 = Matrix(copy(A[1]))
-#    tmp  = SymTridiagonal(tmp1)
-#    expA = exponentiate(tmp, γ)
-#    
-#    julia_exp = exp(γ * tmp1)  
-#
-#    error = LinearAlgebra.norm(julia_exp - expA) / LinearAlgebra.norm(julia_exp)
-#    println(error)
-#
-#    for s in 1:length(A)
-#
-#        y.fmat[s][:, k] = expA * b[s]
-#
-#    end
-#
-#end
+    with_logger(convergencelogger) do
+
+        @debug "Condition: " κ
+        @debug "Chosen tensor rank: " rank
+        @debug "Iteration: " k "relative residual norm:" rel_res_norm
+
+    end
+
+end
 
 function solve_compressed_system( H::KronMat{T}, b::KronProd{T}, ω::Array{T}, α::Array{T}, λ::T) where T <: AbstractFloat
 
@@ -47,7 +40,12 @@ end
 
 
 # SPD case no convergence data
-function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{TensorLanczos{T}}) where T <: AbstractFloat
+function tensor_krylov!(
+    A::KronMat{T}, b::KronProd{T},
+    tol::T,
+    nmax::Int,
+    t_orthonormalization::Type{TensorLanczos{T}},
+    debug::Bool = false) where T <: AbstractFloat
 
     d      = length(A)
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
@@ -57,7 +55,7 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
     tensor_decomp = t_orthonormalization(A)
 
     # Initialize list of characteristic polynomials of Jacobi matrices Tₖ
-    char_poly          = CharacteristicPolynomials{T}(d, tensor_decomp.H[1, 1])
+    #char_poly          = CharacteristicPolynomials{T}(d, tensor_decomp.H[1, 1])
     orthonormalization = tensor_decomp.orthonormalization
     initial_orthonormalization!(tensor_decomp, b, orthonormalization)
 
@@ -67,6 +65,14 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
     coefficients_df  = compute_dataframe(coefficients_dir)
 
     n = dimensions(A)[1]
+
+    convergencelogger = AbstractLogger
+
+    if debug == true
+
+        convergencelogger = ConsoleLogger(stdout, Logging.Debug)
+
+    end
 
     for k = 2:nmax
 
@@ -83,12 +89,12 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
         λ_min, λ_max = analytic_eigenvalues(d, k) # Taking eigenvalues of principal minors of A not of H
         κ            = abs(λ_max / λ_min)
 
-        @info "Condition: " κ
+        @debug "Condition number: " κ
 
         rank = compute_rank(coefficients_df, κ, tol)
         α, ω = exponential_sum_parameters(coefficients_dir, rank, κ)
         
-        @info "Chosen tensor rank: " rank
+        @debug "Chosen tensor rank: " rank
 
 
         # Approximate solution of compressed system
@@ -96,11 +102,33 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
-        r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+
+        r_norm = Inf
+
+        try 
+
+            r_norm = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+
+        catch e
+
+            if isa(e, CompressedNormBreakdown{T})
+
+                println("Early termination at k = " * string(k) * " due to compressed norm breakdown")
+
+                return
+
+            end
+
+        end
+
         rel_res_norm   = (r_norm / b_norm)
 
+        if debug
 
-        @info "Iteration: " k "relative residual norm:" rel_res_norm
+            enable_logger(convergencelogger, κ, rank, k, rel_res_norm)
+
+        end
+
 
         if rel_res_norm < tol
 
@@ -123,7 +151,14 @@ end
 
 # SPD case convergence data
 #function tensor_krylov!(convergencedata::Bool, A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
-function tensor_krylov!(convergence_data::ConvergenceData{T}, A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{<:TensorDecomposition}) where T <: AbstractFloat
+function tensor_krylov!(
+    convergence_data::ConvergenceData{T},
+    A::KronMat{T},
+    b::KronProd{T},
+    tol::T,
+    nmax::Int,
+    t_orthonormalization::Type{<:TensorDecomposition},
+    debug::Bool = false) where T <: AbstractFloat
 
     d      = length(A)
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
@@ -144,6 +179,14 @@ function tensor_krylov!(convergence_data::ConvergenceData{T}, A::KronMat{T}, b::
 
     n = dimensions(A)[1]
 
+    convergencelogger = AbstractLogger
+
+    if debug == true
+
+        convergencelogger = ConsoleLogger(stdout, Logging.Debug)
+
+    end
+
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
@@ -155,29 +198,49 @@ function tensor_krylov!(convergence_data::ConvergenceData{T}, A::KronMat{T}, b::
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
 
-        b̃_norm       = kronprodnorm(b_minors)
         λ_min, λ_max = analytic_eigenvalues(d, k) # Taking eigenvalues of principal minors of A and not of H
         κ            = abs(λ_max / λ_min)
-
-        @info "Condition: " κ
 
         rank = compute_rank(coefficients_df, κ, tol)
         α, ω = exponential_sum_parameters(coefficients_dir, rank, κ)
         
-        @info "Chosen tensor rank: " rank
-
-
         # Approximate solution of compressed system
         y  = solve_compressed_system(H_minors, b_minors, ω, α, λ_min)
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
+
+        r_norm = Inf
+
+        try 
+
+            r_norm = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+
+        catch e
+
+            if isa(e, CompressedNormBreakdown{T})
+
+                println("Early termination due to compressed norm breakdown")
+
+                resize!(convergence_data, k - 1) # Update number of iterations and associated data
+
+                return
+
+            end
+
+        end
+
         r_norm         = residual_norm!(convergence_data, H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
         rel_res_norm   = (r_norm / b_norm)
 
+        if debug
+
+            enable_logger(convergencelogger, κ, rank, k, rel_res_norm)
+
+        end
+
         convergence_data.relative_residual_norm[k]  = rel_res_norm
 
-        @info "Iteration: " k "relative residual norm:" rel_res_norm
 
         if rel_res_norm < tol
 
@@ -199,7 +262,12 @@ function tensor_krylov!(convergence_data::ConvergenceData{T}, A::KronMat{T}, b::
 end
 
 # Non-symmetric case, no convergence data
-function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orthonormalization::Type{TensorArnoldi{T}}) where T <: AbstractFloat
+function tensor_krylov!(
+    A::KronMat{T}, b::KronProd{T},
+    tol::T,
+    nmax::Int,
+    t_orthonormalization::Type{TensorArnoldi{T}},
+    debug::Bool = false) where T <: AbstractFloat
 
     d      = length(A)
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
@@ -217,6 +285,13 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
     n = dimensions(A)[1]
 
     #λ_min = minimum(abs.(eigvals(Matrix(A[1])))) * d
+    convergencelogger = AbstractLogger
+
+    if debug == true
+
+        convergencelogger = ConsoleLogger(stdout, Logging.Debug)
+
+    end
 
     for k = 2:nmax
 
@@ -234,8 +309,6 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
         rank = compute_rank(λ_min, b, tol)
         α, ω = exponential_sum_parameters(rank)
         
-        @info "Chosen tensor rank: " rank
-
         # Approximate solution of compressed system
         y  = solve_compressed_system(H_minors, b_minors, ω, α, λ_min)
         𝔎 .= k 
@@ -244,8 +317,12 @@ function tensor_krylov!(A::KronMat{T}, b::KronProd{T}, tol::T, nmax::Int, t_orth
         r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
         rel_res_norm   = (r_norm / b_norm)
 
+        if debug
 
-        @info "Iteration: " k "relative residual norm:" rel_res_norm
+            enable_logger(convergencelogger, λ_min, rank, k, rel_res_norm)
+
+        end
+
 
         if rel_res_norm < tol
 

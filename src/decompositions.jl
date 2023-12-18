@@ -274,7 +274,7 @@ function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) w
 
 end
 
-function isorthonormal(V::AbstractMatrix{T}, k::Int)::Bool where T<:AbstractFloat
+function orthogonalityloss(V::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
 
     result = zeros(k, k)
 
@@ -282,7 +282,15 @@ function isorthonormal(V::AbstractMatrix{T}, k::Int)::Bool where T<:AbstractFloa
 
     LinearAlgebra.mul!(result, transpose(decomposition_basis), decomposition_basis)
 
-    return result ≈ I(k)
+    return norm(result - I(k)) 
+
+end
+
+function isorthonormal(V::AbstractMatrix{T}, k::Int, tol::T = 1e-14)::Bool where T<:AbstractFloat
+
+    loss = orthogonalityloss(V, k)
+
+    return loss < tol # True if loss of orthogonality is less than the given tolerance
 
 end
 

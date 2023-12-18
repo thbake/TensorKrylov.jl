@@ -15,3 +15,11 @@ mutable struct ConvergenceData{T}
     end
 
 end
+
+function Base.resize!(convergencedata::ConvergenceData{T}, k::Int) where T<:AbstractFloat
+
+    resize!(convergencedata.iterations, k)
+    resize!(convergencedata.relative_residual_norm, k)
+    resize!(convergencedata.projected_residual_norm, k)
+
+end
