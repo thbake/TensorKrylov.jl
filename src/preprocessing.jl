@@ -1,9 +1,9 @@
 using DataFrames
 using CSV
 
-export bound
+export bound, compute_package_directory
 
-function compute_coefficients_directory()::AbstractString
+function compute_package_directory()::AbstractString
 
     pkg_path    = pathof(TensorKrylov)
     regex       = r"src/TensorKrylov.jl"

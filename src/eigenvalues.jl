@@ -245,6 +245,40 @@ function analytic_eigenvalues(d::Int, n::Int)
 
 end
 
+function assemble_matrix(n::Int, ::Type{TensorLanczos{T}}) where T<:AbstractFloat
+
+    h  = inv(n + 1)
+    Aₛ = inv(h^2) * sparse(SymTridiagonal(2ones(n), -ones(n)))
+
+    return Aₛ
+
+end
+
+function assemble_matrix(n::Int, ::Type{TensorArnoldi{T}}, c::AbstractFloat = 10.0) where T<:AbstractFloat
+
+    h  = inv(n + 1)
+    L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
+    Aₛ = L + sparse( (c * inv(4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
+
+    return Aₛ
+
+end
+
+function spectral_data(d::Int, k::Int, ::Type{TensorLanczos{T}}) where T<:AbstractFloat
+
+    return analytic_eigenvalues(d, k)
+
+end
+
+function spectral_data(d::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+
+    A     = assemble_matrix(k, arnoldi)
+    λ_min = minimum(abs.( eigvals(A)) ) * d
+
+    return λ_min
+
+end
+
 
         
     

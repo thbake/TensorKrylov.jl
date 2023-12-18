@@ -1,15 +1,12 @@
+using TensorKrylov
+using TensorKrylov: assemble_matrix
 using Random
 using LinearAlgebra
 using SparseArrays
-using TensorKrylov
 using Plots
 using DataFrames
 using CSV
 using LaTeXStrings
-
-abstract type Problem end
-struct SPDProblem    <: Problem end
-struct NonSymProblem <: Problem end
 
 mutable struct Experiment{T} 
 
@@ -28,7 +25,9 @@ mutable struct Experiment{T}
     # For plotting, due to reliance on ssh connection for running experiments.
     function Experiment{T}(datadir::AbstractString = "experiments/spd_data") where T<:AbstractFloat
 
-        files               = cd(readdir, datadir)
+        pkg_path = compute_package_directory()
+
+        files               = cd(readdir, joinpath(pkg_path, datadir))
         nfiles              = length(files)
         convergence_results = Vector{ConvergenceData{T}}(undef, nfiles)
 
@@ -77,7 +76,7 @@ end
 
 function get_iterations(experiment::Experiment{T}) where T<:AbstractFloat
 
-    return [ experiment.conv_data_vector[i].iterations for i in 1:length(experiment) ]
+    return [ experiment.conv_data_vector[i].iterations[1:2:end] for i in 1:length(experiment) ]
 
 end
 
@@ -93,42 +92,12 @@ function get_projected_residuals(experiment::Experiment{T}) where T<:AbstractFlo
 
 end
     
-function assemble_matrix(n::Int, ::Type{SPDProblem})
 
-    h  = inv(n + 1)
-    Aₛ = inv(h^2) * sparse(SymTridiagonal(2ones(n), -ones(n)))
-
-    return Aₛ
-
-end
-
-function assemble_matrix(n::Int, ::Type{NonSymProblem}, c::AbstractFloat = 10.0) 
-
-    h  = inv(n + 1)
-    L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
-    Aₛ = L + sparse( (c * inv(4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
-
-    return Aₛ
-
-end
-
-function get_orthonormalization(::Type{SPDProblem}, ::Type{T}) where T<:AbstractFloat
-
-    return TensorLanczos{T}
-
-end
-
-function get_orthonormalization(::Type{NonSymProblem}, ::Type{T}) where T<:AbstractFloat
-
-    return TensorArnoldi{T}
-
-end
-
-function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Type{<:Problem}, tol::T = 1e-9, normalize_rhs::Bool = true) where T<:AbstractFloat
+function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, orthonormalization_type::Type{<:TensorDecomposition{T}}, tol::T = 1e-9, normalize_rhs::Bool = true) where T<:AbstractFloat
 
     println("Performing experiments")
 
-    Aₛ = assemble_matrix(n, problem)
+    Aₛ = assemble_matrix(n, orthonormalization_type)
 
     experiment = Experiment{T}(dimensions, nmax)
     
@@ -143,8 +112,6 @@ function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, problem::Ty
             normalize!(b)
 
         end
-
-        orthonormalization_type = get_orthonormalization(problem, T)
 
         println("d = " * string(d))
 
@@ -222,7 +189,8 @@ end
 
 function plotexperiment(experiment::Experiment{T}) where T<:AbstractFloat
 
-    x      = collect(1:2:199)            # Display every second iteration
+    #x      = collect(1:2:199)            # Display every second iteration
+    x      = get_iterations(experiment)
     labels = compute_labels(experiment)  # Add labels
 
     experimentseries(x, experiment, labels)

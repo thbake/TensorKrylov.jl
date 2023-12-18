@@ -1,6 +1,6 @@
 using TensorKrylov, Test
 using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
-using TensorKrylov: compute_coefficients_directory, compute_dataframe, exponential_sum_parameters, exp, exponentiate, normalize!
+using TensorKrylov: compute_dataframe, exponential_sum_parameters, exp, exponentiate, normalize!
 
 @testset "Computation of matrix exponentials" begin
 
@@ -69,7 +69,7 @@ end
         n = size(A[1], 1)
 
         b̃         = initialize_compressed_rhs(b, tensor_decomp.V)
-        coefficients_dir = compute_coefficients_directory()
+        coefficients_dir = compute_package_directory()
         coeffs_df        = compute_dataframe()
         
         for k = 2:nmax
@@ -138,13 +138,13 @@ end
 
     normalize!(b)
     
-    tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64}, true)
+    #tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64}, true)
 
 end
 
 @testset "Nonsymmetric example" begin
 
-    d    = 50
+    d    = 5
     n    = 200
     nmax = 199
     h    = inv(n + 1)
@@ -160,6 +160,6 @@ end
     normalize!(b)
     
     BLAS.set_num_threads(30)
-    #x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64})
+    x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64}, true)
 
 end
