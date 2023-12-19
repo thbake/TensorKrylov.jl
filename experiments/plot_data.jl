@@ -5,15 +5,16 @@ include("reproduction_spd.jl")
 
 const ConvVec{T} = Vector{ConvergenceData{T}} 
 
-abstract type CustomPlot{T} end
+abstract type AbstractDataPlot{T} end
+abstract type CustomPlot{T} <: AbstractDataPlot{T} end
 
 struct ResidualPlot{T} <: CustomPlot{T}
 
-    relative_residuals::Vector{T}
+    data::Vector{Vector{T}}
 
     function ResidualPlot{T}(conv_data_vector::ConvVec{T}) where T<:AbstractFloat
 
-        relative_residuals = [ conv_data_vector.relative_residual_norm[i] for i in 1:length(conv_data_vector) ]
+        relative_residuals = [ conv_data_vector[i].relative_residual_norm for i in 1:length(conv_data_vector) ]
 
         new(relative_residuals)
 
@@ -23,13 +24,13 @@ end
 
 struct OrthogonalityPlot{T} <: CustomPlot{T}   
 
-    orthogonality_data::Vector{T}
+    data::Vector{Vector{T}}
 
     function OrthogonalityPlot{T}(conv_data_vector::ConvVec{T}) where T<:AbstractFloat
 
-        orthogonality_data = [ conv_data_vector.orthogonality_data[i] for i in 1:length(conv_data_vector) ]
+        orthogonality = [ conv_data_vector[i].orthogonality_data for i in 1:length(conv_data_vector) ]
 
-        new(orthogonality_data)
+        new(orthogonality)
 
     end
 
@@ -37,11 +38,11 @@ end
 
 struct ProjResidualPlot{T} <: CustomPlot{T}
 
-    projected_residuals::Vector{T}
+    data::Vector{Vector{T}}
 
     function ProjResidualPlot{T}(conv_data_vector::ConvVec{T}) where T<:AbstractFloat
 
-        projected_residuals = [ conv_data_vector.projected_residual_norm[i] for i in 1:length(conv_data_vector) ]
+        projected_residuals = [ conv_data_vector[i].projected_residual_norm for i in 1:length(conv_data_vector) ]
 
         new(projected_residuals)
 
@@ -64,39 +65,13 @@ end
 #end
 
 # Define Type Recipe for a vector of ConvergenceData{T}
-@recipe function f(::Type{ResidualPlot{T}}, res_plot::ResidualPlot{T}) where T<:AbstractFloat
+@recipe function f(::Type{<:CustomPlot{T}}, custom_plot::CustomPlot{T}) where T<:AbstractFloat
 
-    data = res_plot.relative_residuals
+    data = custom_plot.data
 
     return [ data[i][1:2:end] for i in 1:length(data)]
 
 end
-
-# Define Type Recipe for a vector of ConvergenceData{T}
-@recipe function f(::Type{OrthogonalityPlot{T}}, orth_plot::OrthogonalityPlot{T}) where T<:AbstractFloat
-
-    data = orth_plot.orthogonality_data
-
-    return [ data[i].orthogonality_data[1:2:end] for i in 1:length(data)]
-
-end
-# Define Type Recipe for a vector of ConvergenceData{T}
-@recipe function f(::Type{ProjResidualPlot{T}}, proj_plot::ProjResidualPlot{T}) where T<:AbstractFloat
-
-    data = proj_plot.conv_data_vector
-
-    return [ data[i].projected_residuals[1:2:end] for i in 1:length(data)]
-
-end
-
-# Define Type Recipe for a vector of ConvergenceData{T}
-#@recipe function f(::Type{SpectrumPlot{T}}, spec_plot::SpectrumPlot{T}) where T<:AbstractFloat
-#
-#    data = spec_plot.conv_data_vector
-#
-#    return [ data[i].relative_residual_norm[1:2:end] for i in 1:length(data)]
-#
-#end
 
 # Define Type Recipe for Experiment{T} 
 @recipe function f(::Type{Experiment{T}}, experiment::Experiment{T}) where T<:AbstractFloat
@@ -158,18 +133,20 @@ function plot_experiment(experiment::Experiment{T}, ::Type{ResidualPlot{T}}) whe
 
     x        = get_iterations(experiment)
     labels   = compute_labels(experiment)  # Add labels
-    res_plot = ResidualPlot(experiment.conv_data_vector)
+    res_plot = ResidualPlot{T}(experiment.conv_data_vector)
 
     relativeresidual(x, res_plot, labels)
 
 end
 
 
-function plot_experiment(experiment::Experiment{T}, ::Type{ResidualPlot{T}}) where T<:AbstractFloat
+function plot_experiment(experiment::Experiment{T}, ::Type{OrthogonalityPlot{T}}) where T<:AbstractFloat
 
     x         = get_iterations(experiment)
     labels    = compute_labels(experiment)  # Add labels
-    orth_plot = ResidualPlot(experiment.conv_data_vector)
+    orth_plot = OrthogonalityPlot{T}(experiment.conv_data_vector)
+
+    #println(orth_plot)
 
     orthogonalityloss(x, orth_plot, labels)
 

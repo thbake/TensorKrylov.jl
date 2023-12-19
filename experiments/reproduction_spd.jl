@@ -40,7 +40,7 @@ mutable struct Experiment{T}
 
         sorted_dims    = dimensions[sorted_indices]
         sorted_files   = files[sorted_indices]
-        column_types   = [Int, T, T]
+        column_types   = [Int, T, T, T]
 
         for i in 1:length(sorted_files)
 
