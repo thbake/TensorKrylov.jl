@@ -1,12 +1,13 @@
 using TensorKrylov
 using TensorKrylov: assemble_matrix
-using Random
 using LinearAlgebra
 using SparseArrays
-using Plots
 using DataFrames
 using CSV
-using LaTeXStrings
+using Random
+
+Random.seed!(12345)
+
 
 mutable struct Experiment{T} 
 
@@ -55,6 +56,7 @@ mutable struct Experiment{T}
             convergence_data.iterations              = df[:, 1]
             convergence_data.relative_residual_norm  = df[:, 2]
             convergence_data.projected_residual_norm = df[:, 3]
+            convergence_data.orthogonality_data      = df[:, 4]
 
             convergence_results[i] = convergence_data
 
@@ -89,6 +91,12 @@ end
 function get_projected_residuals(experiment::Experiment{T}) where T<:AbstractFloat
 
     return [ experiment.conv_data_vector[i].projected_residual_norm for i in 1:length(experiment) ]
+
+end
+
+function get_convergence_data(experiment::Experiment{T}) where T<:AbstractFloat
+
+    return experiment.conv_data_vector
 
 end
     
@@ -135,6 +143,7 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
             iterations              = data.iterations,
             relative_residual_norm  = data.relative_residual_norm,
             projected_residual_norm = data.projected_residual_norm,
+            orthogonality_data      = data.orthogonality_data
 
         )
 
@@ -145,54 +154,3 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
 
 end
 
-# Define Type Recipe for a vector of ConvergenceData{T}
-@recipe function f(::Type{Vector{ConvergenceData{T}}}, conv_data_vec::Vector{ConvergenceData{T}}) where T<:AbstractFloat
-
-    return [ conv_data_vec[i].relative_residual_norm[1:2:end] for i in 1:length(conv_data_vec)]
-
-end
-
-# Define Type Recipe for Experiment{T} 
-@recipe function f(::Type{Experiment{T}}, experiment::Experiment{T}) where T<:AbstractFloat
-    
-    # type recipe for vector of ConvergenceData{T} is called recursively
-    return experiment.conv_data_vector
-
-end
-
-# Define Plot Recipe for displaying experiments
-@recipe function f(::Type{Val{:experimentseries}}, plt::AbstractPlot) 
-    x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
-    xlabel     --> L"k"
-    ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
-    xlims      --> (0, 200)
-    ylims      --> (1e-8, 1e+2)
-    yscale     --> :log10
-    labels     --> permutedims(z)
-    ls         --> :solid
-    lw         --> 1.5
-    marker     --> :circle
-    markersize --> 1.5
-
-    x := x
-    y := y
-    seriestype := :path
-
-end
-@shorthands(experimentseries)
-
-function compute_labels(experiment::Experiment{T}) where T<:AbstractFloat
-
-    return "d = " .* string.(experiment.dimensions)
-
-end
-
-function plotexperiment(experiment::Experiment{T}) where T<:AbstractFloat
-
-    #x      = collect(1:2:199)            # Display every second iteration
-    x      = get_iterations(experiment)
-    labels = compute_labels(experiment)  # Add labels
-
-    experimentseries(x, experiment, labels)
-
-end

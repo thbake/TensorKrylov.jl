@@ -138,7 +138,8 @@ end
 
     normalize!(b)
     
-    #tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64}, false)
+    convergencedata = ConvergenceData{Float64}(nmax)
+    tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorLanczos{Float64}, SilentMode)
 
 end
 
@@ -161,6 +162,6 @@ end
     
     BLAS.set_num_threads(30)
     
-    x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64}, true)
+    #x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64}, SilentMode)
 
 end

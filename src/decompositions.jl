@@ -274,7 +274,7 @@ function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) w
 
 end
 
-function orthogonalityloss(V::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
+function orthogonality_loss(V::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
 
     result = zeros(k, k)
 
@@ -282,7 +282,7 @@ function orthogonalityloss(V::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
 
     LinearAlgebra.mul!(result, transpose(decomposition_basis), decomposition_basis)
 
-    return norm(result - I(k)) 
+    return LinearAlgebra.norm(result - I(k)) 
 
 end
 

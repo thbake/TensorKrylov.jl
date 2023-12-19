@@ -7,13 +7,13 @@ module TensorKrylov
 
     include("alias.jl")
 
-    include("convergence.jl")
-
     # Matrix decompositions
     include("decompositions.jl")
     
     # Eigenvalue solvers
     include("eigenvalues.jl")
+
+    include("convergence.jl")
 
     # Preprocessing
     include("preprocessing.jl")

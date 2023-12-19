@@ -1,56 +1,67 @@
 export tensor_krylov!, solve_compressed_system
+export DebugMode, SilentMode
 
 using ExponentialUtilities: exponential!, expv
 using Logging
 
-struct DebugConfig 
+abstract type Mode       end
+struct DebugMode  <:Mode end
+struct SilentMode <:Mode end
 
-    debug_mode::Bool
-    orthogonality_checks::Bool
-
-end
-
-function enable_logger(
-    convergencelogger::ConsoleLogger,
-    spectraldata::SpectralData{T},
-    rank::Int,
+function log_convergence_data(
+    debuglogger::ConsoleLogger,
+    convergencedata::ConvergenceData{T},
     k::Int,
-    rel_res_norm::T,
     ::Type{TensorLanczos{T}}) where T<:AbstractFloat
 
-    with_logger(convergencelogger) do
-
-        @debug "Condition: " spectraldata.κ
-        @debug "Chosen tensor rank: " rank
-        @debug "Iteration: " k "relative residual norm:" rel_res_norm
+    with_logger(debuglogger) do
+        @debug "Condition: " convergencedata.spectraldata[k].κ
+        @debug "Iteration: " k "relative residual norm:" convergencedata.relative_residual_norm[k]
 
     end
 
 end
 
-function enable_logger(
-    convergencelogger::ConsoleLogger,
-    spectraldata::SpectralData{T},
-    rank::Int,
+function log_convergence_data(
+    debuglogger::ConsoleLogger,
+    convergencedata::ConvergenceData{T},
     k::Int,
-    rel_res_norm::T,
     ::Type{TensorArnoldi{T}}) where T<:AbstractFloat
 
-    with_logger(convergencelogger) do
+    with_logger(debuglogger) do
 
-        @debug "Smallest eigenvalue: " spectraldata.λ_min
-        @debug "Chosen tensor rank: " rank
-        @debug "Iteration: " k "relative residual norm:" rel_res_norm
+        @debug "Smallest eigenvalue: " convergencedata.spectraldata[k].λ_min
+        @debug "Iteration: " k "relative residual norm:" convergencedata.relative_residual_norm[k]
 
     end
 
 end
 
+function process_log(::ConvergenceData{T}, k::Int, ::Type{SilentMode}, ::Type{<:TensorDecomposition{T}}) where T<:AbstractFloat
+
+    return
+
+end
+
+function process_log(convergencedata::ConvergenceData{T}, k::Int, ::Type{DebugMode}, orthonormalization_type::Type{<:TensorDecomposition{T}}) where T<:AbstractFloat
+
+    debuglogger = ConsoleLogger(stdout, Logging.Debug)
+
+    log_convergence_data(debuglogger, convergencedata, k, orthonormalization_type) 
+
+end
+
+#function orthogonality_checks(config::DebugChecks, V::KronMat{T}, k::Int, ::Type{DebugMode}) where T<:AbstractFloat
+#
+#    @info orthogonalityloss(V[1], k)
+#
+#end
+
 function solve_compressed_system(
-    H::KronMat{T},
-    b::KronProd{T},
+    H         ::KronMat{T},
+    b         ::KronProd{T},
     approxdata::ApproximationData{T},
-    λ_min::T) where T <: AbstractFloat
+    λ_min     ::T) where T <: AbstractFloat
 
     # Since we are considering a canonical decomposition the tensor rank of yₜ
     # is equal to 
@@ -72,12 +83,12 @@ function solve_compressed_system(
 end
 
 function tensor_krylov!(
-    convergence_data::ConvergenceData{T},
-    A::KronMat{T}, b::KronProd{T},
-    tol::T,
-    nmax::Int,
+    convergence_data       ::ConvergenceData{T},
+    A::KronMat{T}, b       ::KronProd{T},
+    tol                    ::T,
+    nmax                   ::Int,
     orthonormalization_type::Type{<:TensorDecomposition{T}},
-    debug::Bool = false) where T <: AbstractFloat
+    mode                   ::Type{<:Mode} = SilentMode) where T <: AbstractFloat
 
     d      = length(A)
     n      = dimensions(A)[1]
@@ -92,17 +103,9 @@ function tensor_krylov!(
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
 
-
-    convergencelogger = AbstractLogger
-
-    if debug == true
-
-        convergencelogger = ConsoleLogger(stdout, Logging.Debug)
-
-    end
-
     spectraldata = SpectralData{T}()
     approxdata   = ApproximationData{T}(tol, orthonormalization_type)
+    r_norm = Inf
 
     for k = 2:nmax
 
@@ -123,16 +126,29 @@ function tensor_krylov!(
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
-        r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
-        rel_res_norm   = (r_norm / b_norm)
 
-        if debug
+        try
 
-            enable_logger(convergencelogger, spectraldata, approxdata.rank, k, rel_res_norm, orthonormalization_type)
+            r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+
+        catch e 
+
+            if isa(e, CompressedNormBreakdown{T})
+
+                println("Early termination at k = " * string(k) * " due to compressed norm breakdown")
+
+                return
+
+            end
 
         end
+        rel_res_norm   = (r_norm / b_norm)
 
-        convergence_data.relative_residual_norm[k]  = rel_res_norm
+        convergence_data.relative_residual_norm[k] = rel_res_norm
+        convergence_data.spectraldata[k]           = spectraldata
+        convergence_data.orthogonality_data[k]     = orthogonality_loss(V_minors[1], k)
+
+        process_log(convergence_data, k, mode, orthonormalization_type)
 
         if rel_res_norm < tol
 
