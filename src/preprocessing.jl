@@ -1,7 +1,33 @@
 using DataFrames
 using CSV
 
-export bound, compute_package_directory
+export compute_package_directory
+
+mutable struct ApproximationData{T}
+
+    orthonormalization_type::Type{<:TensorDecomposition{T}}
+    df::DataFrame
+    rank::Int
+    α::AbstractArray{T}
+    ω::AbstractArray{T}
+    tol::T
+
+    function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorLanczos{T}}) where T<:AbstractFloat
+
+        package_dir = compute_package_directory()
+        df          = compute_dataframe(package_dir)
+
+        new(orthonormalization_type, df, 0, zeros(), zeros(), tol)
+
+    end
+
+    function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+
+        new(orthonormalization_type, DataFrame(), 0, zeros(), zeros(), tol)
+
+    end
+
+end
 
 function compute_package_directory()::AbstractString
 
@@ -47,23 +73,23 @@ function compute_rank(df::DataFrame, κ::T, tol::T) where T<:AbstractFloat
 
 end
 
-function nonsymmetric_bound(λ::T, rank::Int, b_norm::T) where T<:AbstractFloat
+#function nonsymmetric_bound(λ::T, rank::Int, b_norm::T) where T<:AbstractFloat
+function nonsymmetric_bound(λ::T, rank::Int) where T<:AbstractFloat
 
-    return 2.75 * inv(λ) * exp(-π * sqrt(rank)) * b_norm
+    return 2.75 * inv(λ) * exp(-π * sqrt(rank)) 
 
 end
 
-function compute_rank(λ::T, b::KronProd{T}, tol::T) where T<:AbstractFloat
+function compute_rank(λ::T, tol::T) where T<:AbstractFloat
 
-    b_norm = kronprodnorm(b)
     rank   = 1
-    bound  = nonsymmetric_bound(λ, rank, b_norm) 
+    bound  = nonsymmetric_bound(λ, rank) 
 
     while bound > tol
 
         rank += 1
 
-        bound = nonsymmetric_bound(λ, rank, b_norm)
+        bound = nonsymmetric_bound(λ, rank)
 
     end
 
@@ -137,5 +163,21 @@ function exponential_sum_parameters(rank::Int)
     ω = [ h_st * inv(sqrt((1 + exp(-2 * j * h_st))))       for j in -rank : rank ]
 
     return α, ω 
+
+end
+
+function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralData{T}, ::Type{TensorLanczos{T}}) where T<:AbstractFloat
+
+    package_dir                = compute_package_directory()
+    approxdata.df              = compute_dataframe(package_dir)
+    approxdata.rank            = compute_rank(approxdata.df, spectraldata.κ, approxdata.tol)
+    approxdata.α, approxdata.ω = exponential_sum_parameters(package_dir, approxdata.rank, spectraldata.κ)
+
+end
+
+function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralData{T}, ::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+
+    approxdata.rank            = compute_rank(spectraldata.λ_min, approxdata.tol)
+    approxdata.α, approxdata.ω = exponential_sum_parameters(approxdata.rank)
 
 end

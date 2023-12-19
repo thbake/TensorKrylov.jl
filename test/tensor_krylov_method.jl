@@ -138,13 +138,13 @@ end
 
     normalize!(b)
     
-    #tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64}, true)
+    #tensor_krylov!(A, b, 1e-9, nmax, TensorLanczos{Float64}, false)
 
 end
 
 @testset "Nonsymmetric example" begin
 
-    d    = 5
+    d    = 10
     n    = 200
     nmax = 199
     h    = inv(n + 1)
@@ -160,6 +160,7 @@ end
     normalize!(b)
     
     BLAS.set_num_threads(30)
+    
     x = tensor_krylov!(A, b, 1e-9, nmax, TensorArnoldi{Float64}, true)
 
 end

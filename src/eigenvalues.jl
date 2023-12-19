@@ -264,21 +264,33 @@ function assemble_matrix(n::Int, ::Type{TensorArnoldi{T}}, c::AbstractFloat = 10
 
 end
 
-function spectral_data(d::Int, k::Int, ::Type{TensorLanczos{T}}) where T<:AbstractFloat
+mutable struct SpectralData{T}
 
-    return analytic_eigenvalues(d, k)
+    λ_min::T
+    λ_max::T
+    κ::T
+
+    function SpectralData{T}() where T<:AbstractFloat
+
+        new(Inf, Inf, Inf)
+
+    end
+
 
 end
 
-function spectral_data(d::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+function update_data!(spectraldata::SpectralData{T}, d::Int, k::Int, ::Type{TensorLanczos{T}}) where T
 
-    A     = assemble_matrix(k, arnoldi)
-    λ_min = minimum(abs.( eigvals(A)) ) * d
-
-    return λ_min
+    spectraldata.λ_min, spectraldata.λ_max = analytic_eigenvalues(d, k)
+    spectraldata.κ    = spectraldata.λ_max * inv(spectraldata.λ_min)
 
 end
 
+function update_data!(spectraldata::SpectralData{T}, d::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T
 
+    A                  = assemble_matrix(k , arnoldi)
+    spectraldata.λ_min = minimum( abs.( eigvals( Matrix(A) ) ) ) * d
+
+end
         
     
