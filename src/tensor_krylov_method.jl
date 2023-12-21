@@ -129,7 +129,7 @@ function tensor_krylov!(
 
         try
 
-            r_norm         = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+            r_norm = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
 
         catch e 
 
@@ -146,7 +146,7 @@ function tensor_krylov!(
 
         convergence_data.relative_residual_norm[k] = rel_res_norm
         convergence_data.spectraldata[k]           = spectraldata
-        convergence_data.orthogonality_data[k]     = orthogonality_loss(V_minors[1], k)
+        convergence_data.orthogonality_data[k]     = orthogonality_loss(V_minors, k)
 
         process_log(convergence_data, k, mode, orthonormalization_type)
 

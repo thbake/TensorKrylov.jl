@@ -1,10 +1,24 @@
 export Arnoldi, Lanczos, TensorArnoldi, TensorLanczos, TensorDecomposition
-export orthonormal_basis!, orthonormal_basis_vector!, initial_orthonormalization!, initialize_decomp!, isorthonormal
+export orthonormal_basis!, orthonormal_basis_vector!, 
+       initial_orthonormalization!, initialize_decomp!, isorthonormal,
+       arnoldi_algorithm, lanczos_algorithm, orthogonality_loss
 
 const MatrixView{T}    = AbstractMatrix{T}
 
 abstract type Decomposition{T}       end
 abstract type TensorDecomposition{T} end
+abstract type CheapOrthogonalityLoss end
+
+struct OrthogonalityData{T}
+
+    coefficient_loss::Vector{T}
+    total_loss      ::T
+
+    #function OrthogonalityData{T}(V::KronMat{T}, k::Int)
+
+    #    rank_k_update.(V.𝖳, k)
+
+end
 
 
 function order(decomposition::Decomposition)
@@ -258,6 +272,22 @@ function orthonormal_basis!(t_lanczos::TensorLanczos{T}, k::Int) where T<:Abstra
 
 end
 
+function arnoldi_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) where T<:AbstractFloat
+
+    n = size(A, 1)
+
+    arnoldi = Arnoldi{T}(A, zeros(n, k + 1), zeros(k + 1, k), b)
+
+    for j in 1:k
+
+        orthonormal_basis_vector!(arnoldi, j)
+
+    end
+
+    return arnoldi
+
+end
+
 function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) where T<:AbstractFloat
 
     n = size(A, 1)
@@ -274,21 +304,61 @@ function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) w
 
 end
 
-function orthogonality_loss(V::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
+function rank_k_update!(result::AbstractMatrix{T}, A::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
 
-    result = zeros(k, k)
-
-    decomposition_basis = @view(V[:, 1:k])
+    decomposition_basis = @view A[:, 1:k]
 
     LinearAlgebra.mul!(result, transpose(decomposition_basis), decomposition_basis)
 
-    return LinearAlgebra.norm(result - I(k)) 
+    return Symmetric(result)
 
 end
 
+function rank_k_update(A::KronMat{T}, k::Int) where T<:AbstractFloat
+
+    result          = [ zeros(k, k) for _ in 1:length(A) ]
+    matrix_products = [ rank_k_update!(result[s], A[s], k) for s in 1:length(A)  ]
+
+    return matrix_products
+
+end
+
+function orthogonality_loss(V::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
+
+    result = zeros(k, k)
+    result = rank_k_update!(result, V, k)
+
+    return LinearAlgebra.norm(result - I(k))
+
+end
+
+function orthogonality_loss(V::KronMat{T}, k::Int, ::CheapOrthogonalityLoss) where T<:AbstractFloat
+
+    d      = length(V)
+    result = zeros(k, k)
+    M      = rank_k_update!(result, V[1], k)
+    κₘ     = cond(M)^d
+    result = abs(1.0 - κₘ)
+    
+    return result
+
+end
+
+function orthogonality_loss(V::KronMat{T}, k::Int) where T<:AbstractFloat
+
+    d      = length(V)
+    M      = rank_k_update(V, k)
+    κₘ     = prod( cond(M[s]) for s in 1:d )
+    result = abs(1.0 - κₘ)
+
+    return result
+
+end
+
+
 function isorthonormal(V::AbstractMatrix{T}, k::Int, tol::T = 1e-14)::Bool where T<:AbstractFloat
 
-    loss = orthogonalityloss(V, k)
+    loss = orthogonality_loss(V, k)
 
     return loss < tol # True if loss of orthogonality is less than the given tolerance
 

@@ -90,6 +90,7 @@ end
     xlims      --> (0, 200)
     ylims      --> (1e-8, 1e+2)
     yscale     --> :log10
+    yticks     --> 10 .^collect(-8:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
@@ -107,10 +108,11 @@ end
 
     x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     xlabel     --> L"k"
-    ylabel     --> L"$||V^{H}V - I_k||$"
+    ylabel     --> L"$||mathcal{V}_\mathfrak{K}^{H}V\mathfrak{K} - I_\mathfrak{K}||$"
     xlims      --> (0, 200)
     ylims      --> (1e-16, 1e+2)
     yscale     --> :log10
+    yticks     --> 10 .^collect(-16:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
@@ -145,8 +147,6 @@ function plot_experiment(experiment::Experiment{T}, ::Type{OrthogonalityPlot{T}}
     x         = get_iterations(experiment)
     labels    = compute_labels(experiment)  # Add labels
     orth_plot = OrthogonalityPlot{T}(experiment.conv_data_vector)
-
-    #println(orth_plot)
 
     orthogonalityloss(x, orth_plot, labels)
 
