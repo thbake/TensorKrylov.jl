@@ -34,3 +34,14 @@ function Base.resize!(convergencedata::ConvergenceData{T}, k::Int) where T<:Abst
     resize!(convergencedata.orthogonality_data, k)
 
 end
+
+#function process_convergence!(
+#    convergencedata   ::ConvergenceData{T},
+#    k                 ::Int,
+#    boolean_dictionary::Dic{AbstractString, Bool}) where T<:AbstractFloat
+#
+#    
+#
+#
+#
+#end

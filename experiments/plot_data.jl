@@ -69,7 +69,7 @@ end
 
     data = custom_plot.data
 
-    return [ data[i][1:2:end] for i in 1:length(data)]
+    return [ data[i][2:2:end] for i in 1:length(data)]
 
 end
 
@@ -87,10 +87,10 @@ end
     x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     xlabel     --> L"k"
     ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
-    xlims      --> (0, 200)
+    xlims      --> (1, 200)
     ylims      --> (1e-8, 1e+2)
     yscale     --> :log10
-    yticks     --> 10.0 .^collect(-8:2)
+    yticks     --> 10.0 .^collect(-8:2:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
@@ -108,11 +108,11 @@ end
 
     x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     xlabel     --> L"k"
-    ylabel     --> L"$||mathcal{V}_\mathfrak{K}^{H}V\mathfrak{K} - I_\mathfrak{K}||$"
-    xlims      --> (0, 200)
+    ylabel     --> L"$||\mathcal{V}_\mathfrak{K}^{H}\mathcal{V}_\mathfrak{K} - I_\mathfrak{K}||$"
+    xlims      --> (1, 200)
     ylims      --> (1e-16, 1e+2)
     yscale     --> :log10
-    yticks     --> 10.0 .^collect(-16:2)
+    yticks     --> 10.0 .^collect(-16:2:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
@@ -124,6 +124,30 @@ end
     seriestype := :path
 end
 @shorthands(orthogonalityloss)
+
+@recipe function f(::Type{Val{:proj}}, plt::AbstractPlot) 
+
+    x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
+    xlabel     --> L"k"
+    ylabel     --> L"$||\mathcal{H}_\mathfrak{K} y_t - \tilde{b}||_2$"
+    xlims      --> (1, 200)
+    xticks     --> collect(0:50:200)
+    #ylims      --> (1e-8, 1e+2)
+    yscale     --> :log10
+    #yticks     --> 10.0 .^collect(-8:2:2)
+    labels     --> permutedims(z)
+    ls         --> :solid
+    lw         --> 1.5
+    marker     --> :circle
+    markersize --> 1.5
+
+    x := x
+    y := y
+    seriestype := :path
+
+end
+@shorthands(proj)
+
 
 function compute_labels(experiment::Experiment{T}) where T<:AbstractFloat
 
@@ -152,10 +176,12 @@ function plot_experiment(experiment::Experiment{T}, ::Type{OrthogonalityPlot{T}}
 
 end
 
-#function plot_experiment(experiment::Experiment{T}, ::Type{ResidualPlot{T}}) where T<:AbstractFloat
-#
-#    x      = get_iterations(experiment)
-#    labels = compute_labels(experiment)  # Add labels
-#    res_plot = ResidualPlot(experiment.conv_data_vector)
-#
-#end
+function plot_experiment(experiment::Experiment{T}, ::Type{ProjResidualPlot{T}}) where T<:AbstractFloat
+
+    x        = get_iterations(experiment)
+    labels   = compute_labels(experiment)  # Add labels
+    proj_res = ProjResidualPlot{T}(experiment.conv_data_vector)
+
+    proj(x, proj_res, labels)
+
+end

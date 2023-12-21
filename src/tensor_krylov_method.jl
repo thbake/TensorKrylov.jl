@@ -105,7 +105,8 @@ function tensor_krylov!(
 
     spectraldata = SpectralData{T}()
     approxdata   = ApproximationData{T}(tol, orthonormalization_type)
-    r_norm = Inf
+    r_compressed = Inf
+    r_norm       = Inf
 
     for k = 2:nmax
 
@@ -119,7 +120,6 @@ function tensor_krylov!(
         update_rhs!(b_minors, columns, b, k)
 
         update_data!(spectraldata, d, k, orthonormalization_type)
-
         update_data!(approxdata, spectraldata, orthonormalization_type)
         
         y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min) # Approximate solution of compressed system
@@ -129,7 +129,7 @@ function tensor_krylov!(
 
         try
 
-            r_norm = residual_norm(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+            r_compressed, r_norm = residual_norm!(convergence_data, H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
 
         catch e 
 
@@ -143,10 +143,11 @@ function tensor_krylov!(
 
         end
         rel_res_norm   = (r_norm / b_norm)
+        convergence_data.relative_residual_norm[k]  = rel_res_norm
+        convergence_data.projected_residual_norm[k] = r_compressed
+        convergence_data.spectraldata[k]            = spectraldata
+        convergence_data.orthogonality_data[k]      = orthogonality_loss(V_minors, k)
 
-        convergence_data.relative_residual_norm[k] = rel_res_norm
-        convergence_data.spectraldata[k]           = spectraldata
-        convergence_data.orthogonality_data[k]     = orthogonality_loss(V_minors, k)
 
         process_log(convergence_data, k, mode, orthonormalization_type)
 

@@ -78,7 +78,7 @@ end
 
 function get_iterations(experiment::Experiment{T}) where T<:AbstractFloat
 
-    return [ experiment.conv_data_vector[i].iterations[1:2:end] for i in 1:length(experiment) ]
+    return [ experiment.conv_data_vector[i].iterations[2:2:end] for i in 1:length(experiment) ]
 
 end
 
