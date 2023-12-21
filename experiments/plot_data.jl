@@ -90,7 +90,7 @@ end
     xlims      --> (0, 200)
     ylims      --> (1e-8, 1e+2)
     yscale     --> :log10
-    yticks     --> 10 .^collect(-8:2)
+    yticks     --> 10.0 .^collect(-8:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
@@ -112,7 +112,7 @@ end
     xlims      --> (0, 200)
     ylims      --> (1e-16, 1e+2)
     yscale     --> :log10
-    yticks     --> 10 .^collect(-16:2)
+    yticks     --> 10.0 .^collect(-16:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
