@@ -69,7 +69,7 @@ end
 
     data = custom_plot.data
 
-    return [ data[i][2:2:end] for i in 1:length(data)]
+    return [ data[i] for i in 1:length(data)]
 
 end
 
@@ -97,8 +97,10 @@ end
     marker     --> :circle
     markersize --> 1.5
 
-    x := x
-    y := y
+    stride = 2:2:199
+
+    x := x[stride]
+    y := y[stride]
     seriestype := :path
 
 end
@@ -134,15 +136,16 @@ end
     xticks     --> collect(0:50:200)
     #ylims      --> (1e-8, 1e+2)
     yscale     --> :log10
-    #yticks     --> 10.0 .^collect(-8:2:2)
+    yticks     --> 10.0 .^collect(-100:10:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
     marker     --> :circle
     markersize --> 1.5
 
-    x := x
-    y := y
+    indices = (x .> 0) .& (y .> 0)
+    x := x[indices]
+    y := sqrt.(y[indices])
     seriestype := :path
 
 end
