@@ -12,7 +12,7 @@ function log_convergence_data(
     debuglogger::ConsoleLogger,
     convergencedata::ConvergenceData{T},
     k::Int,
-    ::Type{TensorLanczos{T}}) where T<:AbstractFloat
+    ::Type{LanczosUnion{T}}) where T<:AbstractFloat
 
     with_logger(debuglogger) do
         @debug "Condition: " convergencedata.spectraldata[k].κ
@@ -84,7 +84,8 @@ end
 
 function tensor_krylov!(
     convergence_data       ::ConvergenceData{T},
-    A::KronMat{T}, b       ::KronProd{T},
+    A                      ::KronMat{T},
+    b                      ::KronProd{T},
     tol                    ::T,
     nmax                   ::Int,
     orthonormalization_type::Type{<:TensorDecomposition{T}},
@@ -119,7 +120,7 @@ function tensor_krylov!(
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
 
-        update_data!(spectraldata, d, k, orthonormalization_type)
+        update_data!(spectraldata, d, k, typeof(tensor_decomp))
         update_data!(approxdata, spectraldata, orthonormalization_type)
         
         y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min) # Approximate solution of compressed system

@@ -12,18 +12,18 @@ mutable struct ApproximationData{T}
     ω::AbstractArray{T}
     tol::T
 
-    function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorLanczos{T}}) where T<:AbstractFloat
+    function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+
+        new(orthonormalization_type, DataFrame(), 0, zeros(), zeros(), tol)
+
+    end
+
+    function ApproximationData{T}(tol::T, orthonormalization_type::LanczosUnion{T}) where T<:AbstractFloat
 
         package_dir = compute_package_directory()
         df          = compute_dataframe(package_dir)
 
         new(orthonormalization_type, df, 0, zeros(), zeros(), tol)
-
-    end
-
-    function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorArnoldi{T}}) where T<:AbstractFloat
-
-        new(orthonormalization_type, DataFrame(), 0, zeros(), zeros(), tol)
 
     end
 
@@ -166,7 +166,7 @@ function exponential_sum_parameters(rank::Int)
 
 end
 
-function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralData{T}, ::Type{TensorLanczos{T}}) where T<:AbstractFloat
+function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralData{T}, ::LanczosUnion{T}) where T<:AbstractFloat
 
     package_dir                = compute_package_directory()
     approxdata.df              = compute_dataframe(package_dir)

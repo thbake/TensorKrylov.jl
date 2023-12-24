@@ -37,17 +37,12 @@ end
 
 @testset "Multiple Arnoldi and Lanczos decomposition steps" begin
 
-    d = 5
-
+    d  = 5
     nₛ = 200
-
-    h = inv(nₛ + 1)
-
-    Aₛ= inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
-
-    A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
-
-    b = [ rand(nₛ) for _ in 1:d ]
+    h  = inv(nₛ + 1)
+    Aₛ = inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
+    A  = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+    b  = [ rand(nₛ) for _ in 1:d ]
 
     k = 50
 

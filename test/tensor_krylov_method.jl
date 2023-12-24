@@ -139,7 +139,7 @@ end
     normalize!(b)
     
     convergencedata = ConvergenceData{Float64}(nmax)
-    tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorLanczos{Float64}, SilentMode)
+    tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorLanczosReorth{Float64}, SilentMode)
 
 end
 

@@ -245,7 +245,7 @@ function analytic_eigenvalues(d::Int, n::Int)
 
 end
 
-function assemble_matrix(n::Int, ::Type{TensorLanczos{T}}) where T<:AbstractFloat
+function assemble_matrix(n::Int, ::LanczosUnion{T}) where T<:AbstractFloat
 
     h  = inv(n + 1)
     Aₛ = inv(h^2) * sparse(SymTridiagonal(2ones(n), -ones(n)))
@@ -279,7 +279,7 @@ mutable struct SpectralData{T}
 
 end
 
-function update_data!(spectraldata::SpectralData{T}, d::Int, k::Int, ::Type{TensorLanczos{T}}) where T
+function update_data!(spectraldata::SpectralData{T}, d::Int, k::Int, ::LanczosUnion{T}) where T
 
     spectraldata.λ_min, spectraldata.λ_max = analytic_eigenvalues(d, k)
     spectraldata.κ    = spectraldata.λ_max * inv(spectraldata.λ_min)
