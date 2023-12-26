@@ -201,7 +201,6 @@ function orthonormal_basis!(t_lanczos::TensorLanczos{T}, k::Int) where T<:Abstra
 
     for s in 1:length(t_lanczos)
 
-        #lanczos = t_lanczos[s]
         lanczos = Lanczos{T}(t_lanczos[s]..., k)
 
         orthonormal_basis_vector!(lanczos, k)

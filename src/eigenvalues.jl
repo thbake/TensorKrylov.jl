@@ -246,7 +246,7 @@ end
 function assemble_matrix(n::Int, ::LanczosUnion{T}) where T<:AbstractFloat
 
     h  = inv(n + 1)
-    Aₛ = inv(h^2) * sparse(SymTridiagonal(10000ones(n), -ones(n)))
+    Aₛ = inv(h^2) * sparse(SymTridiagonal(2ones(n), -ones(n)))
 
     return Aₛ
 

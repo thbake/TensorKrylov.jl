@@ -188,7 +188,7 @@ mutable struct TensorLanczosReorth{T} <: TensorDecomposition{T}
     A::KroneckerMatrix{T} # Original matrix
     V::KroneckerMatrix{T} # Matrix representing basis of Krylov subspace
     H::KroneckerMatrix{T} # Upper Hessenberg matrix
-    orthonormalization::Type{LanczosReorth}
+    orthonormalization::Type{LanczosReorth{T}}
 
     function TensorLanczosReorth{T}(A::KroneckerMatrix{T}) where T<:AbstractFloat
 
