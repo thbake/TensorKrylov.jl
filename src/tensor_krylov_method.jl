@@ -98,9 +98,8 @@ function tensor_krylov!(
     x      = nothing # Declare approximate solution
 
     tensor_decomp      = orthonormalization_type(A)
-    orthonormalization = tensor_decomp.orthonormalization
 
-    initial_orthonormalization!(tensor_decomp, b, orthonormalization)
+    initial_orthonormalization!(tensor_decomp, b, tensor_decomp.orthonormalization)
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
 

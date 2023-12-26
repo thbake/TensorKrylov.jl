@@ -1,7 +1,7 @@
 export VectorCollection, MatrixCollection, KroneckerMatrix
 export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, 
        principal_minors, explicit_kroneckersum, recursivekronecker, kth_columns,
-       kroneckervectorize
+       kroneckervectorize, mul!
 
 abstract type VectorCollection{T} end
 abstract type MatrixCollection{T} <: VectorCollection{T} end
@@ -85,10 +85,10 @@ function nentries(collection::VectorCollection{T}) where T
     
 end
 
-function norm(collection::VectorCollection{T}) where T
-
-    return prod( map(norm, collection) )
-end 
+#function norm(collection::VectorCollection{T}) where T
+#
+#    return prod( map(norm, collection) )
+#end 
 
 function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T<:AbstractFloat
 
@@ -243,14 +243,14 @@ function Base.size(KM::KroneckerMatrix{T})::Array{Tuple{Int, Int}} where T
 end
 
 # Linear algebra for KroneckerMatrix
-function norm(KM::KroneckerMatrix{T}) where T
-
-    # This is the best I can think of right now.
-    A = kroneckersum(KM)
-
-    return norm(A)
-
-end
+#function norm(KM::KroneckerMatrix{T}) where T
+#
+#    # This is the best I can think of right now.
+#    A = kroneckersum(KM)
+#
+#    return norm(A)
+#
+#end
 
 function kronproddot(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
 
@@ -323,7 +323,7 @@ function Base.getindex(CP::ktensor, i::Int)
 
 end
 
-function mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{<:AbstractVector{T}}, x::ktensor) where T <: AbstractFloat
+function LinearAlgebra.mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{<:AbstractVector{T}}, x::ktensor) where T <: AbstractFloat
 
     # Compute product between elementary tensor and factor matrices of Kruskal tensor.
     nᵢ = ndims(x)

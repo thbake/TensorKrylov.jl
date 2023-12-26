@@ -1,33 +1,31 @@
 export qr_algorithm,  next_coefficients!, sign_changes, initial_interval, 
-       bisection, analytic_eigenvalues
+       bisection, analytic_eigenvalues, assemble_matrix
 
-
-export CharacteristicPolynomials
 
 # Data structure d sets of Sturm sequences of polynomials
 
-struct CharacteristicPolynomials{T} 
-
-    coefficients::AbstractArray{<:AbstractArray{<:AbstractArray{T}}}
-
-    function CharacteristicPolynomials{T}(d::Int, first_entries::AbstractArray{T}) where T <: AbstractFloat
-
-        # Initialize vector of coefficients of characteristic polynomials
-        coefficients = [ Vector{Vector{T}}(undef, 2) for _ in 1:d ]
-
-        for s in 1:d
-
-            # p₀(λ) = 1, p₁(λ) = γ₁ - λ
-            coefficients[s][1] = [1]
-            coefficients[s][2] = [first_entries[s], -1.0]
-
-        end
-
-        new(coefficients)
-
-    end
-
-end
+#struct CharacteristicPolynomials{T} 
+#
+#    coefficients::AbstractArray{<:AbstractArray{<:AbstractArray{T}}}
+#
+#    function CharacteristicPolynomials{T}(d::Int, first_entries::AbstractArray{T}) where T <: AbstractFloat
+#
+#        # Initialize vector of coefficients of characteristic polynomials
+#        coefficients = [ Vector{Vector{T}}(undef, 2) for _ in 1:d ]
+#
+#        for s in 1:d
+#
+#            # p₀(λ) = 1, p₁(λ) = γ₁ - λ
+#            coefficients[s][1] = [1]
+#            coefficients[s][2] = [first_entries[s], -1.0]
+#
+#        end
+#
+#        new(coefficients)
+#
+#    end
+#
+#end
 
 function sign_changes(x::T, polynomials::AbstractArray{<:AbstractArray{T}})::Int where T<:AbstractFloat
 
@@ -75,19 +73,19 @@ function next_coefficients!(characteristic_polynomial::AbstractArray{<:AbstractA
 end
     
 
-function next_polynomial!(γ::AbstractArray{T}, β::AbstractArray{T}, polynomials::CharacteristicPolynomials{T}, j::Int) where T<:AbstractFloat
-
-    # Generate next characteristic polynomial in the Sturm sequence.
-    # γ and β are the array of the d diagonal and subdiagonal entries at the 
-    # corresponding Jacobi matrices at index j, in the sequence.
-
-    for s in 1:length(polynomials)
-
-        next_coefficients!(polynomials.coefficients[s], γ[s], β[s], j)
-
-    end
-
-end
+#function next_polynomial!(γ::AbstractArray{T}, β::AbstractArray{T}, polynomials::CharacteristicPolynomials{T}, j::Int) where T<:AbstractFloat
+#
+#    # Generate next characteristic polynomial in the Sturm sequence.
+#    # γ and β are the array of the d diagonal and subdiagonal entries at the 
+#    # corresponding Jacobi matrices at index j, in the sequence.
+#
+#    for s in 1:length(polynomials)
+#
+#        next_coefficients!(polynomials.coefficients[s], γ[s], β[s], j)
+#
+#    end
+#
+#end
 
 function initial_interval(γ::AbstractArray{T}, β::AbstractArray{T}) where T<:AbstractFloat
 
@@ -136,29 +134,29 @@ function bisection(y::T, z::T, n::Int, k::Int, polynomials::AbstractArray{<:Abst
     return x
 end
 
-function extreme_tensorized_eigenvalues(A::KronMat{T}, char_poly::CharacteristicPolynomials{T}, k::Int) where T<:AbstractFloat
-
-
-    λ_min = 0.0
-    λ_max = 0.0 
-
-    for s in 1:length(A)
-
-        # Extract diagonal and subdiagonal entries of tridiagonal matrices Aₛ
-        pₛ = char_poly.coefficients[s]
-
-        next_coefficients!(pₛ, k, A[s][k, k], A[s][k, k-1])
-
-        y, z = initial_interval(diag(A[s], 0), diag(A[s], 1))
-
-        λ_min += bisection(y, z, k, k, pₛ)
-        λ_max += bisection(y, z, k, 1, pₛ)
-
-    end
-
-    return λ_min, λ_max
-
-end
+#function extreme_tensorized_eigenvalues(A::KronMat{T}, char_poly::CharacteristicPolynomials{T}, k::Int) where T<:AbstractFloat
+#
+#
+#    λ_min = 0.0
+#    λ_max = 0.0 
+#
+#    for s in 1:length(A)
+#
+#        # Extract diagonal and subdiagonal entries of tridiagonal matrices Aₛ
+#        pₛ = char_poly.coefficients[s]
+#
+#        next_coefficients!(pₛ, k, A[s][k, k], A[s][k, k-1])
+#
+#        y, z = initial_interval(diag(A[s], 0), diag(A[s], 1))
+#
+#        λ_min += bisection(y, z, k, k, pₛ)
+#        λ_max += bisection(y, z, k, 1, pₛ)
+#
+#    end
+#
+#    return λ_min, λ_max
+#
+#end
 
 # QR-Iterations
 
@@ -248,7 +246,7 @@ end
 function assemble_matrix(n::Int, ::LanczosUnion{T}) where T<:AbstractFloat
 
     h  = inv(n + 1)
-    Aₛ = inv(h^2) * sparse(SymTridiagonal(2ones(n), -ones(n)))
+    Aₛ = inv(h^2) * sparse(SymTridiagonal(10000ones(n), -ones(n)))
 
     return Aₛ
 
