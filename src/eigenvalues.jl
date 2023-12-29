@@ -120,7 +120,7 @@ function bisection(y::T, z::T, n::Int, k::Int, polynomials::AbstractArray{<:Abst
         # Count number of sign changes in the sequence which is equal to the 
         # number of eigenvalues of T that, by the Sturm sequence property are 
         # less than x.
-        if sign_changes(x, polynomials) >= (n - k)
+        if sign_changes(x, polynomials) >= (n - k + 1)
 
             z = x
 
@@ -224,20 +224,20 @@ function laplace_eigenspace(n::Int)
     return V
 end
 
-function laplace_eigenvalue(n::Int, j::Int)
+function laplace_eigenvalue(n::Int, k::Int, j::Int)
 
     h = inv(n + 1)
 
-    λⱼ = 2inv(h^2) * (1 - cos(π * j * inv(n + 1)))
+    λⱼ = 4 * inv(h^2) * sin(j * π * inv( 2(k + 1) ) )^2
 
     return λⱼ
 
 end 
 
-function analytic_eigenvalues(d::Int, n::Int)
+function analytic_eigenvalues(d::Int, n::Int, k::Int)
 
-    λ_min = laplace_eigenvalue(n, 1) * d 
-    λ_max = laplace_eigenvalue(n, n) * d
+    λ_min = laplace_eigenvalue(n, k, 1) * d
+    λ_max = laplace_eigenvalue(n, k, k) * d
 
     return λ_min, λ_max
 
@@ -277,11 +277,28 @@ mutable struct SpectralData{T}
 
 end
 
-function update_data!(spectraldata::SpectralData{T}, d::Int, k::Int, ::LanczosUnion{T}) where T
+function display(spectraldata::SpectralData{T}) where T<:AbstractFloat
 
-    spectraldata.λ_min, spectraldata.λ_max = analytic_eigenvalues(d, k)
-    spectraldata.κ    = spectraldata.λ_max * inv(spectraldata.λ_min)
+    println("Spectral data: ")
+    println("Smallest eigenvalues: ", typeof(spectraldata.λ_min))
+    println("Largest  eigenvalues: ", typeof(spectraldata.λ_max))
+    println("Condition number:     ", typeof(spectraldata.λ_max))
 
+end
+
+function Base.show(io::IO, spectraldata::SpectralData{T}) where T<:AbstractFloat
+
+    display(spectraldata)
+
+end
+
+function update_data!(spectraldata::SpectralData{T}, d::Int, n::Int, k::Int, ::LanczosUnion{T}) where T
+
+    spectraldata.λ_min, spectraldata.λ_max = analytic_eigenvalues(d, n, k)
+    #convergence_factor                     = 4(k + 1)^2 * inv(π * d)
+    #convergence_factor < 1.0 ? spectraldata.κ = spectraldata.λ_max * inv(spectraldata.λ_min) : spectraldata.κ = convergence_factor
+    spectraldata.κ = spectraldata.λ_max * inv(spectraldata.λ_min)
+     
 end
 
 function update_data!(spectraldata::SpectralData{T}, d::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T

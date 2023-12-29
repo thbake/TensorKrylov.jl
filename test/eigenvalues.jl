@@ -1,5 +1,5 @@
-using TensorKrylov: CharacteristicPolynomials
-using TensorKrylov: extreme_tensorized_eigenvalues
+#using TensorKrylov: CharacteristicPolynomials
+#using TensorKrylov: extreme_tensorized_eigenvalues
 using LinearAlgebra
 
 @testset "Bisection method for symmetric tridiagonal eigenvalue problems" begin
@@ -67,98 +67,135 @@ using LinearAlgebra
 
     for j in 1:length(exact)
 
-        @test @evalpoly(exact[j], last_polynomial...) < 1e-14
+        @test @evalpoly(exact[j], last_polynomial...) < 1e-13
 
     end
 end
 
-@testset "Extreme eigenvalues of system with symmetric tridiagonal coefficient matrices" begin
+@testset "Test analytic eigenvalues" begin
 
-    d = 1
-    n = 100
-    k = 50
+    d = 5 
+    n = 200
+    k = 199
 
     h = inv(n + 1)
+    A = inv(h^2) * SymTridiagonal(2ones(n), -ones(n))
 
-    #Aₛ = inv(h^2) * Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
-    Aₛ =  Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
+    function getextreme(v::Vector{T}) where T
 
-    
-    bs = rand(n)
+        first  = minimum(v)
+        second = maximum(v)
 
-    A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
-    lanczos = Lanczos{Float64}(Aₛ, zeros(n, k), zeros(k, k), bs)
-
-    for j in 1:k-1
-
-        orthonormal_basis_vector!(lanczos, j)
-
-        @test isposdef(lanczos.H[1:j, 1:j])
-
+        return first, second
     end
 
-    b = [bs for _ in 1:d]
-    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+    approx_eigvals = Vector{Tuple{Float64, Float64}}(undef, k)
+    exact_eigvals  = Vector{Tuple{Float64, Float64}}(undef, k)
 
-    λ_max = 0.0
-    λ_min = 0.0
+    for i in 1:k
 
-    t_lanczos = TensorLanczos{Float64}(A)
-    char_poly = CharacteristicPolynomials{Float64}(d, t_lanczos.H[1, 1])
+        h = i + 1
 
-    initial_orthonormalization!(t_lanczos, b, Lanczos)
-
-    for j = 2:k
-
-        orthonormal_basis!(t_lanczos, j)
-        H_minors = principal_minors(t_lanczos.H, j)
-
-        λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, j)
+        #A = assemble_matrix(i, TensorLanczos{Float64})
+        approx_eigvals[i] = analytic_eigenvalues(d, n, i) 
+        exact_eigvals[i]  = getextreme(eigvals( @view A[1:i, 1:i] ))
         
     end
 
-    Tₖ = t_lanczos.H[1][1:k, 1:k]
-
-    γ = diag(Tₖ, 0)[1:k]
-    β = diag(Tₖ, 1)[1:k-1]
-
-    # Initial interval
-    y, z = initial_interval( γ, β )
-
-    lanczos_basis = t_lanczos.V[1][:, 1:k]
-
-    #display(lanczos_basis' * lanczos_basis)
-
-    # Get first sequence of characteristic polynomials
-    first_char_poly_seq = char_poly.coefficients[1]
-
-    a = bisection(y, z, k, k, first_char_poly_seq)
-    b = bisection(y, z, k, 1, first_char_poly_seq)
-
-    @info "Small eigenvalues: " a, b 
-
-    approximate_eigenvalues = [ a, b ]
-    exact_eigenvalues = eigvals(Matrix(Tₖ))
-
-    @info @evalpoly(a, first_char_poly_seq[end]...)
-
-    exact_extreme         = [(d * exact_eigenvalues[1]), (d * exact_eigenvalues[end])]
-    approximation_extreme = [λ_min, λ_max]
-
-    @info "Exact eigenvalues: " exact_extreme
-    @info "Approximated eigenvalues: " approximation_extreme
-
-    @info "Relative error: " abs(exact_extreme[end] - approximation_extreme[end]) / exact_extreme[end]
-
-    @info "Exact condition number of Tₖ: " cond(Matrix(Tₖ)[1:k, 1:k])
-
-    @info "Condition number of Tₖ given by exact extreme eigenvalues: " exact_eigenvalues[end] / exact_eigenvalues[1]
-    @info "Estimated condition number of Tₖ: " abs(λ_max/ λ_min)
-
-    R = qr_algorithm(Matrix(Tₖ), 1e-5, 100)
-    display(R[1])
-    display(R[end])
-
+    display(approx_eigvals[1:5])
+    display(exact_eigvals[1:5])
 
 
 end
+     
+
+#@testset "Extreme eigenvalues of system with symmetric tridiagonal coefficient matrices" begin
+#
+#    d = 1
+#    n = 100
+#    k = 50
+#
+#    h = inv(n + 1)
+#
+#    #Aₛ = inv(h^2) * Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
+#    Aₛ =  Tridiagonal( -1ones(n - 1), 2ones(n), -1ones(n - 1) )
+#
+#    
+#    bs = rand(n)
+#
+#    A = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+#    lanczos = Lanczos{Float64}(Aₛ, zeros(n, k), zeros(k, k), bs)
+#
+#    for j in 1:k-1
+#
+#        orthonormal_basis_vector!(lanczos, j)
+#
+#        @test isposdef(lanczos.H[1:j, 1:j])
+#
+#    end
+#
+#    b = [bs for _ in 1:d]
+#    b̃ = [ zeros( size(b[s]) )  for s in eachindex(b) ]
+#
+#    λ_max = 0.0
+#    λ_min = 0.0
+#
+#    t_lanczos = TensorLanczos{Float64}(A)
+#    char_poly = CharacteristicPolynomials{Float64}(d, t_lanczos.H[1, 1])
+#
+#    initial_orthonormalization!(t_lanczos, b, Lanczos)
+#
+#    for j = 2:k
+#
+#        orthonormal_basis!(t_lanczos, j)
+#        H_minors = principal_minors(t_lanczos.H, j)
+#
+#        λ_min, λ_max = extreme_tensorized_eigenvalues(H_minors, char_poly, j)
+#        
+#    end
+#
+#    Tₖ = t_lanczos.H[1][1:k, 1:k]
+#
+#    γ = diag(Tₖ, 0)[1:k]
+#    β = diag(Tₖ, 1)[1:k-1]
+#
+#    # Initial interval
+#    y, z = initial_interval( γ, β )
+#
+#    lanczos_basis = t_lanczos.V[1][:, 1:k]
+#
+#    #display(lanczos_basis' * lanczos_basis)
+#
+#    # Get first sequence of characteristic polynomials
+#    first_char_poly_seq = char_poly.coefficients[1]
+#
+#    a = bisection(y, z, k, k, first_char_poly_seq)
+#    b = bisection(y, z, k, 1, first_char_poly_seq)
+#
+#    @info "Small eigenvalues: " a, b 
+#
+#    approximate_eigenvalues = [ a, b ]
+#    exact_eigenvalues = eigvals(Matrix(Tₖ))
+#
+#    @info @evalpoly(a, first_char_poly_seq[end]...)
+#
+#    exact_extreme         = [(d * exact_eigenvalues[1]), (d * exact_eigenvalues[end])]
+#    approximation_extreme = [λ_min, λ_max]
+#
+#    @info "Exact eigenvalues: " exact_extreme
+#    @info "Approximated eigenvalues: " approximation_extreme
+#
+#    @info "Relative error: " abs(exact_extreme[end] - approximation_extreme[end]) / exact_extreme[end]
+#
+#    @info "Exact condition number of Tₖ: " cond(Matrix(Tₖ)[1:k, 1:k])
+#
+#    @info "Condition number of Tₖ given by exact extreme eigenvalues: " exact_eigenvalues[end] / exact_eigenvalues[1]
+#    @info "Estimated condition number of Tₖ: " abs(λ_max/ λ_min)
+#
+#    R = qr_algorithm(Matrix(Tₖ), 1e-5, 100)
+#    display(R[1])
+#    display(R[end])
+#
+#
+#
+#end

@@ -134,12 +134,15 @@ end
     h    = inv(nₛ + 1)
     Aₛ   = sparse(inv(h^2) .* SymTridiagonal(2ones(nₛ), -1ones(nₛ - 1)))
     A    = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
-    b    = [ rand(nₛ) for _ in 1:d ]
+    #b    = [ rand(nₛ) for _ in 1:d ]
+    bₛ    = rand(nₛ)
+    b    = [bₛ for _ in 1:d]
 
     normalize!(b)
     
     convergencedata = ConvergenceData{Float64}(nmax)
     tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorLanczosReorth{Float64}, SilentMode)
+
 
 end
 

@@ -183,35 +183,14 @@ struct KroneckerMatrix{T} <: MatrixCollection{T}
 
 end
 
-struct KroneckerMatrixIter{T} 
+function Base.show(io::IO, A::KroneckerMatrix{T}) where T<:AbstractFloat
 
-    matrix::KroneckerMatrix{T}
-    index::Int
+    d = length(A)
+    n = size(A[1], 1)
+    println("Kronecker sum of order d = ", d, " with coefficient matrices of order n = ", n)
+    println(typeof(A[1]))
 
 end
-
-# TODO: Find out how to implement these damn iterators. 
-#function Base.iterate(iter::KroneckerMatrixIter{T}, state=1) where T
-#
-#    if iter.index <= length(iter.matrix)
-#
-#        value       = iter.matrix[iter.index]
-#        iter.index += 1
-#
-#        return (value, state)
-#
-#    else 
-#        return nothing
-#    end
-#
-#end
-#
-#function Base.iterate(kronmat::KroneckerMatrix{T}) where T
-#
-#    return KroneckerMatrixIter(kronmat, 1)
-#
-#end
-
 
 
 function randkronmat(orders::Array{Int})

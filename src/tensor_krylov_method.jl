@@ -51,12 +51,6 @@ function process_log(convergencedata::ConvergenceData{T}, k::Int, ::Type{DebugMo
 
 end
 
-#function orthogonality_checks(config::DebugChecks, V::KronMat{T}, k::Int, ::Type{DebugMode}) where T<:AbstractFloat
-#
-#    @info orthogonalityloss(V[1], k)
-#
-#end
-
 function solve_compressed_system(
     H         ::KronMat{T},
     b         ::KronProd{T},
@@ -119,8 +113,8 @@ function tensor_krylov!(
         # Update compressed right-hand side b̃ = Vᵀb
         update_rhs!(b_minors, columns, b, k)
 
-        update_data!(spectraldata, d, k, typeof(tensor_decomp))
-        update_data!(approxdata, spectraldata, orthonormalization_type)
+        update_data!(spectraldata, d, n, k,      orthonormalization_type)
+        update_data!(approxdata,   spectraldata, orthonormalization_type)
         
         y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min) # Approximate solution of compressed system
         𝔎 .= k 
@@ -136,6 +130,7 @@ function tensor_krylov!(
             if isa(e, CompressedNormBreakdown{T})
 
                 println("Early termination at k = " * string(k) * " due to compressed norm breakdown")
+                convergence_data.niterations = k - 1
 
                 return
 
@@ -145,7 +140,7 @@ function tensor_krylov!(
         rel_res_norm   = (r_norm / b_norm)
         convergence_data.relative_residual_norm[k]  = rel_res_norm
         convergence_data.projected_residual_norm[k] = r_compressed
-        convergence_data.spectraldata[k]            = spectraldata
+        #convergence_data.spectraldata[k]            = spectraldata
         convergence_data.orthogonality_data[k]      = orthogonality_loss(V_minors, k)
 
 

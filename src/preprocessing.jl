@@ -11,10 +11,12 @@ mutable struct ApproximationData{T}
     α::AbstractArray{T}
     ω::AbstractArray{T}
     tol::T
+    first_digit::Int
+    condition_order::Int
 
     function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorArnoldi{T}}) where T<:AbstractFloat
 
-        new(orthonormalization_type, DataFrame(), 0, zeros(), zeros(), tol)
+        new(orthonormalization_type, DataFrame(), 0, zeros(), zeros(), tol, 0, 0)
 
     end
 
@@ -23,7 +25,7 @@ mutable struct ApproximationData{T}
         package_dir = compute_package_directory()
         df          = compute_dataframe(package_dir)
 
-        new(orthonormalization_type, df, 0, zeros(), zeros(), tol)
+        new(orthonormalization_type, df, 0, zeros(), zeros(), tol, 0, 0)
 
     end
 
@@ -53,15 +55,33 @@ function compute_dataframe(coefficients_dir::AbstractString)
 
 end
 
-function compute_rank(df::DataFrame, κ::T, tol::T) where T<:AbstractFloat
-
-    condition_order, first_digit = parse_condition(κ)
+function getclosestrow(df::DataFrame, condition_order::Int, first_digit::Int)
 
     # Find row that matches best the condition number 
-    closest_row = filter(row -> row.R == first_digit * 10^condition_order, df)[:, 2:end]
+    closest_row = filter(row -> row.R == first_digit * 10.0^condition_order, df)[:, 2:end]
+
+    return closest_row
+
+end
+
+function compute_rank!(approxdata::ApproximationData{T}, κ::T) where T<:AbstractFloat
+
+    approxdata.condition_order, approxdata.first_digit = parse_condition(κ)
+
+    #println("Condtition number: ", approxdata.first_digit,  " ", approxdata.condition_order)
+
+    closest_row = getclosestrow(approxdata.df, approxdata.condition_order, approxdata.first_digit)
+
+    while nrow(closest_row) == 0
+
+        println("hello")
+        approxdata.first_digit += 1
+        closest_row  = getclosestrow(approxdata.df, approxdata.condition_order, approxdata.first_digit)
+
+    end
 
     # Take ranks whose corresponding accuracy is below γ
-    mask = tol .>= Vector(closest_row[1, :])
+    mask = approxdata.tol .>= Vector(closest_row[1, :])
 
     # Extract column headers (represent tensor ranks)
     matching_ranks = parse.(Int, names(closest_row[:, mask]))
@@ -69,7 +89,7 @@ function compute_rank(df::DataFrame, κ::T, tol::T) where T<:AbstractFloat
     # Take smallest rank that satisfies the bounds.
     minimum_rank = minimum(matching_ranks)
 
-    return minimum_rank
+    approxdata.rank = minimum_rank
 
 end
 
@@ -100,14 +120,14 @@ end
 function parse_condition(κ::T) where T<:AbstractFloat
 
     condition_order = Int(floor(log10(κ)))
-    first_digit     = Int( floor(κ / (10^condition_order)) )
+    first_digit     = Int( floor(κ / (10^float(condition_order))) )
 
     return condition_order, first_digit
 
 end
 
 # Symmetric positive definite case
-function exponential_sum_parameters(coefficients_dir::AbstractString, minimum_rank::Int, κ::T) where T<:AbstractFloat
+function exponential_sum_parameters!(approxdata::ApproximationData{T}, coefficients_dir::AbstractString) where T<:AbstractFloat
 
     # Extracts coefficients αⱼ, ωⱼ > 0 and tensor rank t such that the bound of 
     # Lemma 2.6 (denoted by γ) is satisfied.
@@ -121,9 +141,9 @@ function exponential_sum_parameters(coefficients_dir::AbstractString, minimum_ra
     
 
     # Construct file name
-    filename = coefficients_dir * "/coefficients_data/" 
+    filename = coefficients_dir * "coefficients_data/" 
 
-    t_string = string(minimum_rank)
+    t_string = string(approxdata.rank)
 
     if length(t_string) == 1
 
@@ -135,9 +155,7 @@ function exponential_sum_parameters(coefficients_dir::AbstractString, minimum_ra
 
     end
 
-    condition_order, first_digit = parse_condition(κ)
-
-    filename = filename * string(minimum_rank) * "." * string(first_digit) * "_" * string(condition_order)
+    filename = filename * t_string * "." * string(approxdata.first_digit) * "_" * string(approxdata.condition_order)
 
     # Use three spaces to delimit the file(s)
     coeffs_df = CSV.read(
@@ -147,10 +165,8 @@ function exponential_sum_parameters(coefficients_dir::AbstractString, minimum_ra
                     header = ["number", "id"]
                 )
 
-    ω = coeffs_df[1:minimum_rank, 1]
-    α = coeffs_df[minimum_rank + 1 : 2minimum_rank, 1]
-
-    return α, ω
+    approxdata.ω = coeffs_df[1:approxdata.rank, 1]
+    approxdata.α = coeffs_df[approxdata.rank + 1 : 2approxdata.rank, 1]
 
 end
 
@@ -170,8 +186,8 @@ function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralDa
 
     package_dir                = compute_package_directory()
     approxdata.df              = compute_dataframe(package_dir)
-    approxdata.rank            = compute_rank(approxdata.df, spectraldata.κ, approxdata.tol)
-    approxdata.α, approxdata.ω = exponential_sum_parameters(package_dir, approxdata.rank, spectraldata.κ)
+    compute_rank!(approxdata, spectraldata.κ)
+    exponential_sum_parameters!(approxdata, package_dir)
 
 end
 

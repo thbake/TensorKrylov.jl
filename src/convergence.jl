@@ -35,6 +35,16 @@ function Base.resize!(convergencedata::ConvergenceData{T}, k::Int) where T<:Abst
 
 end
 
+function Base.show(io::IO, convergencedata::ConvergenceData{T}) where T<:AbstractFloat
+
+    println("Convergence data: Computations ran for ",  convergencedata.niterations)
+    println(" - Relative residual norm:  ", typeof(convergencedata.relative_residual_norm))
+    println(" - Projected residual norm: ", typeof(convergencedata.projected_residual_norm))
+    println(" - Spectral data:           ", typeof(convergencedata.spectraldata))
+    println(" - Orthogonality data:      ", typeof(convergencedata.orthogonality_data))
+
+end
+
 #function process_convergence!(
 #    convergencedata   ::ConvergenceData{T},
 #    k                 ::Int,
