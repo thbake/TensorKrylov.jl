@@ -274,37 +274,60 @@ mutable struct SpectralData{T}
 
     end
 
+    function SpectralData{T}(λ_min::T, λ_max::T, κ::T) where T <: AbstractFloat
+
+        new(λ_min, λ_max, κ)
+
+    end
+
+    function SpectralData{T}(::Int, ::Int, ::LanczosUnion{T}) where T<:AbstractFloat
+
+        new(Inf, Inf, Inf)
+
+    end
+
+    function SpectralData{T}(d::Int, n::Int, arnoldi::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+
+        A = Matrix(assemble_matrix(n, arnoldi))
+        #κ = cond(eigvecs(A))^d
+        λ_min = minimum(eigvals(A)) * d
+
+        new(λ_min, Inf, Inf)
+
+    end
+
 
 end
 
-function display(spectraldata::SpectralData{T}) where T<:AbstractFloat
+Base.copy(data::SpectralData{T}) where T = SpectralData{T}(data.λ_min, data.λ_max, data.κ)
+
+function display(data::SpectralData{T}) where T<:AbstractFloat
 
     println("Spectral data: ")
-    println("Smallest eigenvalues: ", typeof(spectraldata.λ_min))
-    println("Largest  eigenvalues: ", typeof(spectraldata.λ_max))
-    println("Condition number:     ", typeof(spectraldata.λ_max))
+    println("Smallest eigenvalues: ", data.λ_min)
+    println("Largest  eigenvalues: ", data.λ_max)
+    println("Condition number:     ", data.κ)
 
 end
 
-function Base.show(io::IO, spectraldata::SpectralData{T}) where T<:AbstractFloat
+function Base.show(io::IO, data::SpectralData{T}) where T<:AbstractFloat
 
-    display(spectraldata)
+    display(data)
 
 end
 
-function update_data!(spectraldata::SpectralData{T}, d::Int, n::Int, k::Int, ::LanczosUnion{T}) where T
+function update_data!(data::SpectralData{T}, d::Int, n::Int, k::Int, ::LanczosUnion{T}) where T
 
-    spectraldata.λ_min, spectraldata.λ_max = analytic_eigenvalues(d, n, k)
-    #convergence_factor                     = 4(k + 1)^2 * inv(π * d)
-    #convergence_factor < 1.0 ? spectraldata.κ = spectraldata.λ_max * inv(spectraldata.λ_min) : spectraldata.κ = convergence_factor
-    spectraldata.κ = spectraldata.λ_max * inv(spectraldata.λ_min)
+    data.λ_min, data.λ_max = analytic_eigenvalues(d, n, k)
+    data.κ                 = data.λ_max * inv(data.λ_min)
      
 end
 
-function update_data!(spectraldata::SpectralData{T}, d::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T
+function update_data!(data::SpectralData{T}, d::Int, n::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T
 
-    A                  = assemble_matrix(k , arnoldi)
-    spectraldata.λ_min = minimum( abs.( eigvals( Matrix(A) ) ) ) * d
+    #A          = Matrix(assemble_matrix(n , arnoldi))
+    #data.λ_min = minimum( abs.( eigvals( @view A[1:k, 1:k] ) ) ) * d
+    return
 
 end
         

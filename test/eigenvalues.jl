@@ -96,9 +96,8 @@ end
 
         h = i + 1
 
-        #A = assemble_matrix(i, TensorLanczos{Float64})
         approx_eigvals[i] = analytic_eigenvalues(d, n, i) 
-        exact_eigvals[i]  = getextreme(eigvals( @view A[1:i, 1:i] ))
+        exact_eigvals[i]  = d .* getextreme(eigvals( @view A[1:i, 1:i] ))
         
     end
 

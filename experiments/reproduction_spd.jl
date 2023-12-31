@@ -24,7 +24,7 @@ mutable struct Experiment{T}
     end
 
     # For plotting, due to reliance on ssh connection for running experiments.
-    function Experiment{T}(datadir::AbstractString = "experiments/spd_data") where T<:AbstractFloat
+    function Experiment{T}(datadir::AbstractString) where T<:AbstractFloat
 
         pkg_path = compute_package_directory()
 
@@ -41,11 +41,12 @@ mutable struct Experiment{T}
         sorted_dims    = dimensions[sorted_indices]
         sorted_files   = files[sorted_indices]
         column_types   = [Int, T, T, T]
+        complete_dir   = "data/" * datadir
 
         for i in 1:length(sorted_files)
 
             df = CSV.read(
-                joinpath(datadir, sorted_files[i]),
+                joinpath(complete_dir, sorted_files[i]),
                 DataFrame,
                 delim = ',',
                 types = column_types
@@ -106,25 +107,34 @@ function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, orthonormal
 
     println("Performing experiments")
 
-    Aₛ = assemble_matrix(n, orthonormalization_type)
+    systems = [ TensorizedSystem{T}(n, d, orthonormalization_type) for d ∈ dimensions ]
+    #Aₛ = assemble_matrix(n, orthonormalization_type)
 
-    experiment = Experiment{T}(dimensions, nmax)
+    #experiment = Experiment{T}(dimensions, nmax)
+    #
+    #for i in 1:length(dimensions)
+
+    #    d = dimensions[i]
+    #    A = KroneckerMatrix{T}([Aₛ for s in 1:d])
+    #    b = [ rand(n) for _ in 1:d ]
+
+    #    if normalize_rhs
+
+    #        normalize!(b)
+
+    #    end
+
+    #    println("d = " * string(d))
+
+    #    tensor_krylov!(experiment.conv_data_vector[i], A, b, tol, nmax, orthonormalization_type) 
+
+    #end
     
-    for i in 1:length(dimensions)
+    experiment = Experiment{T}(dimensions, nmax)
 
-        d = dimensions[i]
-        A = KroneckerMatrix{T}([Aₛ for s in 1:d])
-        b = [ rand(n) for _ in 1:d ]
+    for i in eachindex(dimensions)
 
-        if normalize_rhs
-
-            normalize!(b)
-
-        end
-
-        println("d = " * string(d))
-
-        tensor_krylov!(experiment.conv_data_vector[i], A, b, tol, nmax, orthonormalization_type) 
+        experiment.conv_data_vector[i] = solve_tensorized_system(systems[i], nmax)
 
     end
 
@@ -148,7 +158,7 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
 
         )
 
-        output = joinpath(exportdir, "data_d" * string(d) * ".csv")
+        output = joinpath("experiments/data/", exportdir, "data_d" * string(d) * ".csv")
         CSV.write(output, string.(df))
 
     end

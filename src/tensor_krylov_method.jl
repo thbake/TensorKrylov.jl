@@ -76,6 +76,8 @@ function solve_compressed_system(
     return yₜ
 end
 
+distancetosingularity(H::KronMat{T}) where T = cond(first(H))
+
 function tensor_krylov!(
     convergence_data       ::ConvergenceData{T},
     A                      ::KronMat{T},
@@ -91,15 +93,15 @@ function tensor_krylov!(
     b_norm = kronprodnorm(b)
     x      = nothing # Declare approximate solution
 
-    tensor_decomp      = orthonormalization_type(A)
+    tensor_decomp = orthonormalization_type(A)
 
     initial_orthonormalization!(tensor_decomp, b, tensor_decomp.orthonormalization)
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
 
-    spectraldata = SpectralData{T}()
+    spectraldata = SpectralData{T}(d, n, orthonormalization_type)
     approxdata   = ApproximationData{T}(tol, orthonormalization_type)
-    r_compressed = Inf
+    r_comp       = Inf
     r_norm       = Inf
 
     for k = 2:nmax
@@ -115,7 +117,8 @@ function tensor_krylov!(
 
         update_data!(spectraldata, d, n, k,      orthonormalization_type)
         update_data!(approxdata,   spectraldata, orthonormalization_type)
-        
+        spectraldata.κ = distancetosingularity(H_minors)
+
         y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min) # Approximate solution of compressed system
         𝔎 .= k 
 
@@ -123,7 +126,7 @@ function tensor_krylov!(
 
         try
 
-            r_compressed, r_norm = residual_norm!(convergence_data, H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
+            r_comp, r_norm = residual_norm!(H_minors, y, 𝔎, subdiagentries, b_minors) # Compute residual norm
 
         catch e 
 
@@ -139,8 +142,8 @@ function tensor_krylov!(
         end
         rel_res_norm   = (r_norm / b_norm)
         convergence_data.relative_residual_norm[k]  = rel_res_norm
-        convergence_data.projected_residual_norm[k] = r_compressed
-        #convergence_data.spectraldata[k]            = spectraldata
+        convergence_data.projected_residual_norm[k] = r_comp
+        convergence_data.spectraldata[k]            = copy(spectraldata)
         convergence_data.orthogonality_data[k]      = orthogonality_loss(V_minors, k)
 
 

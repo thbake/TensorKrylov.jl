@@ -37,12 +37,17 @@ end
 
 function Base.show(io::IO, convergencedata::ConvergenceData{T}) where T<:AbstractFloat
 
-    println("Convergence data: Computations ran for ",  convergencedata.niterations)
+    println("Convergence data: ")
     println(" - Relative residual norm:  ", typeof(convergencedata.relative_residual_norm))
     println(" - Projected residual norm: ", typeof(convergencedata.projected_residual_norm))
     println(" - Spectral data:           ", typeof(convergencedata.spectraldata))
     println(" - Orthogonality data:      ", typeof(convergencedata.orthogonality_data))
 
+    println("\nComputations ran for ",  convergencedata.niterations)
+    println(
+        "Achieved relative residual norm: ",
+        convergencedata.relative_residual_norm[convergencedata.niterations]
+    )
 end
 
 #function process_convergence!(

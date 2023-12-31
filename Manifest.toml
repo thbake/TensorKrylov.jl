@@ -2,7 +2,7 @@
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "ba1abb16eea08d62f1eb60ac49aac6205713f967"
+project_hash = "6075eed2885db2e2c6f84df9d600c3576461165b"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "332e5d7baeff8497b923b730b994fa480601efc7"
@@ -852,6 +852,12 @@ git-tree-sha1 = "0b8cf121228f7dae022700c1c11ac1f04122f384"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
 version = "2.3.2"
 
+[[deps.MKL]]
+deps = ["Libdl", "MKL_jll", "PackageCompiler"]
+git-tree-sha1 = "e01175ff53c062c52b6cbe441a4382e132f7c82e"
+uuid = "33e6dc65-8f57-5167-99aa-e5a354878fb2"
+version = "0.3.0"
+
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl"]
 git-tree-sha1 = "72dc3cf284559eb8f53aa593fe62cb33f83ed0c0"
@@ -973,6 +979,12 @@ version = "1.6.3"
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
 version = "10.42.0+0"
+
+[[deps.PackageCompiler]]
+deps = ["LazyArtifacts", "Libdl", "Pkg", "UUIDs"]
+git-tree-sha1 = "d2f93cc940b4a3d1aba77b266cbd7c7d404568c7"
+uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
+version = "1.6.0"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]

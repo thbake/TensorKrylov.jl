@@ -141,14 +141,14 @@ end
     normalize!(b)
     
     convergencedata = ConvergenceData{Float64}(nmax)
-    tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorLanczosReorth{Float64}, SilentMode)
+    #tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorLanczosReorth{Float64}, SilentMode)
 
 
 end
 
 @testset "Nonsymmetric example" begin
 
-    d    = 5
+    d    = 50
     n    = 200
     nmax = 199
     h    = inv(n + 1)
@@ -166,6 +166,6 @@ end
     BLAS.set_num_threads(30)
     
     convergencedata = ConvergenceData{Float64}(nmax)
-    #x = tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorArnoldi{Float64}, SilentMode)
+    x = tensor_krylov!(convergencedata, A, b, 1e-9, nmax, TensorArnoldi{Float64}, SilentMode)
 
 end

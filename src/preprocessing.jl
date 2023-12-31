@@ -6,13 +6,13 @@ export compute_package_directory
 mutable struct ApproximationData{T}
 
     orthonormalization_type::Type{<:TensorDecomposition{T}}
-    df::DataFrame
-    rank::Int
-    α::AbstractArray{T}
-    ω::AbstractArray{T}
-    tol::T
-    first_digit::Int
-    condition_order::Int
+    df                     ::DataFrame
+    rank                   ::Int
+    α                      ::AbstractArray{T}
+    ω                      ::AbstractArray{T}
+    tol                    ::T
+    first_digit            ::Int
+    condition_order        ::Int
 
     function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorArnoldi{T}}) where T<:AbstractFloat
 
@@ -68,52 +68,41 @@ function compute_rank!(approxdata::ApproximationData{T}, κ::T) where T<:Abstrac
 
     approxdata.condition_order, approxdata.first_digit = parse_condition(κ)
 
-    #println("Condtition number: ", approxdata.first_digit,  " ", approxdata.condition_order)
-
     closest_row = getclosestrow(approxdata.df, approxdata.condition_order, approxdata.first_digit)
 
     while nrow(closest_row) == 0
 
-        println("hello")
         approxdata.first_digit += 1
         closest_row  = getclosestrow(approxdata.df, approxdata.condition_order, approxdata.first_digit)
 
     end
 
     # Take ranks whose corresponding accuracy is below γ
-    mask = approxdata.tol .>= Vector(closest_row[1, :])
-
-    # Extract column headers (represent tensor ranks)
-    matching_ranks = parse.(Int, names(closest_row[:, mask]))
-
-    # Take smallest rank that satisfies the bounds.
-    minimum_rank = minimum(matching_ranks)
-
+    mask            = approxdata.tol .>= Vector(closest_row[1, :])
+    matching_ranks  = parse.(Int, names(closest_row[:, mask])) # Extract column headers (represent tensor ranks)
+    minimum_rank    = minimum(matching_ranks) # Take smallest rank that satisfies the bounds.
     approxdata.rank = minimum_rank
 
 end
 
-#function nonsymmetric_bound(λ::T, rank::Int, b_norm::T) where T<:AbstractFloat
-function nonsymmetric_bound(λ::T, rank::Int) where T<:AbstractFloat
+nonsymmetric_bound(κ::T, λ::T, rank::Int) where T = 2.75 * inv(λ) * exp(-π * sqrt(rank))
 
-    return 2.75 * inv(λ) * exp(-π * sqrt(rank)) 
-
-end
-
-function compute_rank(λ::T, tol::T) where T<:AbstractFloat
+function compute_rank!(
+    approxdata::ApproximationData{T},
+    spectraldata::SpectralData{T}) where T<:AbstractFloat
 
     rank   = 1
-    bound  = nonsymmetric_bound(λ, rank) 
+    bound  = nonsymmetric_bound(spectraldata.κ, spectraldata.λ_min, rank) 
 
-    while bound > tol
+    while bound > approxdata.tol
 
         rank += 1
 
-        bound = nonsymmetric_bound(λ, rank)
+        bound = nonsymmetric_bound(spectraldata.κ, spectraldata.λ_min, rank)
 
     end
 
-    return rank
+    approxdata.rank = rank
 
 end
 
@@ -171,14 +160,13 @@ function exponential_sum_parameters!(approxdata::ApproximationData{T}, coefficie
 end
 
 # Non-symmetric case
-function exponential_sum_parameters(rank::Int)
+function exponential_sum_parameters!(data::ApproximationData{T}) where T<:AbstractFloat
 
-    h_st = π * inv(sqrt(rank))
+    t = data.rank
 
-    α = [ log(exp(j * h_st) + sqrt(1 + exp(2 * j * h_st))) for j in -rank : rank ]
-    ω = [ h_st * inv(sqrt((1 + exp(-2 * j * h_st))))       for j in -rank : rank ]
-
-    return α, ω 
+    h_st   = π * inv(sqrt(t))
+    data.α = [ log(exp(j * h_st) + sqrt(1 + exp(2 * j * h_st) ) ) for j in -t : t ]
+    data.ω = [ h_st * inv( sqrt( (1 + exp(-2 * j * h_st) ) ) )    for j in -t : t ]
 
 end
 
@@ -193,7 +181,7 @@ end
 
 function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralData{T}, ::Type{TensorArnoldi{T}}) where T<:AbstractFloat
 
-    approxdata.rank            = compute_rank(spectraldata.λ_min, approxdata.tol)
-    approxdata.α, approxdata.ω = exponential_sum_parameters(approxdata.rank)
+    compute_rank!(approxdata, spectraldata)
+    exponential_sum_parameters!(approxdata)
 
 end

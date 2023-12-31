@@ -42,7 +42,6 @@ struct TensorizedSystem{T}
 
 end
 
-
 function display(system::TensorizedSystem{T}, name="TensorizedSystem") where T<:AbstractFloat
 
     println(
@@ -137,7 +136,7 @@ function canonicaltoTT(x::ktensor)
     cores = initialize_cores(d, n, 1, rank, rank) 
 
     tmp = redistribute(x, 1) # Redistribute weights
-    #
+    
 
     for i in 1:rank
 
@@ -420,66 +419,34 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:
 
 end
 
-function compressed_residual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
-
-    # This variant expands the matrices/tensors
-
-    N = nentries(H)
-
-    H_expanded = sparse(Matrix(kroneckersum(H.𝖳...)))
-    y_expanded = reshape(full(y), N)
-    b_expanded = kronecker(b...)
-
-    x = zeros(N)
-
-    @assert issparse(H_expanded)
-
-    #mul!(x, H_expanded, y_expanded)
-
-    comp_res = (H_expanded * y_expanded) - b_expanded
-    comp_res = x - b_expanded
-    
-    @info "Compressed residual" dot(comp_res, comp_res)
-    return dot(comp_res, comp_res)
-
-end
-
 function compressed_residual(
-    Ly              ::FMatrices{T},
-    Λ               ::AbstractMatrix{T},
-    H               ::KronMat{T},
-    y               ::ktensor,
-    b               ::KronProd{T}) where T <:AbstractFloat
+    Ly::FMatrices{T},
+    Λ ::AbstractMatrix{T},
+    H ::KronMat{T},
+    y ::ktensor,
+    b ::KronProd{T}) where T <:AbstractFloat
 
     # We know that 
     
     #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
 
     # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
-    Z = matrix_vector(H, y)
-
+    Z  = matrix_vector(H, y)
     Ly = Symmetric.(Ly, :L)
 
-    # First we compute ||Hy||²
-    Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z)
+    Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z) # First we compute ||Hy||²
+    Hy_b    = tensorinnerprod(Z, y, b)           # <Hy, b>₂
+    b_norm  = kronproddot(b)                     # squared 2-norm of b
+    r_comp  = Hy_norm - 2* Hy_b + b_norm
 
-    # Now we proceed with <Hy, b>₂
-    Hy_b = tensorinnerprod(Z, y, b)
+    r_comp < 0.0 ? throw( CompressedNormBreakdown{T}(r_comp) ) : return r_comp
 
-    # Finally we compute the squared 2-norm of b
-    b_norm = kronproddot(b)
-
-    comp_res = Hy_norm - 2* Hy_b + b_norm
-
-    comp_res < 0.0 ? throw( CompressedNormBreakdown{T}(comp_res) ) : return comp_res
-
-    return comp_res
+    return r_comp
 
 end
 
 
 function residual_norm!(
-    convergence_data   ::ConvergenceData{T},
     H                  ::KronMat{T},
     y                  ::ktensor,
     𝔎                  ::Vector{Int},
@@ -516,10 +483,9 @@ function residual_norm!(
 
     end
 
-    r_compressed = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
-    #r_compressed = TTcompressedresidual(H, y, b)
+    r_comp = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
 
-    return r_compressed, sqrt(res_norm + r_compressed)
+    return r_comp, sqrt(res_norm + r_comp)
 
 end
 
@@ -580,12 +546,16 @@ end
 
 function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, γ::T, k::Int) where T<:AbstractFloat
 
+    tmp = Matrix(copy(A[1]))
+
+    expA = exp(γ * tmp)
+
     for s = 1:length(A)
 
-        tmp = Matrix(copy(A[s]))
-
-        #y.fmat[s][:, k] = expv(γ, tmp, b[s]) # Update kth column
-        y.fmat[s][:, k] =  exp(γ * tmp) * b[s] # Update kth column
+        #tmp = Matrix(copy(A[s]))
+        #y.fmat[s][:, k] =  exp(γ * tmp) * b[s] # Update kth column
+        
+        y.fmat[s][:, k] =  expA * b[s] # Update kth column
 
     end
 

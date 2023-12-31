@@ -15,19 +15,15 @@ const Core{T} = Vector{Vector{Vector{Vector{T}}}}
 
 # Basic functions for VectorCollection types
 # ==========================================
-function Base.length(collection::VectorCollection{T}) where T
+Base.length(collection::VectorCollection{T})           where T = length(collection.𝖳)
 
-    return length(collection.𝖳)
+Base.getindex(collection::VectorCollection{T}, i::Int) where T = collection.𝖳[i]
 
-end
+Base.eachindex(collection::VectorCollection{T})        where T = eachindex(collection.𝖳)
 
-function Base.getindex(collection::VectorCollection{T}, i::Int) where T
+Base.first(collection::VectorCollection{T})            where T = first(collection.𝖳)
 
-    1 <= i <= length(collection.𝖳) || throw(BoundsError(collection, i))
-
-    return collection.𝖳[i]
-
-end
+Base.last(collection::VectorCollection{T})             where T = last(collection.𝖳)
 
 function Base.getindex(collection::VectorCollection{T}, multiindex::Matrix{<:Int}) where T
 
@@ -59,11 +55,6 @@ function Base.setindex!(collection::VectorCollection{T}, M::Matrix{T}, i::Int) w
 
 end
 
-function Base.eachindex(collection::VectorCollection{T}) where T
-
-    return eachindex(collection.𝖳)
-
-end
 
 function dimensions(collection::VectorCollection{T})::Array{Int} where T
     
@@ -79,91 +70,8 @@ function dimensions(collection::VectorCollection{T})::Array{Int} where T
 
 end
 
-function nentries(collection::VectorCollection{T}) where T
+nentries(collection::VectorCollection{T}) where T = prod(dimensions(collection))
     
-    return prod(dimensions(collection))
-    
-end
-
-#function norm(collection::VectorCollection{T}) where T
-#
-#    return prod( map(norm, collection) )
-#end 
-
-function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T<:AbstractFloat
-
-    # Compute 
-
-    d = length(orders)
-
-    if d == 1
-
-        return A
-
-    elseif s == 1 && d > 1
-
-        return kron(recursivekronecker(A, s, orders[1:d-1]), I(orders[d]))
-
-    else
-
-        return kron(I(orders[1]), recursivekronecker(A, s - 1, orders[2:d]))
-
-    end
-
-end
-
-function recursivekronecker(A::Vector{Matrix{T}}, factor_matrix::Vector{Matrix{T}}, s::Int, i::Int, d::Int) where T<:AbstractFloat
-
-    if d == 1
-
-        return A[s][:, i]
-
-    elseif s == 1 && d > 1
-
-        return kron(recursivekronecker(A[1:d-1], factor_matrix[1:d-1], s, i, d - 1), factor_matrix[d][:, i])
-
-    else
-
-        return kron(factor_matrix[1][:, i], recursivekronecker(A[2:d], factor_matrix[2:d], s - 1, i, d - 1))
-
-    end
-
-end
-
-function explicit_kroneckersum(A::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat
-
-    orders = [ size(A[s], 1) for s in eachindex(A) ]
-
-    N = prod(orders)
-
-    K = zeros(N, N)
-
-    for s in eachindex(A)
-
-        K += recursivekronecker(A[s], s, orders)
-
-    end
-
-    return K
-end
-
-function explicit_kroneckersum(A::Vector{<:SparseMatrixCSC{T, U}}) where {T<:AbstractFloat, U<:Int}
-
-    orders = [ size(A[s], 1) for s in eachindex(A) ]
-
-
-    K = recursivekronecker(A[1], 1, orders)
-
-    for s in 2:length(A)
-
-        K += recursivekronecker(A[s], s, orders)
-
-    end
-
-    return K
-
-end
-			
 struct KroneckerMatrix{T} <: MatrixCollection{T}
     
     𝖳::Vector{<:AbstractMatrix{T}} # We only store the d matrices explicitly in a vector.
@@ -220,16 +128,6 @@ function Base.size(KM::KroneckerMatrix{T})::Array{Tuple{Int, Int}} where T
 
     return factor_sizes
 end
-
-# Linear algebra for KroneckerMatrix
-#function norm(KM::KroneckerMatrix{T}) where T
-#
-#    # This is the best I can think of right now.
-#    A = kroneckersum(KM)
-#
-#    return norm(A)
-#
-#end
 
 function kronproddot(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
 
