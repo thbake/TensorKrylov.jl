@@ -30,6 +30,7 @@ mutable struct Experiment{T}
 
         pkg_path = compute_package_directory()
 
+        complete_dir        = "experiments/data/" * datadir
         files               = cd(readdir, joinpath(pkg_path, datadir))
         nfiles              = length(files)
         convergence_results = Vector{ConvergenceData{T}}(undef, nfiles)
@@ -43,7 +44,6 @@ mutable struct Experiment{T}
         sorted_dims    = dimensions[sorted_indices]
         sorted_files   = files[sorted_indices]
         column_types   = [Int, T, T, T]
-        complete_dir   = "data/" * datadir
 
         for i in 1:length(sorted_files)
 
@@ -147,35 +147,23 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
 
 end
 
-function server()
+function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) where T
 
-    server = listen(12345)
-    println("Waiting for connection...")
-    sock = accept(server)
-    println("Connection established.")
+    complete_path = "experiments/data/serialized_data/" * filename
 
-    data_received = deserialize(read(sock))
-    println("Received data: ", data_received)
-
-    close(sock)
-    close(server)
-
-    return data_received
+    serialize(complete_path, experiment)
 
 end
 
-function client(server_ip::AbstractString, data::Experiment{T}) where T
+function deserizalize_from_file(filename::AbstractString) 
 
-    port = 12345
+    complete_path = "experiments/data/serialized_data/" * filename
 
-    sock = connect(server_ip, port)
-    println("Connected to server.")
+    return deserialize(complete_path)
 
-    write(sock, serialize(data))
-    println("Data sent.")
-
-    close(sock)
 end
+
+
 
 
 
