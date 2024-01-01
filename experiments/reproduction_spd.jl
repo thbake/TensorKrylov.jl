@@ -5,6 +5,8 @@ using SparseArrays
 using DataFrames
 using CSV
 using Random
+using Sockets
+using Serialization
 
 Random.seed!(12345)
 
@@ -108,32 +110,12 @@ function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, orthonormal
     println("Performing experiments")
 
     systems = [ TensorizedSystem{T}(n, d, orthonormalization_type) for d ∈ dimensions ]
-    #Aₛ = assemble_matrix(n, orthonormalization_type)
-
-    #experiment = Experiment{T}(dimensions, nmax)
-    #
-    #for i in 1:length(dimensions)
-
-    #    d = dimensions[i]
-    #    A = KroneckerMatrix{T}([Aₛ for s in 1:d])
-    #    b = [ rand(n) for _ in 1:d ]
-
-    #    if normalize_rhs
-
-    #        normalize!(b)
-
-    #    end
-
-    #    println("d = " * string(d))
-
-    #    tensor_krylov!(experiment.conv_data_vector[i], A, b, tol, nmax, orthonormalization_type) 
-
-    #end
     
     experiment = Experiment{T}(dimensions, nmax)
 
     for i in eachindex(dimensions)
 
+        println("d = " * string(dimensions[i]))
         experiment.conv_data_vector[i] = solve_tensorized_system(systems[i], nmax)
 
     end
@@ -164,4 +146,38 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
     end
 
 end
+
+function server()
+
+    server = listen(12345)
+    println("Waiting for connection...")
+    sock = accept(server)
+    println("Connection established.")
+
+    data_received = deserialize(read(sock))
+    println("Received data: ", data_received)
+
+    close(sock)
+    close(server)
+
+    return data_received
+
+end
+
+function client(server_ip::AbstractString, data::Experiment{T}) where T
+
+    port = 12345
+
+    sock = connect(server_ip, port)
+    println("Connected to server.")
+
+    write(sock, serialize(data))
+    println("Data sent.")
+
+    close(sock)
+end
+
+
+
+    
 
