@@ -1,11 +1,4 @@
-using TensorKrylov, Test
-
-import TensorKrylov: compute_lower_outer!, compute_lower_triangles!, 
-                     cp_tensor_coefficients, maskprod, matrix_vector, MVnorm, 
-                     efficientMVnorm, compressed_residual, residual_norm,
-                     squared_tensor_entries, tensorinnerprod
-
-using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
+using TensorKrylov, Test, SparseArrays
 
 @testset "Masked products" begin
 
@@ -48,45 +41,6 @@ using Kronecker, TensorToolbox, LinearAlgebra, BenchmarkTools, SparseArrays
 end
 
 @testset "Compressed residual computations" begin
-
-    function initialize_matrix_products(M, x)
-
-        d      = length(M)
-        t      = length(x.lambda)
-        Λ      = LowerTriangular( zeros(t, t) )
-        lowerX = [ zeros(t, t) for _ in 1:d ]
-        Z      = matrix_vector(M, x)
-        
-        compute_lower_outer!(Λ, x.lambda)
-        compute_lower_triangles!(lowerX, x)
-
-        return Λ, lowerX, Z
-
-    end
-
-
-    function tensorsquarednorm(x::ktensor)
-
-        d = length(x.fmat)
-        t = length(x.lambda)
-
-        value = 0.0 
-
-        lowerX = [ zeros(t, t) for _ in 1:d ]
-        
-        compute_lower_triangles!(lowerX, x)
-
-        X = Symmetric.(lowerX, :L)
-
-        for j in 1:t, i in 1:t
-
-            value += maskprod(X, i, j)
-
-        end
-
-        return value
-
-    end
 
     @testset "Residual computation of linearly dependent factor matrices" begin
 

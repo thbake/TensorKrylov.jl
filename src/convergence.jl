@@ -6,19 +6,17 @@ mutable struct ConvergenceData{T}
     iterations             ::Vector{Int}
     relative_residual_norm ::Vector{T}
     projected_residual_norm::Vector{T}
-    spectraldata           ::Vector{SpectralData{T}}
+    spectraldata           ::SpectralData{T}
     orthogonality_data     ::Vector{T}
 
     function ConvergenceData{T}(nmax::Int) where T<:AbstractFloat
-
-        spectraldata = [ SpectralData{T}() for _ in 1:nmax]
 
         new(
             nmax,
             collect(1:nmax),
             zeros(nmax),
             zeros(nmax),
-            spectraldata,
+            SpectralData{T}(nmax),
             zeros(nmax))
 
     end
@@ -43,7 +41,7 @@ function Base.show(io::IO, convergencedata::ConvergenceData{T}) where T<:Abstrac
     println(" - Spectral data:           ", typeof(convergencedata.spectraldata))
     println(" - Orthogonality data:      ", typeof(convergencedata.orthogonality_data))
 
-    println("\nComputations ran for ",  convergencedata.niterations)
+    println("\nComputations ran for ",  convergencedata.niterations, " iterations.")
     println(
         "Achieved relative residual norm: ",
         convergencedata.relative_residual_norm[convergencedata.niterations]

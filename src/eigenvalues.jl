@@ -1,5 +1,5 @@
-export qr_algorithm,  next_coefficients!, sign_changes, initial_interval, 
-       bisection, analytic_eigenvalues, assemble_matrix
+export assemble_matrix,qr_algorithm,  next_coefficients!, sign_changes, initial_interval, 
+       bisection, analytic_eigenvalues 
 
 
 # Data structure d sets of Sturm sequences of polynomials
@@ -264,42 +264,68 @@ end
 
 mutable struct SpectralData{T}
 
-    λ_min::T
-    λ_max::T
-    κ::T
+    λ_min::Vector{T}
+    λ_max::Vector{T}
+    κ    ::Vector{T}
+    k    ::Int      # Current iteration
 
-    function SpectralData{T}() where T<:AbstractFloat
+    function SpectralData{T}(nmax::Int) where T<:AbstractFloat
 
-        new(Inf, Inf, Inf)
-
-    end
-
-    function SpectralData{T}(λ_min::T, λ_max::T, κ::T) where T <: AbstractFloat
-
-        new(λ_min, λ_max, κ)
+        new(fill(Inf, nmax), fill(Inf, nmax), fill(Inf, nmax), 1)
 
     end
 
-    function SpectralData{T}(::Int, ::Int, ::LanczosUnion{T}) where T<:AbstractFloat
+    function SpectralData{T}(::Int, ::Int, nmax::Int, ::LanczosUnion{T}) where T<:AbstractFloat
 
-        new(Inf, Inf, Inf)
+        SpectralData{T}(nmax)
 
     end
 
-    function SpectralData{T}(d::Int, n::Int, arnoldi::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+    function SpectralData{T}(d::Int, n::Int, nmax::Int, arnoldi::Type{TensorArnoldi{T}}) where T<:AbstractFloat
 
         A = Matrix(assemble_matrix(n, arnoldi))
         #κ = cond(eigvecs(A))^d
-        λ_min = minimum(eigvals(A)) * d
+        tmp = minimum(eigvals(A)) * d
 
-        new(λ_min, Inf, Inf)
+        λ_min = fill(tmp, nmax)
+        
+
+        new(λ_min, fill(nmax, Inf), fill(nmax, Inf), 1)
 
     end
 
 
 end
 
+Base.getindex(s::SpectralData{T}, k::Int) where T = s.λ_min[k], s.λ_max[k], s.κ[k]
+
+function Base.setindex!(
+    data     ::SpectralData{T},
+    iter_data::Tuple{T, T, T},
+    k        ::Int) where T  
+
+    data[k] = iter_data
+
+end
+
+function current_data(data::SpectralData{T}) where T 
+
+    k = data.k
+
+    return data.λ_min[k], data.λ_max[k], data.κ[k]
+
+end
+
+
 Base.copy(data::SpectralData{T}) where T = SpectralData{T}(data.λ_min, data.λ_max, data.κ)
+
+function Base.resize!(data::SpectralData{T}, k::Int) where T
+
+    resize!(data.λ_min, k)
+    resize!(data.λ_max, k)
+    resize!(data.κ,     k)
+
+end
 
 function display(data::SpectralData{T}) where T<:AbstractFloat
 
@@ -318,15 +344,15 @@ end
 
 function update_data!(data::SpectralData{T}, d::Int, n::Int, k::Int, ::LanczosUnion{T}) where T
 
-    data.λ_min, data.λ_max = analytic_eigenvalues(d, n, k)
-    data.κ                 = data.λ_max * inv(data.λ_min)
+    data.λ_min[k], data.λ_max[k] = analytic_eigenvalues(d, n, k)
+
+    data.κ[k] = data.λ_max[k] * inv(data.λ_min[k])
+    data.k    = k
      
 end
 
-function update_data!(data::SpectralData{T}, d::Int, n::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T
+function update_data!(::SpectralData{T}, ::Int, ::Int, ::Int, ::Type{TensorArnoldi{T}}) where T
 
-    #A          = Matrix(assemble_matrix(n , arnoldi))
-    #data.λ_min = minimum( abs.( eigvals( @view A[1:k, 1:k] ) ) ) * d
     return
 
 end

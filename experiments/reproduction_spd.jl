@@ -30,8 +30,8 @@ mutable struct Experiment{T}
 
         pkg_path = compute_package_directory()
 
-        complete_dir        = "experiments/data/" * datadir
-        files               = cd(readdir, joinpath(pkg_path, datadir))
+        complete_path        = "experiments/data/" * datadir
+        files               = cd(readdir, joinpath(pkg_path, complete_path))
         nfiles              = length(files)
         convergence_results = Vector{ConvergenceData{T}}(undef, nfiles)
 
@@ -48,7 +48,7 @@ mutable struct Experiment{T}
         for i in 1:length(sorted_files)
 
             df = CSV.read(
-                joinpath(complete_dir, sorted_files[i]),
+                joinpath(complete_path, sorted_files[i]),
                 DataFrame,
                 delim = ',',
                 types = column_types
@@ -81,7 +81,6 @@ end
 
 function get_iterations(experiment::Experiment{T}) where T<:AbstractFloat
 
-    #return [ experiment.conv_data_vector[i].iterations[2:2:end] for i in 1:length(experiment) ]
     return [ experiment.conv_data_vector[i].iterations for i in 1:length(experiment) ]
 
 end
@@ -155,17 +154,10 @@ function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) 
 
 end
 
-function deserizalize_from_file(filename::AbstractString) 
+function deserialize_from_file(filename::AbstractString) 
 
     complete_path = "experiments/data/serialized_data/" * filename
 
     return deserialize(complete_path)
 
 end
-
-
-
-
-
-    
-

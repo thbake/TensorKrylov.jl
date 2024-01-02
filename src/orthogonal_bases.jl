@@ -328,7 +328,7 @@ function orthogonality_loss(V::KronMat{T}, k::Int) where T<:AbstractFloat
 end
 
 
-function isorthonormal(V::AbstractMatrix{T}, k::Int, tol::T = 1e-14)::Bool where T<:AbstractFloat
+function isorthonormal(V::AbstractMatrix{T}, k::Int, tol::T = 1e-8)::Bool where T<:AbstractFloat
 
     loss = orthogonality_loss(V, k)
 

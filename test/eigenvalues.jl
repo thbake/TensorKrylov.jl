@@ -81,13 +81,6 @@ end
     h = inv(n + 1)
     A = inv(h^2) * SymTridiagonal(2ones(n), -ones(n))
 
-    function getextreme(v::Vector{T}) where T
-
-        first  = minimum(v)
-        second = maximum(v)
-
-        return first, second
-    end
 
     approx_eigvals = Vector{Tuple{Float64, Float64}}(undef, k)
     exact_eigvals  = Vector{Tuple{Float64, Float64}}(undef, k)
@@ -101,9 +94,8 @@ end
         
     end
 
-    display(approx_eigvals[1:5])
-    display(exact_eigvals[1:5])
 
+    @assert all( all(approx_eigvals[i] .≈ exact_eigvals[i]) for i in 1:k )
 
 end
      

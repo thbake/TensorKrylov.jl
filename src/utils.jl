@@ -513,7 +513,7 @@ end
 function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) where T<:AbstractFloat
     # b̃ = Vᵀb = ⨂ Vₛᵀ ⋅ ⨂ bₛ = ⨂ Vₛᵀbₛ
     
-    for s = 1:length(b̃)
+    for s in eachindex(b̃)
 
         # Update one entry of each component of b̃ by performing a single inner product 
         b̃[s][k] = dot(V[s], b[s])
@@ -559,6 +559,44 @@ function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, �
 
     end
 
+end
+
+function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T<:AbstractFloat
+
+    # Compute 
+
+    d = length(orders)
+
+    if d == 1
+
+        return A
+
+    elseif s == 1 && d > 1
+
+        return kron(recursivekronecker(A, s, orders[1:d-1]), I(orders[d]))
+
+    else
+
+        return kron(I(orders[1]), recursivekronecker(A, s - 1, orders[2:d]))
+
+    end
+
+end
+function explicit_kroneckersum(A::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat
+
+    orders = [ size(A[s], 1) for s in eachindex(A) ]
+
+    N = prod(orders)
+
+    K = zeros(N, N)
+
+    for s in eachindex(A)
+
+        K += recursivekronecker(A[s], s, orders)
+
+    end
+
+    return K
 end
 
 function exponentiate(A::AbstractMatrix{T}, γ::T) where T<:AbstractFloat

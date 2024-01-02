@@ -98,8 +98,8 @@ function tensor_krylov!(
     initial_orthonormalization!(tensor_decomp, b, tensor_decomp.orthonormalization)
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
-
-    spectraldata = SpectralData{T}(d, n, orthonormalization_type)
+    
+    #spectraldata = SpectralData{T}(d, n, nmax, orthonormalization_type)
     approxdata   = ApproximationData{T}(tol, orthonormalization_type)
     r_comp       = Inf
     r_norm       = Inf
@@ -112,14 +112,12 @@ function tensor_krylov!(
         H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
         columns                      = kth_columns(tensor_decomp.V, k)
 
-        # Update compressed right-hand side b̃ = Vᵀb
-        update_rhs!(b_minors, columns, b, k)
+        update_rhs!(b_minors, columns, b, k) # b̃ = Vᵀb
+        update_data!(convergence_data.spectraldata, d, n, k,      orthonormalization_type)
+        update_data!(approxdata,   convergence_data.spectraldata, orthonormalization_type)
+        #spectraldata.κ = distancetosingularity(principal_minors(tensor_decomp.H, k + 1, k))
 
-        update_data!(spectraldata, d, n, k,      orthonormalization_type)
-        update_data!(approxdata,   spectraldata, orthonormalization_type)
-        spectraldata.κ = distancetosingularity(H_minors)
-
-        y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min) # Approximate solution of compressed system
+        y  = solve_compressed_system(H_minors, b_minors, approxdata, convergence_data.spectraldata.λ_min[k]) # Hy = b̃ 
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
@@ -143,8 +141,7 @@ function tensor_krylov!(
         rel_res_norm   = (r_norm / b_norm)
         convergence_data.relative_residual_norm[k]  = rel_res_norm
         convergence_data.projected_residual_norm[k] = r_comp
-        convergence_data.spectraldata[k]            = copy(spectraldata)
-        convergence_data.orthogonality_data[k]      = orthogonality_loss(V_minors, k)
+        convergence_data.orthogonality_data[k]      = orthogonality_loss(first(V_minors), k)
 
 
         process_log(convergence_data, k, mode, orthonormalization_type)

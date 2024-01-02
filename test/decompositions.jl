@@ -10,25 +10,8 @@ using LinearAlgebra
     A = inv(h^2) * SymTridiagonal( 2ones(n), -1ones(n - 1) )
     b = rand(n)
 
-    # Initialize Arnoldi and Lanczos decompositions
-    
-    arnoldi = Arnoldi{Float64}(rand(n, n), zeros(n, k + 1), zeros(k + 1, k), b)
-    lanczos = Lanczos{Float64}(A, zeros(n, k), zeros(k, k), b)
-
-    for j in 1:k
-
-        orthonormal_basis_vector!(arnoldi, j)
-
-    end
-    
-
-    for j in 1:k-1
-
-        orthonormal_basis_vector!(lanczos, j)
-
-        @test isposdef(lanczos.H[1:j, 1:j])
-
-    end
+    arnoldi = arnoldi_algorithm(A, b, k)
+    lanczos = lanczos_algorithm(A, b, k)
 
     @test isorthonormal(arnoldi, k)
     @test isorthonormal(lanczos, k-1)
@@ -38,11 +21,11 @@ end
 @testset "Multiple Arnoldi and Lanczos decomposition steps" begin
 
     d  = 5
-    nₛ = 200
-    h  = inv(nₛ + 1)
-    Aₛ = inv(h^2) * Tridiagonal( -1ones(nₛ - 1) , 2ones(nₛ), -1ones(nₛ - 1) )
+    n = 200
+
+    Aₛ = assemble_matrix(n, TensorLanczos{Float64})
     A  = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
-    b  = [ rand(nₛ) for _ in 1:d ]
+    b  = [ rand(n) for _ in 1:d ]
 
     k = 50
 
@@ -50,8 +33,8 @@ end
     t_arnoldi = TensorArnoldi{Float64}(A)
     t_lanczos = TensorLanczos{Float64}(A)
 
-    initial_orthonormalization!(t_arnoldi, b, Arnoldi)
-    initial_orthonormalization!(t_lanczos, b, Lanczos)
+    initial_orthonormalization!(t_arnoldi, b, Arnoldi{Float64})
+    initial_orthonormalization!(t_lanczos, b, Lanczos{Float64})
 
     for j in 2:k
 

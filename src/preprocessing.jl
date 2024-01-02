@@ -91,14 +91,16 @@ function compute_rank!(
     approxdata::ApproximationData{T},
     spectraldata::SpectralData{T}) where T<:AbstractFloat
 
+    λ_min, _, κ = current_data(spectraldata)
+
     rank   = 1
-    bound  = nonsymmetric_bound(spectraldata.κ, spectraldata.λ_min, rank) 
+    bound  = nonsymmetric_bound(κ, λ_min, rank) 
 
     while bound > approxdata.tol
 
         rank += 1
 
-        bound = nonsymmetric_bound(spectraldata.κ, spectraldata.λ_min, rank)
+        bound = nonsymmetric_bound(κ, λ_min, rank)
 
     end
 
@@ -174,7 +176,8 @@ function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralDa
 
     package_dir                = compute_package_directory()
     approxdata.df              = compute_dataframe(package_dir)
-    compute_rank!(approxdata, spectraldata.κ)
+    _, _, κ                    = current_data(spectraldata)
+    compute_rank!(approxdata, κ)
     exponential_sum_parameters!(approxdata, package_dir)
 
 end

@@ -1,34 +1,39 @@
-using TensorKrylov
-using Test
-using Random
+module TestSets
 
-Random.seed!(12345)
+    using TensorKrylov
+    using Test
+    using Random
 
+    include("test_utils.jl")
 
-@testset "TensorKrylov tests" begin 
+    Random.seed!(12345)
 
-    #@testset "Preprocessing tests" begin
-    #    include("preprocessing.jl")
-    #end
+    @testset "TensorKrylov tests" begin 
 
-    #@testset "Decomposition tests" begin
-    #   include("decompositions.jl")
-    #end
+        @testset "Preprocessing tests" begin
+            include("preprocessing.jl")
+        end
 
-    @testset "Eigenvalue tests" begin
-        include("eigenvalues.jl")
-    end
+        @testset "Decomposition tests" begin
+           include("decompositions.jl")
+        end
 
-    #@testset "Kronecker product structures" begin
-    #    include("tensor_struct.jl")
-    #end
+        @testset "Eigenvalue tests" begin
+            include("eigenvalues.jl")
+        end
 
-    #@testset "Utils tests" begin
-    #    include("utils.jl")
-    #end
+        #@testset "Kronecker product structures" begin
+        #    include("tensor_struct.jl")
+        #end
 
-    @testset "Tensor Krylov subspace method tests" begin
-        include("tensor_krylov_method.jl")
+        @testset "Utils tests" begin
+            include("utils.jl")
+        end
+
+        @testset "Tensor Krylov subspace method tests" begin
+            include("tensor_krylov_method.jl")
+        end
+
     end
 
 end
