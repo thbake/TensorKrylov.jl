@@ -21,6 +21,7 @@ mutable struct ConvergenceData{T}
 
     end
 
+
 end
 
 function Base.resize!(convergencedata::ConvergenceData{T}, k::Int) where T<:AbstractFloat

@@ -47,7 +47,7 @@ function Base.getindex(collection::VectorCollection{T}, multiindex::Matrix{<:Int
 
 end
 
-function Base.setindex!(collection::VectorCollection{T}, M::Matrix{T}, i::Int) where T<:AbstractFloat
+function Base.setindex!(collection::VectorCollection{T}, M::Matrix{T}, i::Int) where T
 
     1 <= i <= length(collection.𝖳) || throw(BoundsError(collection, i))
 
@@ -76,14 +76,14 @@ struct KroneckerMatrix{T} <: MatrixCollection{T}
     
     𝖳::Vector{<:AbstractMatrix{T}} # We only store the d matrices explicitly in a vector.
 
-    function KroneckerMatrix{T}(Aₛ::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat # Constructor with vector of matrix coefficients
+    function KroneckerMatrix{T}(Aₛ::Vector{<:AbstractMatrix{T}}) where T# Constructor with vector of matrix coefficients
 
         new(Aₛ)
 
     end
 
 
-    function KroneckerMatrix{T}(orders::Array{Int}) where T<:AbstractFloat
+    function KroneckerMatrix{T}(orders::Array{Int}) where T
 
         new([ zeros(orders[s], orders[s]) for s in 1:length(orders) ])
 
@@ -91,7 +91,7 @@ struct KroneckerMatrix{T} <: MatrixCollection{T}
 
 end
 
-function Base.show(io::IO, A::KroneckerMatrix{T}) where T<:AbstractFloat
+function Base.show(io::IO, A::KroneckerMatrix{T}) where T
 
     d = length(A)
     n = size(A[1], 1)
@@ -129,31 +129,31 @@ function Base.size(KM::KroneckerMatrix{T})::Array{Tuple{Int, Int}} where T
     return factor_sizes
 end
 
-function kronproddot(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
+function kronproddot(v::AbstractArray{<:AbstractArray{T}}) where T
 
     return prod( dot(v[s], v[s]) for s in 1:length(v) ) 
 
 end
 
-function kronprodnorm(v::AbstractArray{<:AbstractArray{T}}) where T<:AbstractFloat
+function kronprodnorm(v::AbstractArray{<:AbstractArray{T}}) where T
 
     return sqrt( kronproddot(v) )
 
 end
 
-function principal_minors(v::AbstractArray{<:AbstractArray{T}}, i::Int) where T<:AbstractFloat
+function principal_minors(v::AbstractArray{<:AbstractArray{T}}, i::Int) where T
 
     return [ @view(v[s][1:i]) for s in 1:length(v)]
 
 end
 
-function principal_minors(KM::KroneckerMatrix{T}, i::Int) where T<:AbstractFloat
+function principal_minors(KM::KroneckerMatrix{T}, i::Int) where T
 
     return KroneckerMatrix{T}( [ @view(KM[s][1:i, 1:i]) for s in 1:length(KM)] )
 
 end
 
-function principal_minors(KM::KroneckerMatrix{T}, i::Int, j::Int) where T<:AbstractFloat
+function principal_minors(KM::KroneckerMatrix{T}, i::Int, j::Int) where T
 
     return KroneckerMatrix{T}( [ @view(KM[s][1:i, 1:j]) for s in 1:length(KM)] )
 
@@ -200,7 +200,7 @@ function Base.getindex(CP::ktensor, i::Int)
 
 end
 
-function LinearAlgebra.mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{<:AbstractVector{T}}, x::ktensor) where T <: AbstractFloat
+function LinearAlgebra.mul!(result::Vector{<:AbstractMatrix{T}}, y::Vector{<:AbstractVector{T}}, x::ktensor) where T 
 
     # Compute product between elementary tensor and factor matrices of Kruskal tensor.
     nᵢ = ndims(x)
@@ -240,7 +240,7 @@ end
 function mul!(
         result::Vector{<:AbstractMatrix{T}},
         x::Vector{<:AbstractVector{T}},
-        A::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat
+        A::Vector{<:AbstractMatrix{T}}) where T 
 
     # Compute product between vector of collection of row vectors and matrices.
     nᵢ = length(result)

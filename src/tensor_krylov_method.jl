@@ -12,7 +12,7 @@ function log_convergence_data(
     debuglogger::ConsoleLogger,
     convergencedata::ConvergenceData{T},
     k::Int,
-    ::Type{LanczosUnion{T}}) where T<:AbstractFloat
+    ::Type{LanczosUnion{T}}) where T
 
     with_logger(debuglogger) do
         @debug "Condition: " convergencedata.spectraldata[k].κ
@@ -26,7 +26,7 @@ function log_convergence_data(
     debuglogger::ConsoleLogger,
     convergencedata::ConvergenceData{T},
     k::Int,
-    ::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+    ::Type{TensorArnoldi{T}}) where T
 
     with_logger(debuglogger) do
 
@@ -37,13 +37,13 @@ function log_convergence_data(
 
 end
 
-function process_log(::ConvergenceData{T}, k::Int, ::Type{SilentMode}, ::Type{<:TensorDecomposition{T}}) where T<:AbstractFloat
+function process_log(::ConvergenceData{T}, k::Int, ::Type{SilentMode}, ::Type{<:TensorDecomposition{T}}) where T
 
     return
 
 end
 
-function process_log(convergencedata::ConvergenceData{T}, k::Int, ::Type{DebugMode}, orthonormalization_type::Type{<:TensorDecomposition{T}}) where T<:AbstractFloat
+function process_log(convergencedata::ConvergenceData{T}, k::Int, ::Type{DebugMode}, orthonormalization_type::Type{<:TensorDecomposition{T}}) where T
 
     debuglogger = ConsoleLogger(stdout, Logging.Debug)
 
@@ -85,7 +85,7 @@ function tensor_krylov!(
     tol                    ::T,
     nmax                   ::Int,
     orthonormalization_type::Type{<:TensorDecomposition{T}},
-    mode                   ::Type{<:Mode} = SilentMode) where T <: AbstractFloat
+    mode                   ::Type{<:Mode} = SilentMode) where T 
 
     d      = length(A)
     n      = dimensions(A)[1]

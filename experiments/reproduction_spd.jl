@@ -5,7 +5,6 @@ using SparseArrays
 using DataFrames
 using CSV
 using Random
-using Sockets
 using Serialization
 
 Random.seed!(12345)
@@ -150,14 +149,33 @@ function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) 
 
     complete_path = "experiments/data/serialized_data/" * filename
 
-    serialize(complete_path, experiment)
+    open(complete_path, "w") do file
+
+        s = Serializer(file)
+
+        serialize(s, experiment)
+
+    end
+
 
 end
 
-function deserialize_from_file(filename::AbstractString) 
+function deserialize_to_file(filename::AbstractString) 
 
     complete_path = "experiments/data/serialized_data/" * filename
 
-    return deserialize(complete_path)
+    experiment = open(complete_path, "r") do file
 
+        s = Deserializer(file)
+
+        deserialize(s, experiment)
+
+    end
+
+    return experiment
+
+        
+
+
+     
 end

@@ -351,9 +351,15 @@ function update_data!(data::SpectralData{T}, d::Int, n::Int, k::Int, ::LanczosUn
      
 end
 
-function update_data!(::SpectralData{T}, ::Int, ::Int, ::Int, ::Type{TensorArnoldi{T}}) where T
+function update_data!(data::SpectralData{T}, d::Int, n::Int, k::Int, arnoldi::Type{TensorArnoldi{T}}) where T
 
-    return
+
+    A = Matrix(assemble_matrix(n, arnoldi))
+    #κ = cond(eigvecs(A))^d
+    tmp = minimum(eigvals(A)) * d
+
+    data.λ_min[k] = tmp
+    data.k = k
 
 end
         

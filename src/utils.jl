@@ -23,7 +23,7 @@ struct TensorizedSystem{T}
         n                     ::Int,
         d                     ::Int,
         orthogonalization_type::Type{<:TensorDecomposition{T}},
-        normalize_rhs         ::Bool = true) where T<:AbstractFloat
+        normalize_rhs         ::Bool = true) where T
 
         Aₛ = assemble_matrix(n, orthogonalization_type)
         bₛ = rand(n)
@@ -42,7 +42,7 @@ struct TensorizedSystem{T}
 
 end
 
-function display(system::TensorizedSystem{T}, name="TensorizedSystem") where T<:AbstractFloat
+function display(system::TensorizedSystem) 
 
     println(
         "Tensorized linear system of order d = ",
@@ -54,13 +54,13 @@ function display(system::TensorizedSystem{T}, name="TensorizedSystem") where T<:
 
 end
 
-function Base.show(io::IO, system::TensorizedSystem{T}) where T<:AbstractFloat
+function Base.show(io::IO, system::TensorizedSystem) 
 
     display(system)
 
 end
 
-function solve_tensorized_system(system::TensorizedSystem{T}, nmax::Int, tol::T = 1e-9) where T<:AbstractFloat
+function solve_tensorized_system(system::TensorizedSystem{T}, nmax::Int, tol::T = 1e-9) where T
 
     convergencedata = ConvergenceData{Float64}(nmax)
 
@@ -89,7 +89,7 @@ function initialize_cores(d::Int, m::Int, n::Int, r1::Int, r2::Int)
 
 end
 
-function initializeTToperator(Aₛ::AbstractMatrix{T}, d::Int) where T<:AbstractFloat
+function initializeTToperator(Aₛ::AbstractMatrix{T}, d::Int) where T
 
     n = size(Aₛ, 1)
 
@@ -113,7 +113,7 @@ function initializeTToperator(Aₛ::AbstractMatrix{T}, d::Int) where T<:Abstract
 
 end
 
-function initialize_rhs(b::KronProd{T}, d::Int) where T<:AbstractFloat
+function initialize_rhs(b::KronProd{T}, d::Int) where T
 
     
     cores = [ zeros(1, size(b[s], 1), 1, 1) for s in 1:d ]
@@ -166,7 +166,7 @@ function canonicaltoTT(x::ktensor)
 
 end
 
-function TTcompressedresidual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T<:AbstractFloat
+function TTcompressedresidual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T
 
     py"""
 
@@ -243,7 +243,7 @@ function maskprod(A::FMatrices{T}, i::Int, j::Int) where T <: AbstractFloat
 end
 
 
-function maskprod(x::AbstractVector{<:AbstractVector{T}}, i::Int) where T<:AbstractFloat
+function maskprod(x::AbstractVector{<:AbstractVector{T}}, i::Int) where T
 
     return prod(getindex.(x, i))
 
@@ -255,7 +255,7 @@ function maskprod(x::FMatrices{T}, i::Int) where T <: AbstractFloat
 
 end
 
-function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) where T<:AbstractFloat
+function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) where T
 
     for s = 1:length(LowerTriangles)
 
@@ -265,7 +265,7 @@ function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) wher
 
 end
 
-function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T}) where T<:AbstractFloat
+function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T}) where T
 
     for s = 1:length(LowerTriangles)
 
@@ -303,7 +303,7 @@ function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) w
 end
 
 
-function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T<:AbstractFloat
+function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T
 
     # Compute the matrix vector products 
     #   
@@ -330,19 +330,19 @@ function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T<:Abstr
 
 end
 
-function evalmvnorm(Λ::AbstractMatrix{T}, Y::FMatrices{T}, YZ::FMatrices{T}, Z_inner::FMatrices{T}, i::Int, j::Int, mask_s, mask_r) where T<:AbstractFloat
+function evalmvnorm(Λ::AbstractMatrix{T}, Y::FMatrices{T}, YZ::FMatrices{T}, Z_inner::FMatrices{T}, i::Int, j::Int, mask_s, mask_r) where T
 
     return Λ[i, j] * maskprod( Y[.!(mask_s .|| mask_r)], i, j ) *  maskprod(YZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
 
 end
 
-function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T<:AbstractFloat
+function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T
 
     return y.lambda[i] * maskprod(bZ[mask], i) * maskprod(bY[.!mask], i)
 
 end
 
-function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMatrices{T}) where T<:AbstractFloat
+function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMatrices{T}) where T
 
     Λ_complete = Symmetric(Λ, :L)
     X          = Symmetric.(lowerX, :L)
@@ -381,7 +381,7 @@ function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMat
     
 end
 
-function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T<:AbstractFloat
+function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T
 
     d   = ndims(x)
     t   = ncomponents(x)
@@ -424,7 +424,7 @@ function compressed_residual(
     Λ ::AbstractMatrix{T},
     H ::KronMat{T},
     y ::ktensor,
-    b ::KronProd{T}) where T <:AbstractFloat
+    b ::KronProd{T}) where T 
 
     # We know that 
     
@@ -451,7 +451,7 @@ function residual_norm!(
     y                  ::ktensor,
     𝔎                  ::Vector{Int},
     subdiagonal_entries::Vector{T},
-    b                  ::KronProd{T}) where T<:AbstractFloat
+    b                  ::KronProd{T}) where T
     
     # Compute squared norm of the residual according to Lemma 3.4 of paper.
     
@@ -490,7 +490,7 @@ function residual_norm!(
 end
 
 
-function normalize!(rhs::KronProd{T}) where T<:AbstractFloat
+function normalize!(rhs::KronProd{T}) where T
 
     for i in 1:length(rhs)
 
@@ -500,7 +500,7 @@ function normalize!(rhs::KronProd{T}) where T<:AbstractFloat
 
 end
 
-function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T}) where T<:AbstractFloat
+function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T}) where T
 
         b̃        = [ zeros( size(b[s]) )  for s in eachindex(b) ]
         b_minors = principal_minors(b̃, 1)
@@ -510,7 +510,7 @@ function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T}) where T<:Abstr
         return b̃
 end
 
-function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) where T<:AbstractFloat
+function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) where T
     # b̃ = Vᵀb = ⨂ Vₛᵀ ⋅ ⨂ bₛ = ⨂ Vₛᵀbₛ
     
     for s in eachindex(b̃)
@@ -522,7 +522,7 @@ function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) w
 
 end
 
-function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:AbstractFloat
+function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T
 
     x.lambda = copy(y.lambda)
 
@@ -534,7 +534,7 @@ function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T<:Abstr
 
 end
 
-function compute_minors(tensor_decomp::TensorDecomposition{T}, rhs::KronProd{T}, n::Int, k::Int) where T<:AbstractFloat
+function compute_minors(tensor_decomp::TensorDecomposition{T}, rhs::KronProd{T}, n::Int, k::Int) where T
 
         H_minors = principal_minors(tensor_decomp.H, k)
         V_minors = principal_minors(tensor_decomp.V, n, k)
@@ -544,7 +544,7 @@ function compute_minors(tensor_decomp::TensorDecomposition{T}, rhs::KronProd{T},
     
 end
 
-function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, γ::T, k::Int) where T<:AbstractFloat
+function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, γ::T, k::Int) where T
 
     tmp = Matrix(copy(A[1]))
 
@@ -561,7 +561,7 @@ function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, �
 
 end
 
-function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T<:AbstractFloat
+function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T
 
     # Compute 
 
@@ -582,7 +582,8 @@ function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) w
     end
 
 end
-function explicit_kroneckersum(A::Vector{<:AbstractMatrix{T}}) where T <: AbstractFloat
+
+function explicit_kroneckersum(A::Vector{<:AbstractMatrix{T}}) where T 
 
     orders = [ size(A[s], 1) for s in eachindex(A) ]
 
@@ -599,7 +600,7 @@ function explicit_kroneckersum(A::Vector{<:AbstractMatrix{T}}) where T <: Abstra
     return K
 end
 
-function exponentiate(A::AbstractMatrix{T}, γ::T) where T<:AbstractFloat
+function exponentiate(A::AbstractMatrix{T}, γ::T) where T
 
     tmp    = zeros(size(A))
     result = zeros(size(A))
