@@ -160,15 +160,15 @@ function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) 
 
 end
 
-function deserialize_to_file(filename::AbstractString) where T
+function deserialize_to_file(filename::AbstractString) 
 
     complete_path = "experiments/data/serialized_data/" * filename
 
     experiment = open(complete_path, "r") do file
 
-        s = Deserializer(file)
+        s = Serializer(file)
 
-        deserialize(s, Experiment{T})
+        deserialize(s)
 
     end
 
