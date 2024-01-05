@@ -194,7 +194,7 @@ end
 
 
 
-function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T <: AbstractFloat
+function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T 
 
     # Lower triangular matrix representing the outer product of a vector with itself
 
@@ -208,7 +208,7 @@ function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T <: Abs
 
 end
 
-function cp_tensor_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T <: AbstractFloat
+function cp_tensor_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T 
 
     # Given a collection of lower triangular matrices containing all values of 
     # λ⁽ˢ⁾corresponding to each factor matrix in the CP-decomposition of the 
@@ -234,7 +234,7 @@ function skipindex(index::Int, range::UnitRange{Int})
 
 end
 
-function maskprod(A::FMatrices{T}, i::Int, j::Int) where T <: AbstractFloat
+function maskprod(A::FMatrices{T}, i::Int, j::Int) where T 
 
     # Compute product of entries (i,j) of the matrices contained in A.
 
@@ -249,7 +249,7 @@ function maskprod(x::AbstractVector{<:AbstractVector{T}}, i::Int) where T
 
 end
 
-function maskprod(x::FMatrices{T}, i::Int) where T <: AbstractFloat
+function maskprod(x::FMatrices{T}, i::Int) where T 
 
     return prod(getindex.(x, 1, i)) 
 
@@ -275,7 +275,7 @@ function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T})
 
 end
 
-function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) where T <: AbstractFloat
+function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) where T 
 
     # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
     #
@@ -330,23 +330,39 @@ function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T
 
 end
 
-function evalmvnorm(Λ::AbstractMatrix{T}, Y::FMatrices{T}, YZ::FMatrices{T}, Z_inner::FMatrices{T}, i::Int, j::Int, mask_s, mask_r) where T
+function mask_matrix_collection(
+    YZ::FMatrices{T},
+    mask_s::BitVector, mask_r::BitVector, 
+    i::Int, j::Int) where T
 
-    return Λ[i, j] * maskprod( Y[.!(mask_s .|| mask_r)], i, j ) *  maskprod(YZ[mask_s .⊻ mask_r], i, j) * maskprod(Z_inner[mask_s .&& mask_r], i, j)
+    mask = mask_s .⊻ mask_r
+    
+    return !any(mask) ? 1.0 : maskprod(YZ[mask_s], i, j) * maskprod(YZ[mask_r], j, i)
 
 end
 
-function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T
+function evalmvnorm(
+    Λ      ::AbstractMatrix{T},
+    Y      ::FMatrices{T},
+    YZ     ::FMatrices{T},
+    Z_inner::FMatrices{T},
+    i::Int, j::Int, 
+    mask_s, mask_r) where T
 
-    return y.lambda[i] * maskprod(bZ[mask], i) * maskprod(bY[.!mask], i)
+    α  = maskprod(Y[.!(mask_s .|| mask_r)], i, j)
+    β = mask_matrix_collection(YZ, mask_s, mask_r, i, j)
+    γ = maskprod(Z_inner[mask_s .&& mask_r], i, j)
+
+    return Λ[i, j] * α * β * γ
 
 end
+
 
 function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMatrices{T}) where T
 
     Λ_complete = Symmetric(Λ, :L)
     X          = Symmetric.(lowerX, :L)
-    Z_inner    = [ Z[s]'Z[s] for s in 1:length(Z) ]
+    Z_inner    = [ Z[s]'Z[s]      for s in 1:length(Z)]
     XZ         = [ x.fmat[s]'Z[s] for s in 1:ndims(x) ]
 
     d    = length(lowerX)
@@ -379,6 +395,12 @@ function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMat
 
     return MVnorm
     
+end
+
+function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T
+
+    return y.lambda[i] * maskprod(bZ[mask], i) * maskprod(bY[.!mask], i)
+
 end
 
 function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T

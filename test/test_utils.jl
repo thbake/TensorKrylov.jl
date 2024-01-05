@@ -37,6 +37,63 @@ function initialize_matrix_products(M, x)
 
 end
 
+function exact_solution(M::KronMat, x::ktensor)
+
+    M_kroneckersum = kroneckersum(M.𝖳...)
+    x_explicit     = kroneckervectorize(x)
+    
+    return M_kroneckersum * x_explicit
+
+end
+
+function error_MVnorm(
+    x       ::ktensor,
+    Λ       ::AbstractMatrix{T},
+    lowerX  ::Vector{<:AbstractMatrix{T}},
+    Z       ::Vector{<:AbstractMatrix{T}},
+    solution::Vector{T}) where T
+    
+    exact_efficient_MVnorm = MVnorm(x, Λ, lowerX, Z) # Compute ||Mx||²
+    exactMVnorm            = dot(solution, solution)
+    relative_error         = (exact_efficient_MVnorm - exactMVnorm) / exactMVnorm 
+
+    return relative_error
+
+end
+
+function error_tensorinnerprod(
+    Z::Vector{Matrix{T}},
+    x::ktensor,
+    b::KronProd{T},
+    solution::Vector{T}) where T
+
+    b_explicit      = kron(b...)
+    approxinnerprod = tensorinnerprod(Z, x, b)
+    exactinnerprod  = dot(solution, b_explicit) # Compute <Mx, b>₂
+    relative_error  = abs(exactinnerprod - approxinnerprod) / exactinnerprod 
+
+    return relative_error
+
+end
+
+function error_compressed_residualnorm(
+    b       ::KronProd{T},
+    solution::Vector{T},
+    Λ       ::AbstractMatrix{T},
+    lowerX  ::Vector{Matrix{T}},
+    M       ::KronMat{T},
+    x       ::ktensor) where T
+
+    # Explicit compressed residual norm
+    exp_comp_res_norm    = norm(kron(b...) - solution)^2
+    approx_comp_res_norm = compressed_residual(lowerX, Λ, M, x, b)
+    relative_error       = (exp_comp_res_norm - approx_comp_res_norm) * inv(exp_comp_res_norm)
+
+    return relative_error
+
+end
+
+
 
 function tensorsquarednorm(x::ktensor)
 

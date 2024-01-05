@@ -55,7 +55,7 @@ function solve_compressed_system(
     H         ::KronMat{T},
     b         ::KronProd{T},
     approxdata::ApproximationData{T},
-    λ_min     ::T) where T <: AbstractFloat
+    λ_min     ::T) where T 
 
     # Since we are considering a canonical decomposition the tensor rank of yₜ
     # is equal to 

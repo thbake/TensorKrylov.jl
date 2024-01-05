@@ -21,7 +21,7 @@ function Base.length(tensor_decomp::TensorDecomposition)
 
 end
 
-function Base.getindex(tensordecomp::TensorDecomposition{T}, i::Int) where T<:AbstractFloat
+function Base.getindex(tensordecomp::TensorDecomposition{T}, i::Int) where T
 
     1 <= i <= length(tensordecomp) || throw(BoundsError(tensordecomp, i))
 
@@ -39,7 +39,7 @@ mutable struct Arnoldi{T} <: Decomposition{T}
                 A::MatrixView{T},
                 V::MatrixView{T},
                 H::MatrixView{T},
-                b::AbstractArray{T}) where T<:AbstractFloat
+                b::AbstractArray{T}) where T
 
         initialize_decomp!(V, b)
 
@@ -50,7 +50,7 @@ mutable struct Arnoldi{T} <: Decomposition{T}
     function Arnoldi{T}(
                 A::MatrixView{T},
                 V::MatrixView{T},
-                H::MatrixView{T}) where T<:AbstractFloat
+                H::MatrixView{T}) where T
 
         new(A, V, H)
 
@@ -70,7 +70,7 @@ mutable struct Lanczos{T} <: Decomposition{T}
                 A::MatrixView{T},
                 V::MatrixView{T},
                 H::MatrixView{T},
-                b::AbstractArray{T}) where T<:AbstractFloat
+                b::AbstractArray{T}) where T
 
         # β₀ = 0, v₀ = 0
         β = 0.0
@@ -86,7 +86,7 @@ mutable struct Lanczos{T} <: Decomposition{T}
                 A::MatrixView{T},
                 V::MatrixView{T},
                 H::MatrixView{T},
-                k::Int) where T<:AbstractFloat
+                k::Int) where T
 
         β = H[k - 1, k]
         v = @view(V[:, k - 1])
@@ -108,7 +108,7 @@ mutable struct LanczosReorth{T} <: Decomposition{T}
                 A::MatrixView{T},
                 V::MatrixView{T},
                 H::MatrixView{T},
-                b::AbstractArray{T}) where T<:AbstractFloat
+                b::AbstractArray{T}) where T
                 
         lanczos = Lanczos{T}(A, V, H, b)
 
@@ -120,7 +120,7 @@ mutable struct LanczosReorth{T} <: Decomposition{T}
                 A::MatrixView{T},
                 V::MatrixView{T},
                 H::MatrixView{T},
-                k::Int) where T<:AbstractFloat
+                k::Int) where T
 
         lanczos = Lanczos{T}(A, V, H, k)
 
@@ -130,7 +130,7 @@ mutable struct LanczosReorth{T} <: Decomposition{T}
 
 end
 
-function initialize_decomp!(V::MatrixView{T}, b::AbstractArray{T}) where T<:AbstractFloat
+function initialize_decomp!(V::MatrixView{T}, b::AbstractArray{T}) where T
 
         # Normalize first basis vector
 
@@ -145,7 +145,7 @@ mutable struct TensorArnoldi{T} <: TensorDecomposition{T}
     H::KroneckerMatrix{T} # Upper Hessenberg matrix
     orthonormalization::Type{Arnoldi{T}}
 
-    function TensorArnoldi{T}(A::KroneckerMatrix{T}) where T<:AbstractFloat
+    function TensorArnoldi{T}(A::KroneckerMatrix{T}) where T
 
         V = KroneckerMatrix{T}(dimensions(A))
         H = KroneckerMatrix{T}(
@@ -168,7 +168,7 @@ mutable struct TensorLanczos{T} <: TensorDecomposition{T}
     H::KroneckerMatrix{T} # Upper Hessenberg matrix
     orthonormalization::Type{Lanczos{T}}
 
-    function TensorLanczos{T}(A::KroneckerMatrix{T}) where T<:AbstractFloat
+    function TensorLanczos{T}(A::KroneckerMatrix{T}) where T
 
         V = KroneckerMatrix{T}(dimensions(A))
         H = KroneckerMatrix{T}(
@@ -190,7 +190,7 @@ mutable struct TensorLanczosReorth{T} <: TensorDecomposition{T}
     H::KroneckerMatrix{T} # Upper Hessenberg matrix
     orthonormalization::Type{LanczosReorth{T}}
 
-    function TensorLanczosReorth{T}(A::KroneckerMatrix{T}) where T<:AbstractFloat
+    function TensorLanczosReorth{T}(A::KroneckerMatrix{T}) where T
 
         V = KroneckerMatrix{T}(dimensions(A))
         H = KroneckerMatrix{T}(
@@ -207,7 +207,7 @@ end
 
 const LanczosUnion{T} = Union{Type{TensorLanczos{T}}, Type{TensorLanczosReorth{T}}}
 
-function update_subdiagonals!(H::AbstractMatrix{T}, k::Int, β::T) where T<:AbstractFloat
+function update_subdiagonals!(H::AbstractMatrix{T}, k::Int, β::T) where T
 
     indices = [CartesianIndex(k + 1, k), CartesianIndex(k, k + 1)]
 
@@ -215,7 +215,7 @@ function update_subdiagonals!(H::AbstractMatrix{T}, k::Int, β::T) where T<:Abst
 
 end
 
-#function orthonormal_basis_vector!(decomposition::Decomposition{T}, k::Int, ::MGS) where T<:AbstractFloat
+#function orthonormal_basis_vector!(decomposition::Decomposition{T}, k::Int, ::MGS) where T
 #
 #    v = zeros( size(decomposition.A, 1) )
 #
