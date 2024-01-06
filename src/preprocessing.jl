@@ -85,7 +85,7 @@ function compute_rank!(approxdata::ApproximationData{T}, κ::T) where T<:Abstrac
 
 end
 
-nonsymmetric_bound(κ::T, λ::T, rank::Int) where T = 2.75 * inv(λ) * exp(-π * sqrt(rank))
+nonsymmetric_bound(κ::T, λ::T, rank::Int) where T = 2.75 * inv(λ) * exp(-π * sqrt(rank / 2))
 
 function compute_rank!(
     approxdata::ApproximationData{T},

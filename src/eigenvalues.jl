@@ -356,7 +356,7 @@ function update_data!(data::SpectralData{T}, d::Int, n::Int, k::Int, arnoldi::Ty
 
     A = Matrix(assemble_matrix(n, arnoldi))
     #κ = cond(eigvecs(A))^d
-    tmp = minimum(eigvals(A)) * d
+    tmp = minimum(eigvals(@view A[1:k, 1:k])) * d
 
     data.λ_min[k] = tmp
     data.k = k

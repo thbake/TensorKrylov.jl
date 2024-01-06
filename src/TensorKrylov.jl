@@ -1,6 +1,6 @@
 module TensorKrylov
     
-    using LinearAlgebra, TensorToolbox, Kronecker, SparseArrays, LinearSolve, Logging
+    using LinearAlgebra, TensorToolbox, Kronecker, SparseArrays, Logging
     import LinearAlgebra: norm, mul!
 
     # Tensor approximations

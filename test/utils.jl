@@ -40,6 +40,51 @@ using TensorKrylov, Test, SparseArrays
 
 end
 
+@testset "Test data updates at each iterative step" begin
+
+    @testset "Update right-hand side" begin
+
+        d  = 2
+        n  = 20
+        k  = 10
+        bs = rand(n)
+        b  = [ bs for _ in 1:d ]
+        b̃  = [ zeros(n) for _ in eachindex(b) ]
+        V  = KronMat{Float64}([ rand(n, k) for _ in 1:d ])
+
+        @test test_update_rhs(b̃, V, b, k)
+        
+    end
+
+    #@testset "Update spectral data"
+    
+end
+
+@testset "Compressed system solution" begin
+
+    d    = 2
+    n    = 4
+    rank = 2
+    Hs = diagm( log.( ones(n) ) )              # exp(Hs) = I(n)
+    H  = KronMat{Float64}([ Hs for _ in 1:d ])
+    b  = [ ones(n) for _ in 1:d ]              # exp(Hs) * bs = [1, ..., 1]ᵀ
+    y = ktensor(ones(rank), [ ones(n, rank) for _ in 1:d ])
+
+
+    @testset "Matrix exponential vector" begin
+
+        for k = 1:rank
+
+            matrix_exponential_vector!(y, H, b, 1.0, k) 
+
+        end
+
+        @test all( y.fmat[s] == ones(n, rank) for s in 1:d )
+
+    end
+
+end
+
 @testset "Compressed residual computations" begin
 
     @testset "Residual computation in symmetric case" begin

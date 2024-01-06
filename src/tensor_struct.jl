@@ -1,7 +1,6 @@
 export VectorCollection, MatrixCollection, KroneckerMatrix
 export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, 
-       principal_minors, explicit_kroneckersum, recursivekronecker, kth_columns,
-       kroneckervectorize, mul!
+       principal_minors, kth_columns, kroneckervectorize, mul!
 
 abstract type VectorCollection{T} end
 abstract type MatrixCollection{T} <: VectorCollection{T} end
@@ -189,6 +188,10 @@ function kth_columns(A, k::Int)
     return [ @view(A[s][:, k]) for s in 1:length(A) ]
 
 end
+
+# Linear algebra for Kronecker matrices
+LinearAlgebra.adjoint(A::KroneckerMatrix)   = adjoint.(A.𝖳)
+LinearAlgebra.transpose(A::KroneckerMatrix) = transpose.(A.𝖳)
 
 # Additional functionality for Kruskal tensors
 # ============================================

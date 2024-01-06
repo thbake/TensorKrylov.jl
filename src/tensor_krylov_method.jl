@@ -139,6 +139,7 @@ function tensor_krylov!(
 
         end
         rel_res_norm   = (r_norm / b_norm)
+
         convergence_data.relative_residual_norm[k]  = rel_res_norm
         convergence_data.projected_residual_norm[k] = r_comp
         convergence_data.orthogonality_data[k]      = orthogonality_loss(first(V_minors), k)

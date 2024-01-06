@@ -265,16 +265,6 @@ function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) wher
 
 end
 
-function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::FMatrices{T}) where T
-
-    for s = 1:length(LowerTriangles)
-
-        BLAS.syrk!('L', 'T', 1.0, x[s], 1.0, LowerTriangles[s])
-
-    end
-
-end
-
 function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) where T 
 
     # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
@@ -500,7 +490,7 @@ function residual_norm!(
 
         mask[s]   = false
         y²        = squared_tensor_entries(Ly[mask], Γ)
-        res_norm += abs( subdiagonal_entries[s] )^2 * y²
+        res_norm += abs2( subdiagonal_entries[s] ) * y²
         mask[s]   = true
 
     end
@@ -583,44 +573,6 @@ function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, �
 
 end
 
-function recursivekronecker(A::AbstractMatrix{T}, s::Int, orders::Vector{Int}) where T
-
-    # Compute 
-
-    d = length(orders)
-
-    if d == 1
-
-        return A
-
-    elseif s == 1 && d > 1
-
-        return kron(recursivekronecker(A, s, orders[1:d-1]), I(orders[d]))
-
-    else
-
-        return kron(I(orders[1]), recursivekronecker(A, s - 1, orders[2:d]))
-
-    end
-
-end
-
-function explicit_kroneckersum(A::Vector{<:AbstractMatrix{T}}) where T 
-
-    orders = [ size(A[s], 1) for s in eachindex(A) ]
-
-    N = prod(orders)
-
-    K = zeros(N, N)
-
-    for s in eachindex(A)
-
-        K += recursivekronecker(A[s], s, orders)
-
-    end
-
-    return K
-end
 
 function exponentiate(A::AbstractMatrix{T}, γ::T) where T
 

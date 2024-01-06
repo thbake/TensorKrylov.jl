@@ -50,8 +50,8 @@ end
     n    = 200
 
     nonsym_system   = TensorizedSystem{Float64}(n, d, TensorArnoldi{Float64})
-    convergencedata = solve_tensorized_system(nonsym_system, nmax)
-    println(convergencedata.relative_residual_norm)
-    display(convergencedata)
+    nmax            = 199
+    #convergencedata = solve_tensorized_system(nonsym_system, nmax)
+    #display(convergencedata)
     
 end

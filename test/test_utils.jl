@@ -1,7 +1,7 @@
 using LinearAlgebra, Kronecker,  TensorToolbox, TensorKrylov, SparseArrays
 using TensorKrylov: compressed_residual, compute_lower_outer!, 
                     compute_lower_triangles!, cp_tensor_coefficients,
-                    explicit_kroneckersum, maskprod, matrix_vector, MVnorm, 
+                    maskprod, matrix_exponential_vector!, matrix_vector, MVnorm, 
                     squared_tensor_entries, tensorinnerprod 
 using TensorKrylov: compute_minors, exponential_sum_parameters!, exponentiate,  
                     initialize_compressed_rhs, normalize!, update_data!, 
@@ -22,6 +22,30 @@ function getextreme(v::Vector{T}) where T
 end
 
 # test/utils.jl functions
+function test_update_rhs(b̃::KronProd, V, b::KronProd, k::Int)
+
+    d        = length(b)
+    n        = size(b[1], 1)
+    b_minors = [ zeros(k)    for _ in 1:d ]
+
+    for j in 1:k
+
+        b_minors = principal_minors(b̃, j)
+        columns = kth_columns(V, j)
+        update_rhs!(b_minors, columns, b, j)
+
+    end
+
+    exact  = zeros(k^2)
+    approx = kron(b_minors...)
+
+
+    mul!(exact,  kron( adjoint(V)...), kron(b...))
+
+    return exact ≈ approx
+
+end
+
 function initialize_matrix_products(M, x)
 
     d      = length(M)
