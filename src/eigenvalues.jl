@@ -1,5 +1,6 @@
-export assemble_matrix,qr_algorithm,  next_coefficients!, sign_changes, initial_interval, 
-       bisection, analytic_eigenvalues 
+using Combinatorics
+export analytic_eigenvalues, assemble_matrix,bisection, initial_interval,
+       kronsumeigs, next_coefficients!, sign_changes,  qr_algorithm
 
 
 # Data structure d sets of Sturm sequences of polynomials
@@ -200,6 +201,26 @@ function tensor_qr_algorithm(A::KronMat{T}, tol::T, n_max::Int) where T<:Abstrac
     end
 
     return λ_min, λ_max
+
+end
+
+function possiblesums(eigenvalues1d::Array, d::Int)
+
+    n    = length(eigenvalues1d)
+    sums = sum.( with_replacement_combinations(eigenvalues1d, d) )
+    
+    return sums
+
+end
+
+function kronsumeigs(A::KronMat)
+
+    tmp    = Matrix( first(A) )
+    values = eigvals( tmp )
+
+    eigenvalues = possiblesums(values, length(A))
+
+    return eigenvalues
 
 end
 
