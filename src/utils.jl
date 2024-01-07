@@ -1,4 +1,3 @@
-export TensorizedSystem, solve_tensorized_system
 using PyCall
 
 tensor_train = pyimport("scikit_tt.tensor_train")
@@ -11,70 +10,6 @@ struct CompressedNormBreakdown{T} <: Exception
 
 end
 
-struct TensorizedSystem{T} 
-
-    n                      ::Int
-    d                      ::Int
-    A                      ::KronMat{T}
-    b                      ::KronProd{T}
-    orthonormalization_type::Type{<:TensorDecomposition{T}}
-
-    function TensorizedSystem{T}(
-        n                     ::Int,
-        d                     ::Int,
-        orthogonalization_type::Type{<:TensorDecomposition{T}},
-        normalize_rhs         ::Bool = true) where T
-
-        Aₛ = assemble_matrix(n, orthogonalization_type)
-        bₛ = rand(n)
-        A  = KronMat{T}([Aₛ for _ in 1:d])
-        b  = [ bₛ for _ in 1:d ]
-        
-        if normalize_rhs
-
-            normalize!(b)
-
-        end
-
-        new(n, d, A, b, orthogonalization_type)
-
-    end
-
-end
-
-function display(system::TensorizedSystem) 
-
-    println(
-        "Tensorized linear system of order d = ",
-        system.d,
-        "  with coefficient matrices of order n = ",
-        system.n
-    )
-        flush(stdout)
-
-end
-
-function Base.show(io::IO, system::TensorizedSystem) 
-
-    display(system)
-
-end
-
-function solve_tensorized_system(system::TensorizedSystem{T}, nmax::Int, tol::T = 1e-9) where T
-
-    convergencedata = ConvergenceData{Float64}(nmax)
-
-    tensor_krylov!(
-        convergencedata, system.A,
-        system.b,
-        tol,
-        nmax,
-        system.orthonormalization_type
-    )
-
-    return convergencedata
-
-end
 
 Base.showerror(io::IO, e::CompressedNormBreakdown{T}) where T = print(io, e.r_comp, " is strictly negative.")
 
