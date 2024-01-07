@@ -30,7 +30,7 @@ end
     marker     --> :circle
     markersize --> 1.5
 
-    stride = 2:2:199
+    stride = 2:5:199
 
     x := x[stride]
     y := y[stride]

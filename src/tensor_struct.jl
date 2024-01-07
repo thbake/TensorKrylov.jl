@@ -88,6 +88,13 @@ struct KroneckerMatrix{T} <: MatrixCollection{T}
 
     end
 
+    function KroneckerMatrix{T}(d::Int, A::AbstractMatrix{T}) where T
+
+        KroneckerMatrix{T}( [ A for _ in 1:d ] )
+
+    end
+
+
 end
 
 function Base.show(io::IO, A::KroneckerMatrix{T}) where T

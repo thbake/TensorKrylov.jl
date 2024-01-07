@@ -27,6 +27,8 @@ module TensorKrylov
     # Linear system solvers
     include("tensor_krylov_method.jl")
 
+    include("system.jl")
+
     #include("variants.jl")
 
 
