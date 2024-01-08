@@ -53,6 +53,7 @@ function orthonormal_basis_vector!(lanczos::Lanczos{T}, k::Int) where T<:Abstrac
 
     # Update Jacobi matrix
     update_subdiagonals!(lanczos.H, k, lanczos.β)
+    
 
 end
 
@@ -138,6 +139,8 @@ function orthonormal_basis_vector!(
         orthonormal_basis_vector!(lanczos, k, MGS())
 
         lanczos.β = lanczos.H[k + 1, k]
+        
+        lanczos.H[1:k - 2, k] .= 0.0
 
     end
 
@@ -146,7 +149,6 @@ function orthonormal_basis_vector!(
 
     # Update Jacobi matrix
     update_subdiagonals!(lanczos.H, k, lanczos.β)
-
 
 end
 

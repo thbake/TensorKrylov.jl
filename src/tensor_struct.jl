@@ -1,9 +1,17 @@
 export VectorCollection, MatrixCollection, KroneckerMatrix
-export size, kronproddot, kronprodnorm, randkronmat, trikronmat, nentries, 
-       principal_minors, kth_columns, kroneckervectorize, mul!
+export ConvDiff, EigValMat, Laplace, MatrixGallery, RandSPD
+export assemble_matrix, kroneckervectorize,  kronproddot, kronprodnorm, 
+       kth_columns, mul!, nentries, principal_minors,  randkronmat, size, 
+       trikronmat 
 
 abstract type VectorCollection{T} end
 abstract type MatrixCollection{T} <: VectorCollection{T} end
+
+abstract type MatrixGallery{T} end
+struct Laplace{T}   <: MatrixGallery{T} end 
+struct ConvDiff{T}  <: MatrixGallery{T} end
+struct EigValMat{T} <: MatrixGallery{T} end
+struct RandSPD{T}   <: MatrixGallery{T} end
 
 const Core{T} = Vector{Vector{Vector{Vector{T}}}}
 
@@ -70,30 +78,75 @@ function dimensions(collection::VectorCollection{T})::Array{Int} where T
 end
 
 nentries(collection::VectorCollection{T}) where T = prod(dimensions(collection))
+
+function assemble_matrix(n::Int, ::Type{Laplace{T}}) where T
+
+    h  = inv(n + 1)
+    Aₛ = inv(h^2) * sparse(SymTridiagonal(2ones(n), -ones(n)))
+
+    return Aₛ
+
+end
+
+function assemble_matrix(n::Int, ::Type{ConvDiff{T}}, c::AbstractFloat = 10.0)  where T
+
+    h  = inv(n + 1)
+    L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
+    Aₛ = L + sparse( (c * inv(4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
+
+    return Aₛ
+
+end
+
+assemble_matrix(eigenvalues::Vector, ::Type{EigValMat{T}}) where T= diagm(eigenvalues)
+
+
+function assemble_matrix(n::Int, ::Type{RandSPD{T}}) where T
+
+    R = rand(n, n)
+
+    return  Symmetric(R'R, :L)
+
+end
+
+
     
 struct KroneckerMatrix{T} <: MatrixCollection{T}
     
-    𝖳::Vector{<:AbstractMatrix{T}} # We only store the d matrices explicitly in a vector.
+    𝖳           ::Vector{<:AbstractMatrix{T}} # We only store the d matrices explicitly in a vector.
+    matrix_class::Type{<:MatrixGallery{T}}
 
-    function KroneckerMatrix{T}(Aₛ::Vector{<:AbstractMatrix{T}}) where T# Constructor with vector of matrix coefficients
+    function KroneckerMatrix{T}(Aₛ::Vector{<:AbstractMatrix{T}}) where T 
 
-        new(Aₛ)
+        new(Aₛ, MatrixGallery{T})
 
     end
 
+    function KroneckerMatrix{T}(Aₛ::Vector{<:AbstractMatrix{T}}, class::Type{<:MatrixGallery{T}}) where T# Constructor with vector of matrix coefficients
+
+        new(Aₛ, class)
+
+    end
 
     function KroneckerMatrix{T}(orders::Array{Int}) where T
 
-        new([ zeros(orders[s], orders[s]) for s in 1:length(orders) ])
+        new([ zeros(orders[s], orders[s]) for s in 1:length(orders) ], MatrixGallery{T})
 
     end
 
-    function KroneckerMatrix{T}(d::Int, A::AbstractMatrix{T}) where T
+    function KroneckerMatrix{T}(d::Int, n::Int, matrix_class::Type{<:MatrixGallery{T}}) where T
 
-        KroneckerMatrix{T}( [ A for _ in 1:d ] )
+        A = assemble_matrix(n, matrix_class)
+        KroneckerMatrix{T}( [ A for _ in 1:d ], matrix_class)
 
     end
 
+    function KroneckerMatrix{T}(d::Int, eigenvalues, class::Type{EigValMat{T}}) where T
+
+        A = assemble_matrix(eigenvalues, class)
+        KroneckerMatrix{T}( [ A for _ in 1:d ], class)
+
+    end
 
 end
 

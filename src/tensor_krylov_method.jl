@@ -69,7 +69,7 @@ function solve_compressed_system(
 
         γ = -approxdata.α[k] * λ_inv
 
-        matrix_exponential_vector!(yₜ, H, b, γ, k)
+        matrix_exponential_vector!(yₜ, H, b, γ, k, approxdata.orthonormalization_type)
 
     end
 
@@ -99,7 +99,8 @@ function tensor_krylov!(
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
     
-    #spectraldata = SpectralData{T}(d, n, nmax, orthonormalization_type)
+    #spectraldata = SpectralData{T}(A, d, nmax, orthonormalization_type)
+    set_matrix!(convergence_data.spectraldata, first(A))
     approxdata   = ApproximationData{T}(tol, orthonormalization_type)
     r_comp       = Inf
     r_norm       = Inf
@@ -113,8 +114,8 @@ function tensor_krylov!(
         columns                      = kth_columns(tensor_decomp.V, k)
 
         update_rhs!(b_minors, columns, b, k) # b̃ = Vᵀb
-        update_data!(convergence_data.spectraldata, d, n, k,      orthonormalization_type)
-        update_data!(approxdata,   convergence_data.spectraldata, orthonormalization_type)
+        update_data!(convergence_data.spectraldata, d, k, orthonormalization_type, A.matrix_class())
+        update_data!(approxdata, convergence_data.spectraldata, orthonormalization_type)
         #spectraldata.κ = distancetosingularity(principal_minors(tensor_decomp.H, k + 1, k))
 
         y  = solve_compressed_system(H_minors, b_minors, approxdata, convergence_data.spectraldata.λ_min[k]) # Hy = b̃ 

@@ -491,9 +491,26 @@ function compute_minors(tensor_decomp::TensorDecomposition{T}, rhs::KronProd{T},
     
 end
 
-function matrix_exponential_vector!(y::ktensor, A::KronMat{T}, b::KronProd{T}, γ::T, k::Int) where T
+function Base.first(A::KronMat{T}, ::LanczosUnion{T}) where T  
+    
+    tmp = Symmetric(Matrix(first(A)), :L)
 
-    tmp = Matrix(copy(A[1]))
+    return SymTridiagonal(tmp)
+
+end
+    
+Base.first(A::KronMat{T}, ::TensorArnoldi{T}) where T = Matrix(first(A))
+
+function matrix_exponential_vector!(
+    y::ktensor,
+    A::KronMat{T},
+    b::KronProd{T},
+    γ::T, k::Int,
+    orthogonalization::Type{<:TensorDecomposition{T}}) where T
+
+    #tmp = Matrix(copy(A[1]))
+    #Base.display(first(A))
+    tmp = first(A, orthogonalization)
 
     expA = exp(γ * tmp)
 

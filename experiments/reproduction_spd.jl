@@ -1,6 +1,5 @@
 using TensorKrylov
-using TensorKrylov: assemble_matrix
-using LinearAlgebra
+using LinearAlgebrarepr
 using SparseArrays
 using DataFrames
 using CSV
@@ -9,14 +8,15 @@ using Serialization
 
 Random.seed!(12345)
 
+abstract type Experiment{T} end
 
-mutable struct Experiment{T} 
+mutable struct Reproduction{T}<:Experiment{T}
 
     dimensions::Vector{Int}
     niterations::Int
     conv_data_vector::Vector{ConvergenceData{T}}
 
-    function Experiment{T}(problem_dimensions::Vector{Int}, nmax::Int) where T<:AbstractFloat
+    function Reproduction{T}(problem_dimensions::Vector{Int}, nmax::Int) where T<:AbstractFloat
 
         convergence_results = [ ConvergenceData{T}(nmax) for _ in 1:length(problem_dimensions) ]
 
@@ -25,7 +25,7 @@ mutable struct Experiment{T}
     end
 
     # For plotting, due to reliance on ssh connection for running experiments.
-    function Experiment{T}(datadir::AbstractString) where T<:AbstractFloat
+    function Reproduction{T}(datadir::AbstractString) where T<:AbstractFloat
 
         pkg_path = compute_package_directory()
 
@@ -72,49 +72,59 @@ mutable struct Experiment{T}
 
 end
 
-function Base.length(experiment::Experiment{T}) where T
+function Base.length(experiment::Reproduction{T}) where T
 
     return length(experiment.dimensions)
 
 end
 
-function get_iterations(experiment::Experiment{T}) where T<:AbstractFloat
+function get_iterations(experiment::Reproduction{T}) where T<:AbstractFloat
 
     return [ experiment.conv_data_vector[i].iterations for i in 1:length(experiment) ]
 
 end
 
-function get_relative_residuals(experiment::Experiment{T}) where T<:AbstractFloat
+function get_relative_residuals(experiment::Reproduction{T}) where T<:AbstractFloat
 
     return [ experiment.conv_data_vector[i].relative_residual_norm for i in 1:length(experiment) ]
 
 end
 
-function get_projected_residuals(experiment::Experiment{T}) where T<:AbstractFloat
+function get_projected_residuals(experiment::Reproduction{T}) where T<:AbstractFloat
 
     return [ experiment.conv_data_vector[i].projected_residual_norm for i in 1:length(experiment) ]
 
 end
 
-function get_convergence_data(experiment::Experiment{T}) where T<:AbstractFloat
+function get_convergence_data(experiment::Reproduction{T}) where T<:AbstractFloat
 
     return experiment.conv_data_vector
 
 end
     
 
-function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, orthonormalization_type::Type{<:TensorDecomposition{T}}, tol::T = 1e-9, normalize_rhs::Bool = true) where T<:AbstractFloat
+function run_experiments(
+    dimensions             ::Vector{Int},
+    n                      ::Int,
+    nmax                   ::Int,
+    matrix_instance        ::MatrixGallery,
+    b                      ::Vector{KronProd{T}},
+    orthonormalization_type::Type{<:TensorDecomposition{T}},
+    tol                    ::T = 1e-9) where T<:AbstractFloat
 
     println("Performing experiments")
 
-    systems = [ TensorizedSystem{T}(n, d, orthonormalization_type) for d ∈ dimensions ]
+    systems = [ TensorizedSystem{T}(
+        assemble_kronmat(dimensions[i], n, matrix_instance),
+        b[i],
+        orthonormalization_type) for i in eachindex(dimensions) ]
     
-    experiment = Experiment{T}(dimensions, nmax)
+    experiment = Reproduction{T}(dimensions, nmax)
 
     for i in eachindex(dimensions)
 
         println("d = " * string(dimensions[i]))
-        experiment.conv_data_vector[i] = solve_tensorized_system(systems[i], nmax)
+        experiment.conv_data_vector[i] = solve_tensorized_system(systems[i], nmax, tol)
 
     end
 
@@ -122,7 +132,7 @@ function run_experiments(dimensions::Vector{Int}, n::Int, nmax::Int, orthonormal
 
 end
 
-function exportresults(exportdir::AbstractString, experiment::Experiment{T}) where T<:AbstractFloat
+function exportresults(exportdir::AbstractString, experiment::Reproduction{T}) where T<:AbstractFloat
 
     for i in 1:length(experiment)
 
@@ -145,7 +155,7 @@ function exportresults(exportdir::AbstractString, experiment::Experiment{T}) whe
 
 end
 
-function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) where T
+function serialize_to_file(filename::AbstractString, experiment::Reproduction{T}) where T
 
     complete_path = "experiments/data/serialized_data/" * filename
 
