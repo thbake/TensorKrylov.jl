@@ -1,5 +1,5 @@
 export TensorizedSystem
-export random_rhs, solve_tensorized_system
+export multiple_rhs, random_rhs, solve_tensorized_system
 
 
 function random_rhs(d::Int, n::Int)
@@ -9,6 +9,8 @@ function random_rhs(d::Int, n::Int)
     return [ bs for _ in 1:d ]
 
 end
+
+multiple_rhs(dims::Array{Int}, n::Int) = [ random_rhs(d, n) for d ∈ dims ]
 
 struct TensorizedSystem{T} 
 
@@ -23,6 +25,9 @@ struct TensorizedSystem{T}
         b                     ::KronProd{T},
         orthogonalization_type::Type{<:TensorDecomposition{T}},
         normalize_rhs         ::Bool = true) where T
+
+        @assert length(A) == length(b)
+        @assert all(dimensions(A) .== size.(b, 1))
 
         d = length(A)
         n = size(first(A), 1)
@@ -60,7 +65,7 @@ end
 
 function solve_tensorized_system(system::TensorizedSystem{T}, nmax::Int, tol::T = 1e-9) where T
 
-    convergencedata = ConvergenceData{T}(nmax, system.orthonormalization_type)
+    convergencedata = ConvergenceData{T}(nmax)
 
     tensor_krylov!(
         convergencedata, system.A,

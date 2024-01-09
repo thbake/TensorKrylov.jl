@@ -499,7 +499,7 @@ function Base.first(A::KronMat{T}, ::LanczosUnion{T}) where T
 
 end
     
-Base.first(A::KronMat{T}, ::TensorArnoldi{T}) where T = Matrix(first(A))
+Base.first(A::KronMat{T}, ::Type{TensorArnoldi{T}}) where T = Matrix(first(A))
 
 function matrix_exponential_vector!(
     y::ktensor,

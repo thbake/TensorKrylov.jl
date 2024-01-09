@@ -1,8 +1,8 @@
 export VectorCollection, MatrixCollection, KroneckerMatrix
 export ConvDiff, EigValMat, Laplace, MatrixGallery, RandSPD
-export assemble_matrix, kroneckervectorize,  kronproddot, kronprodnorm, 
-       kth_columns, mul!, nentries, principal_minors,  randkronmat, size, 
-       trikronmat 
+export assemble_matrix, dimensions, kroneckervectorize,  kronproddot, 
+       kronprodnorm, kth_columns, mul!, nentries, principal_minors,  
+       randkronmat, size, trikronmat 
 
 abstract type VectorCollection{T} end
 abstract type MatrixCollection{T} <: VectorCollection{T} end
@@ -63,19 +63,6 @@ function Base.setindex!(collection::VectorCollection{T}, M::Matrix{T}, i::Int) w
 end
 
 
-function dimensions(collection::VectorCollection{T})::Array{Int} where T
-    
-    factor_dimensions = Array{Int}(undef, length(collection))
-
-    for s = 1:length(collection)
-        
-        factor_dimensions[s] = size(collection[s], 1)
-
-    end
-
-    return factor_dimensions
-
-end
 
 nentries(collection::VectorCollection{T}) where T = prod(dimensions(collection))
 
@@ -159,12 +146,11 @@ function Base.show(io::IO, A::KroneckerMatrix{T}) where T
 
 end
 
+dimensions(A::KroneckerMatrix) = [ size(A[s], 1) for s in 1:length(A) ]
 
-function randkronmat(orders::Array{Int})
 
-        return KroneckerMatrix{Float64}([ rand(order, order) for order in orders ])
+randkronmat(orders::Array{Int}) = KroneckerMatrix{Float64}([ rand(n, n) for n ∈ orders ])
 
-end
 
 
 function trikronmat(orders::Array{Int})

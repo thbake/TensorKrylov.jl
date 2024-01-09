@@ -9,7 +9,7 @@ mutable struct ConvergenceData{T}
     spectraldata           ::SpectralData{T}
     orthogonality_data     ::Vector{T}
 
-    function ConvergenceData{T}(nmax::Int, orthonormalization::Type{<:TensorDecomposition{T}}) where T<:AbstractFloat
+    function ConvergenceData{T}(nmax::Int) where T<:AbstractFloat
 
         new(
             nmax,

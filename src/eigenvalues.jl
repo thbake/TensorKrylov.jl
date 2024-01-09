@@ -301,7 +301,7 @@ mutable struct SpectralData{T}
 
 end
 
-set_matrix!(data::SpectralData{T}, A::AbstractMatrix{T}) where T = data.A = A
+set_matrix!(data::SpectralData{T}, A::AbstractMatrix{T}) where T = data.A = Matrix(A)
 
 Base.getindex(s::SpectralData{T}, k::Int) where T = s.λ_min[k], s.λ_max[k], s.κ[k]
 

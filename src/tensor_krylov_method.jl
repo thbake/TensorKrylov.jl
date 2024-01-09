@@ -99,7 +99,6 @@ function tensor_krylov!(
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
     
-    #spectraldata = SpectralData{T}(A, d, nmax, orthonormalization_type)
     set_matrix!(convergence_data.spectraldata, first(A))
     approxdata   = ApproximationData{T}(tol, orthonormalization_type)
     r_comp       = Inf

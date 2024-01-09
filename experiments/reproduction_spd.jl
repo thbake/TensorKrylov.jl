@@ -1,5 +1,5 @@
 using TensorKrylov
-using LinearAlgebrarepr
+using LinearAlgebra
 using SparseArrays
 using DataFrames
 using CSV
@@ -107,18 +107,15 @@ function run_experiments(
     dimensions             ::Vector{Int},
     n                      ::Int,
     nmax                   ::Int,
-    matrix_instance        ::MatrixGallery,
-    b                      ::Vector{KronProd{T}},
+    matrix_instance        ::Type{<:MatrixGallery{T}},
+    b                      ::Vector{<:KronProd{T}},
     orthonormalization_type::Type{<:TensorDecomposition{T}},
     tol                    ::T = 1e-9) where T<:AbstractFloat
 
     println("Performing experiments")
 
-    systems = [ TensorizedSystem{T}(
-        assemble_kronmat(dimensions[i], n, matrix_instance),
-        b[i],
-        orthonormalization_type) for i in eachindex(dimensions) ]
-    
+    systems = [ TensorizedSystem{T}( KronMat{T}(dimensions[i], n, matrix_instance), b[i], orthonormalization_type) for i in eachindex(dimensions) ]
+
     experiment = Reproduction{T}(dimensions, nmax)
 
     for i in eachindex(dimensions)
