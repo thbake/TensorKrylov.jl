@@ -3,9 +3,8 @@ using CSV
 
 export compute_package_directory
 
-mutable struct ApproximationData{T}
+mutable struct ApproximationData{T, U<:Instance}
 
-    orthonormalization_type::Type{<:TensorDecomposition{T}}
     df                     ::DataFrame
     rank                   ::Int
     α                      ::AbstractArray{T}
@@ -14,18 +13,18 @@ mutable struct ApproximationData{T}
     first_digit            ::Int
     condition_order        ::Int
 
-    function ApproximationData{T}(tol::T, orthonormalization_type::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+    function ApproximationData{T, SymInstance}(tol::T) where T<:AbstractFloat
 
-        new(orthonormalization_type, DataFrame(), 0, zeros(), zeros(), tol, 0, 0)
+        new(DataFrame(), 0, zeros(), zeros(), tol, 0, 0)
 
     end
 
-    function ApproximationData{T}(tol::T, orthonormalization_type::LanczosUnion{T}) where T<:AbstractFloat
+    function ApproximationData{T, NonSymInstance}(tol::T) where T<:AbstractFloat
 
         package_dir = compute_package_directory()
         df          = compute_dataframe(package_dir)
 
-        new(orthonormalization_type, df, 0, zeros(), zeros(), tol, 0, 0)
+        new(df, 0, zeros(), zeros(), tol, 0, 0) 
 
     end
 
@@ -64,7 +63,7 @@ function getclosestrow(df::DataFrame, condition_order::Int, first_digit::Int)
 
 end
 
-function compute_rank!(approxdata::ApproximationData{T}, κ::T) where T<:AbstractFloat
+function compute_rank!(approxdata::ApproximationData{T, SymInstance}, κ::T) where T<:AbstractFloat
 
     approxdata.condition_order, approxdata.first_digit = parse_condition(κ)
 
@@ -85,22 +84,22 @@ function compute_rank!(approxdata::ApproximationData{T}, κ::T) where T<:Abstrac
 
 end
 
-nonsymmetric_bound(κ::T, λ::T, rank::Int) where T = 2.75 * inv(λ) * exp(-π * sqrt(rank / 2))
+nonsymmetric_bound(λ::T, rank::Int) where T = 2.75 * inv(λ) * exp(-π * sqrt(rank / 2))
 
 function compute_rank!(
-    approxdata::ApproximationData{T},
+    approxdata::ApproximationData{T, NonSymInstance},
     spectraldata::SpectralData{T}) where T<:AbstractFloat
 
-    λ_min, _, κ = current_data(spectraldata)
+    λ_min, _, _ = current_data(spectraldata)
 
     rank   = 1
-    bound  = nonsymmetric_bound(κ, λ_min, rank) 
+    bound  = nonsymmetric_bound(λ_min, rank) 
 
     while bound > approxdata.tol
 
         rank += 1
 
-        bound = nonsymmetric_bound(κ, λ_min, rank)
+        bound = nonsymmetric_bound(λ_min, rank)
 
     end
 
@@ -118,17 +117,12 @@ function parse_condition(κ::T) where T<:AbstractFloat
 end
 
 # Symmetric positive definite case
-function exponential_sum_parameters!(approxdata::ApproximationData{T}, coefficients_dir::AbstractString) where T<:AbstractFloat
+function exponential_sum_parameters!(approxdata::ApproximationData{T, SymInstance}, coefficients_dir::AbstractString) where T<:AbstractFloat
 
     # Extracts coefficients αⱼ, ωⱼ > 0 and tensor rank t such that the bound of 
     # Lemma 2.6 (denoted by γ) is satisfied.
     #
     # This has been already computed for multiple pairs of t (tensor rank), and R = κ. 
-    #
-    # In order to satisfy the bound of Corollary 2.7, (γ / λ) ⋅ ||b̃||₂ ≤ τ, where
-    # τ is the desired tolerance. This is equivalent as looking for the value
-    #
-    #   γ ≤ (τ ⋅ λ) / ||b̃||₂
     
 
     # Construct file name
@@ -136,17 +130,9 @@ function exponential_sum_parameters!(approxdata::ApproximationData{T}, coefficie
 
     t_string = string(approxdata.rank)
 
-    if length(t_string) == 1
+    length(t_string) == 1 ? filename *= "1_xk0" : filename *= "1_xk"
 
-        filename = filename * "1_xk0" 
-
-    else 
-        
-        filename = filename * "1_xk" 
-
-    end
-
-    filename = filename * t_string * "." * string(approxdata.first_digit) * "_" * string(approxdata.condition_order)
+    filename *= t_string * "." * string(approxdata.first_digit) * "_" * string(approxdata.condition_order)
 
     # Use three spaces to delimit the file(s)
     coeffs_df = CSV.read(
@@ -162,7 +148,7 @@ function exponential_sum_parameters!(approxdata::ApproximationData{T}, coefficie
 end
 
 # Non-symmetric case
-function exponential_sum_parameters!(data::ApproximationData{T}) where T<:AbstractFloat
+function exponential_sum_parameters!(data::ApproximationData{T, NonSymInstance}) where T<:AbstractFloat
 
     t = data.rank
 
@@ -172,7 +158,7 @@ function exponential_sum_parameters!(data::ApproximationData{T}) where T<:Abstra
 
 end
 
-function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralData{T}, ::LanczosUnion{T}) where T<:AbstractFloat
+function update_data!(approxdata::ApproximationData{T, SymInstance}, spectraldata::SpectralData{T, SymInstance}) where T<:AbstractFloat
 
     package_dir                = compute_package_directory()
     approxdata.df              = compute_dataframe(package_dir)
@@ -182,7 +168,7 @@ function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralDa
 
 end
 
-function update_data!(approxdata::ApproximationData{T}, spectraldata::SpectralData{T}, ::Type{TensorArnoldi{T}}) where T<:AbstractFloat
+function update_data!(approxdata::ApproximationData{T, NonSymInstance}, spectraldata::SpectralData{T, NonSymInstance}) where T<:AbstractFloat
 
     compute_rank!(approxdata, spectraldata)
     exponential_sum_parameters!(approxdata)

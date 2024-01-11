@@ -288,7 +288,7 @@ function rank_k_update!(result::AbstractMatrix{T}, A::AbstractMatrix{T}, k::Int)
 
 end
 
-function rank_k_update(A::KronMat{T}, k::Int) where T<:AbstractFloat
+function rank_k_update(A::KronMat{T, U}, k::Int) where {T<:AbstractFloat, U<:Instance}
 
     result          = [ zeros(k, k) for _ in 1:length(A) ]
     matrix_products = [ rank_k_update!(result[s], A[s], k) for s in 1:length(A)  ]
@@ -305,30 +305,6 @@ function orthogonality_loss(V::AbstractMatrix{T}, k::Int) where T<:AbstractFloat
     return norm(result - I(k))
 
 end
-
-function orthogonality_loss(V::KronMat{T}, k::Int, ::CheapOrthogonalityLoss) where T<:AbstractFloat
-
-    d      = length(V)
-    result = zeros(k, k)
-    M      = rank_k_update!(result, V[1], k)
-    κₘ     = cond(M)^d
-    result = abs(1.0 - κₘ)
-    
-    return result
-
-end
-
-function orthogonality_loss(V::KronMat{T}, k::Int) where T<:AbstractFloat
-
-    d      = length(V)
-    M      = rank_k_update(V, k)
-    κₘ     = prod( cond(M[s]) for s in 1:d )
-    result = abs(1.0 - κₘ)
-
-    return result
-
-end
-
 
 function isorthonormal(V::AbstractMatrix{T}, k::Int, tol::T = 1e-8)::Bool where T<:AbstractFloat
 

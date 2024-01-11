@@ -19,8 +19,8 @@ end
 
     d    = 2
     n    = 100
-    Tₖ   = assemble_matrix(n, TensorLanczos{Float64})
-    A    = KroneckerMatrix{Float64}([Tₖ for _ in 1:d])
+    Tₖ   = assemble_matrix(n,  Laplace{Float64})
+    A    = KroneckerMatrix{Float64, SymInstance}([Tₖ for _ in 1:d], Laplace{Float64})
     b    = [ rand(n) for _ in 1:d ]
     nmax = 99
 
@@ -35,9 +35,11 @@ end
     d   = 10
     n   = 200
 
-    spd_system      = TensorizedSystem{Float64}(n, d, TensorLanczosReorth{Float64})
+    A               = KronMat{Float64, SymInstance}(d, n, Laplace{Float64})
+    b               = random_rhs(d, n)
+    spd_system      = TensorizedSystem{Float64, SymInstance}(A, b)
     nmax            = 199
-    #convergencedata = solve_tensorized_system(spd_system, nmax)
+    convergencedata = solve_tensorized_system(spd_system, nmax, TensorLanczosReorth{Float64})
     #display(convergencedata)
 
 end
@@ -49,9 +51,11 @@ end
     d    = 5
     n    = 200
 
-    nonsym_system   = TensorizedSystem{Float64}(n, d, TensorArnoldi{Float64})
+    A               = KronMat{Float64, NonSymInstance}(d, n, ConvDiff{Float64})
+    b               = random_rhs(d, n)
+    nonsym_system   = TensorizedSystem{Float64, NonSymInstance}(A, b)
     nmax            = 199
-    #convergencedata = solve_tensorized_system(nonsym_system, nmax)
+    #convergencedata = solve_tensorized_system(nonsym_system, nmax, TensorArnoldi{Float64})
     #display(convergencedata)
     
 end
