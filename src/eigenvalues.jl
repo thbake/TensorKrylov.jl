@@ -161,57 +161,49 @@ end
 
 # QR-Iterations
 
+#function qr_algorithm(A::AbstractMatrix, tol, n_max)
+#	
+#	n = size(A, 1)
+#	
+#	Q = U(n)
+#	
+#	Â = Q' * A * Q
+#	
+#	for k = 1:n_max
+#		Q, R = qr(Â)
+#		Â = R * Q
+#
+#		nrm = LinearAlgebra.norm(diag(Â, -1))
+#		
+#		if nrm <= tol
+#
+#			return Â
+#		end
+#	end
+#	
+#    return sort(diag(Â))
+#
+#end
+#
+#function tensor_qr_algorithm(A::KronMat{T}, tol::T, n_max::Int) where T<:AbstractFloat
+#
+#    λ_min = 0.0
+#    λ_max = 0.0
+#
+#    for s in length(A)
+#
+#        eigs = qr_algorithm(Matrix(A[s]), tol, n_max)
+#
+#        λ_min += eigs[1]
+#        λ_max += eigs[end]
+#
+#    end
+#
+#    return λ_min, λ_max
+#
+#end
 
-function qr_algorithm(A::AbstractMatrix, tol, n_max)
-	
-	n = size(A, 1)
-	
-	Q = I(n)
-	
-	Â = Q' * A * Q
-	
-	for k = 1:n_max
-		Q, R = qr(Â)
-		Â = R * Q
-
-		nrm = LinearAlgebra.norm(diag(Â, -1))
-		
-		if nrm <= tol
-
-			return Â
-		end
-	end
-	
-    return sort(diag(Â))
-
-end
-
-function tensor_qr_algorithm(A::KronMat{T}, tol::T, n_max::Int) where T<:AbstractFloat
-
-    λ_min = 0.0
-    λ_max = 0.0
-
-    for s in length(A)
-
-        eigs = qr_algorithm(Matrix(A[s]), tol, n_max)
-
-        λ_min += eigs[1]
-        λ_max += eigs[end]
-
-    end
-
-    return λ_min, λ_max
-
-end
-
-function possiblesums(eigenvalues1d::Array, d::Int)
-
-    n    = length(eigenvalues1d)
-    sums = sum.( with_replacement_combinations(eigenvalues1d, d) )
-    
-    return sums
-
-end
+possiblesums(eigenvalues1d::Array, d::Int) = sum.( with_replacement_combinations(eigenvalues1d, d) )
 
 function kronsumeigs(A::KronMat)
 
@@ -265,7 +257,7 @@ function analytic_eigenvalues(d::Int, n::Int, k::Int)
 end
 
 
-mutable struct SpectralData{T}
+mutable struct SpectralData{T, U}
 
     A    ::AbstractMatrix{T}
     λ_min::Vector{T}
@@ -273,40 +265,20 @@ mutable struct SpectralData{T}
     κ    ::Vector{T}
     k    ::Int      # Current iteration
 
-    function SpectralData{T}(nmax::Int) where T
+    function SpectralData{T, U}(nmax::Int) where {T, U<:Instance}
 
         new(zeros(nmax, nmax), fill(Inf, nmax), fill(Inf, nmax), fill(Inf, nmax), 1)
 
     end
 
-    #function SpectralData{T}(A::AbstractMatrix{T}, ::Int, nmax::Int, ::LanczosUnion{T}) where T<:AbstractFloat
-
-    #    SpectralData{T}(A, nmax)
-
-    #end
-
-    #function SpectralData{T}(A::AbstractMatrix{T}, d::Int, nmax::Int, ::Type{TensorArnoldi{T}}) where T<:AbstractFloat
-
-    #    #κ = cond(eigvecs(A))^d
-    #    copyA = Matrix(A)                 # There are no sparse eigenvalue solvers
-    #    tmp   = minimum(eigvals(copyA)) * d
-
-    #    λ_min = fill(tmp, nmax)
-    #    
-
-    #    new(copyA, λ_min, fill(nmax, Inf), fill(nmax, Inf), 1)
-
-    #end
-
-
 end
 
-set_matrix!(data::SpectralData{T}, A::AbstractMatrix{T}) where T = data.A = Matrix(A)
+set_matrix!(data::SpectralData{T, U}, A::AbstractMatrix{T}) where {T, U<:Instance} = data.A = Matrix(A)
 
-Base.getindex(s::SpectralData{T}, k::Int) where T = s.λ_min[k], s.λ_max[k], s.κ[k]
+Base.getindex(s::SpectralData, k::Int) = s.λ_min[k], s.λ_max[k], s.κ[k]
 
 function Base.setindex!(
-    data     ::SpectralData{T},
+    data     ::SpectralData,
     iter_data::Tuple{T, T, T},
     k        ::Int) where T  
 
@@ -314,7 +286,7 @@ function Base.setindex!(
 
 end
 
-function current_data(data::SpectralData{T}) where T 
+function current_data(data::SpectralData)  
 
     k = data.k
 
@@ -323,9 +295,7 @@ function current_data(data::SpectralData{T}) where T
 end
 
 
-Base.copy(data::SpectralData{T}) where T = SpectralData{T}(data.λ_min, data.λ_max, data.κ)
-
-function Base.resize!(data::SpectralData{T}, k::Int) where T
+function Base.resize!(data::SpectralData, k::Int) 
 
     resize!(data.λ_min, k)
     resize!(data.λ_max, k)
@@ -333,7 +303,7 @@ function Base.resize!(data::SpectralData{T}, k::Int) where T
 
 end
 
-function display(data::SpectralData{T}) where T<:AbstractFloat
+function display(data::SpectralData) 
 
     println("Spectral data: ")
     println("Smallest eigenvalues: ", data.λ_min)
@@ -342,22 +312,7 @@ function display(data::SpectralData{T}) where T<:AbstractFloat
 
 end
 
-function Base.show(data::SpectralData) 
-
-    display(data)
-
-end
-
-function update_data!(data::SpectralData{T}, d::Int, k::Int, ::LanczosUnion{T}, ::Laplace{T}) where T
-
-    n = size(data.A, 1)
-
-    data.λ_min[k], data.λ_max[k] = analytic_eigenvalues(d, n, k)
-
-    data.κ[k] = data.λ_max[k] * inv(data.λ_min[k])
-    data.k    = k
-     
-end
+Base.show(data::SpectralData) = display(data)
 
 function getextreme(d::Int, v::AbstractArray{T}) where T
 
@@ -367,34 +322,38 @@ function getextreme(d::Int, v::AbstractArray{T}) where T
     return first, second
 end
 
-function update_data!(data::SpectralData{T}, d::Int, k::Int, ::LanczosUnion{T}, ::RandSPD{T}) where T
+function extreme_eigenvals(data::SpectralData, d::Int) # Default
 
+    k      = data.k
     values = eigvals(@view data.A[1:k, 1:k])
 
-    data.λ_min[k], data.λ_max[k] = getextreme(d, values)
-    data.κ[k]                    = data.λ_max[k] * inv(data.λ_min[k])
-    data.k                       = k
-
-end
-
-
-function update_data!(data::SpectralData{T}, d::Int,  k::Int, ::LanczosUnion{T}, ::EigValMat{T}) where T
-
-    data.λ_min[k], data.λ_max[k] = getextreme(d, @view diag(data.A)[1:k])
-    data.κ[k]                    = data.λ_max[k] * inv(data.λ_min[k])
-    data.k                       = k
-
-end
-
-function update_data!(data::SpectralData{T}, d::Int, k::Int, ::Type{TensorArnoldi{T}}, ::ConvDiff{T}) where T
-
-
-    #κ = cond(eigvecs(A))^d
-    tmp = minimum(eigvals(@view data.A[1:k, 1:k])) * d
-
-    data.λ_min[k] = tmp
-    data.k = k
-
-end
-        
+    return getextreme(d, values)
     
+end
+
+extreme_eigvals(data::SpectralData, d::Int, ::Laplace)   = analytic_eigenvalues(d, size(data.A, 1), data.k)
+
+extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]))
+
+extreme_eigvals(data::SpectralData, d::Int, ::EigValMat) = getextreme(d, @view diag(data.A)[1:data.k])
+
+extreme_eigvals(data::SpectralData, d::Int, ::ConvDiff)  = minimum(eigvals(@view data.A[1:data.k, 1:data.k])) * d
+
+function update_data!(data::SpectralData{T, SymInstance}, d::Int, class::MatrixGallery{T}) where T
+
+
+    data.k += 1
+    k       = data.k
+
+    data.λ_min[k], data.λ_max[k] = extreme_eigvals(data, d, class)
+    data.κ[k]                    = data.λ_max[k] * inv(data.λ_min[k])
+
+end
+
+
+function update_data!(data::SpectralData{T, NonSymInstance}, d::Int, class::MatrixGallery{T}) where T
+
+    data.k            += 1
+    data.λ_min[data.k] = extreme_eigvals(data, d, class)
+
+end

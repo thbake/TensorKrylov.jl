@@ -25,7 +25,6 @@ end
 function test_update_rhs(b̃::KronProd, V, b::KronProd, k::Int)
 
     d        = length(b)
-    n        = size(b[1], 1)
     b_minors = [ zeros(k)    for _ in 1:d ]
 
     for j in 1:k
@@ -105,8 +104,8 @@ function error_compressed_residualnorm(
     solution::Vector{T},
     Λ       ::AbstractMatrix{T},
     lowerX  ::Vector{Matrix{T}},
-    M       ::KronMat{T},
-    x       ::ktensor) where T
+    M       ::KronMat{T, U},
+    x       ::ktensor) where {T, U<:Instance}
 
     # Explicit compressed residual norm
     exp_comp_res_norm    = norm(kron(b...) - solution)^2
@@ -144,7 +143,7 @@ end
 
 # test/tensor_krylov_method.jl functions
 
-function solvecompressed(H::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}) where T
+function solvecompressed(H::KronMat{T, U}, b::Vector{<:AbstractVector{T}}) where {T, U<:Instance}
 
     H_expanded = Symmetric(kroneckersum(H.𝖳...))
     b_expanded = kron(b...)
@@ -154,7 +153,7 @@ function solvecompressed(H::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}) 
 
 end
 
-function exactresidualnorm(A::KroneckerMatrix{T}, b::Vector{<:AbstractVector{T}}, xₖ::AbstractVector{T}) where T
+function exactresidualnorm(A::KronMat{T, U}, b::Vector{<:AbstractVector{T}}, xₖ::AbstractVector{T}) where {T, U<:Instance}
 
     A_expanded = kroneckersum(A.𝖳...)
     b_expanded = kron(b...)
@@ -187,7 +186,7 @@ function monotonic_decrease(errors::Vector{T}) where T
 
 end
 
-function tensor_krylov_exact(A::KronMat{T}, b::KronProd{T}, nmax::Int, orthonormalization_type::Type{<:TensorDecomposition{T}}, tol = 1e-9) where T 
+function tensor_krylov_exact(A::KronMat{T, U}, b::KronProd{T}, nmax::Int, orthonormalization_type::Type{<:TensorDecomposition{T}}, tol = 1e-9) where {T, U<:Instance}
 
     d  = length(A)
     xₖ = Vector{T}(undef, nentries(A))
@@ -205,8 +204,8 @@ function tensor_krylov_exact(A::KronMat{T}, b::KronProd{T}, nmax::Int, orthonorm
     n = size(A[1], 1)
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V)
     
-    spectraldata = SpectralData{T}(d, n, nmax, orthonormalization_type)
-    approxdata   = ApproximationData{T}(tol, orthonormalization_type)
+    spectraldata = SpectralData{T,U}(nmax)
+    approxdata   = ApproximationData{T, U}(tol)
     r_norm       = Inf
     errors       = zeros(nmax)
 
@@ -225,11 +224,11 @@ function tensor_krylov_exact(A::KronMat{T}, b::KronProd{T}, nmax::Int, orthonorm
         H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
         columns                      = kth_columns(tensor_decomp.V, k) 
         update_rhs!(b_minors, columns, b, k) # Update compressed right-hand side b̃ = Vᵀb
-        update_data!(spectraldata, d, n, k, orthonormalization_type)
-        update_data!(approxdata, spectraldata, orthonormalization_type)
+        update_data!(spectraldata, d, A.matrix_class())
+        update_data!(approxdata, spectraldata)
 
         y  = solvecompressed(H_minors, b_minors)
-        yₜ = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min[k])
+        #yₜ = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min[k])
 
         #@info "Relative error of solving compressed system: " norm(y - kroneckervectorize(yₜ)) * inv(norm(y))
 

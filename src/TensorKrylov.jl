@@ -3,7 +3,7 @@ module TensorKrylov
     using LinearAlgebra, TensorToolbox, Kronecker, SparseArrays, Logging
     import LinearAlgebra: norm, mul!
 
-    # Tensor approximations
+    # Tensor structures representing componets of linear systems
     include("tensor_struct.jl")
 
     include("alias.jl")
@@ -17,16 +17,19 @@ module TensorKrylov
     # Eigenvalue solvers
     include("eigenvalues.jl")
 
+    # Convergence data structures
     include("convergence.jl")
 
     # Preprocessing
     include("preprocessing.jl")
     
+    # Utilities
     include("utils.jl")
 
     # Linear system solvers
     include("tensor_krylov_method.jl")
 
+    # Assembly of linear system
     include("system.jl")
 
     #include("variants.jl")

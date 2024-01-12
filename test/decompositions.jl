@@ -23,8 +23,8 @@ end
     d  = 5
     n = 200
 
-    Aₛ = assemble_matrix(n, TensorLanczos{Float64})
-    A  = KroneckerMatrix{Float64}([Aₛ for _ in 1:d])
+    Aₛ = assemble_matrix(n, Laplace{Float64})
+    A  = KroneckerMatrix{Float64, SymInstance}([Aₛ for _ in 1:d])
     b  = [ rand(n) for _ in 1:d ]
 
     k = 50

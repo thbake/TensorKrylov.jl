@@ -13,119 +13,119 @@ end
 
 Base.showerror(io::IO, e::CompressedNormBreakdown{T}) where T = print(io, e.r_comp, " is strictly negative.")
 
-function initialize_cores(d::Int, m::Int, n::Int, r1::Int, r2::Int)
-
-    first_core   = zeros(1,  m, n, r2)
-    middle_cores = [ zeros(r1, m, n, r2) for _ in 1:d - 2 ]
-    final_core   = zeros(r1, m, n, 1)
-    cores        = collect( (first_core, middle_cores..., final_core) )
-
-    return cores 
-
-end
-
-function initializeTToperator(Aₛ::AbstractMatrix{T}, d::Int) where T
-
-    n = size(Aₛ, 1)
-
-    cores = initialize_cores(d, n, n, 2, 2)
-
-    cores[1][1, :, :, 1] = Aₛ
-    cores[1][1, :, :, 2] = I(n)
-
-    for s in 2:d-1
-        
-        cores[s][1,:, :, 1] = I(n)
-        cores[s][2,:, :, 1] = Aₛ
-        cores[s][2,:, :, 2] = I(n)
-
-    end
-
-    cores[end][1, :, :, 1] = I(n)
-    cores[end][2, :, :, 1] = Aₛ
-
-    return TT(cores)
-
-end
-
-function initialize_rhs(b::KronProd{T}, d::Int) where T
-
-    
-    cores = [ zeros(1, size(b[s], 1), 1, 1) for s in 1:d ]
-
-    for s in 1:d
-
-        cores[s][1, :, 1, 1] = b[s]
-
-    end
-
-    return TT(cores)
-
-end
-
-function canonicaltoTT(x::ktensor)
-
-    d     = ndims(x)
-    rank  = ncomponents(x)
-    n     = size(x, 1)
-    cores = initialize_cores(d, n, 1, rank, rank) 
-
-    tmp = redistribute(x, 1) # Redistribute weights
-    
-
-    for i in 1:rank
-
-        #cores[1][1, :, 1, i] = x.lambda[i] .* @view(x.fmat[1][:, i]) # Fill first core
-        #cores[1][1, :, 1, i] = @view(x.fmat[1][:, i]) # Fill first core
-        cores[1][1, :, 1, i] = @view(tmp.fmat[1][:, i]) # Fill first core
-
-    end
-
-    for s in 2:d-1, i in 1:rank
-
-        #cores[s][i, :, 1, i] = x.lambda[i] * @view(x.fmat[s][:, i]) # Fill middle cores
-        #cores[s][i, :, 1, i] = @view(x.fmat[s][:, i]) # Fill middle cores
-        cores[s][i, :, 1, i] = @view(tmp.fmat[s][:, i]) # Fill middle cores
-
-    end
-
-    for i in 1:rank
-
-        #cores[end][i, :, 1, 1] = x.lambda[i] * @view(x.fmat[end][:, i])
-        #cores[end][i, :, 1, 1] = @view(x.fmat[end][:, i])
-        cores[end][i, :, 1, 1] = @view(tmp.fmat[end][:, i])
-
-    end
-
-    return TT(cores)
-
-end
-
-function TTcompressedresidual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T
-
-    py"""
-
-    import scikit_tt.tensor_train as tensor_train
-
-    """
-
-    TT = py"tensor_train".TT
-
-    d = length(H)
-
-    H_TT = TT(initializeTToperator(H.𝖳[1], d))
-    y_TT = TT(canonicaltoTT(y))
-    b_TT = TT(initialize_rhs(b, d))
-
-    TT_multiplication = py"tensor_train.TT.__matmul__"
-    TT_subtraction    = py"tensor_train.TT.__sub__"
-    TT_norm           = py"tensor_train.TT.norm"
-
-    product    = TT_multiplication(H_TT, y_TT)
-    difference = TT_subtraction(product, b_TT)
-
-    return TT_norm(difference)^2
-end
+#function initialize_cores(d::Int, m::Int, n::Int, r1::Int, r2::Int)
+#
+#    first_core   = zeros(1,  m, n, r2)
+#    middle_cores = [ zeros(r1, m, n, r2) for _ in 1:d - 2 ]
+#    final_core   = zeros(r1, m, n, 1)
+#    cores        = collect( (first_core, middle_cores..., final_core) )
+#
+#    return cores 
+#
+#end
+#
+#function initializeTToperator(Aₛ::AbstractMatrix{T}, d::Int) where T
+#
+#    n = size(Aₛ, 1)
+#
+#    cores = initialize_cores(d, n, n, 2, 2)
+#
+#    cores[1][1, :, :, 1] = Aₛ
+#    cores[1][1, :, :, 2] = I(n)
+#
+#    for s in 2:d-1
+#        
+#        cores[s][1,:, :, 1] = I(n)
+#        cores[s][2,:, :, 1] = Aₛ
+#        cores[s][2,:, :, 2] = I(n)
+#
+#    end
+#
+#    cores[end][1, :, :, 1] = I(n)
+#    cores[end][2, :, :, 1] = Aₛ
+#
+#    return TT(cores)
+#
+#end
+#
+#function initialize_rhs(b::KronProd{T}, d::Int) where T
+#
+#    
+#    cores = [ zeros(1, size(b[s], 1), 1, 1) for s in 1:d ]
+#
+#    for s in 1:d
+#
+#        cores[s][1, :, 1, 1] = b[s]
+#
+#    end
+#
+#    return TT(cores)
+#
+#end
+#
+#function canonicaltoTT(x::ktensor)
+#
+#    d     = ndims(x)
+#    rank  = ncomponents(x)
+#    n     = size(x, 1)
+#    cores = initialize_cores(d, n, 1, rank, rank) 
+#
+#    tmp = redistribute(x, 1) # Redistribute weights
+#    
+#
+#    for i in 1:rank
+#
+#        #cores[1][1, :, 1, i] = x.lambda[i] .* @view(x.fmat[1][:, i]) # Fill first core
+#        #cores[1][1, :, 1, i] = @view(x.fmat[1][:, i]) # Fill first core
+#        cores[1][1, :, 1, i] = @view(tmp.fmat[1][:, i]) # Fill first core
+#
+#    end
+#
+#    for s in 2:d-1, i in 1:rank
+#
+#        #cores[s][i, :, 1, i] = x.lambda[i] * @view(x.fmat[s][:, i]) # Fill middle cores
+#        #cores[s][i, :, 1, i] = @view(x.fmat[s][:, i]) # Fill middle cores
+#        cores[s][i, :, 1, i] = @view(tmp.fmat[s][:, i]) # Fill middle cores
+#
+#    end
+#
+#    for i in 1:rank
+#
+#        #cores[end][i, :, 1, 1] = x.lambda[i] * @view(x.fmat[end][:, i])
+#        #cores[end][i, :, 1, 1] = @view(x.fmat[end][:, i])
+#        cores[end][i, :, 1, 1] = @view(tmp.fmat[end][:, i])
+#
+#    end
+#
+#    return TT(cores)
+#
+#end
+#
+#function TTcompressedresidual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T
+#
+#    py"""
+#
+#    import scikit_tt.tensor_train as tensor_train
+#
+#    """
+#
+#    TT = py"tensor_train".TT
+#
+#    d = length(H)
+#
+#    H_TT = TT(initializeTToperator(H.𝖳[1], d))
+#    y_TT = TT(canonicaltoTT(y))
+#    b_TT = TT(initialize_rhs(b, d))
+#
+#    TT_multiplication = py"tensor_train.TT.__matmul__"
+#    TT_subtraction    = py"tensor_train.TT.__sub__"
+#    TT_norm           = py"tensor_train.TT.norm"
+#
+#    product    = TT_multiplication(H_TT, y_TT)
+#    difference = TT_subtraction(product, b_TT)
+#
+#    return TT_norm(difference)^2
+#end
 
 
 
@@ -169,7 +169,7 @@ function skipindex(index::Int, range::UnitRange{Int})
 
 end
 
-function maskprod(A::FMatrices{T}, i::Int, j::Int) where T 
+function maskprod(A::KronStruct{T}, i::Int, j::Int) where T 
 
     # Compute product of entries (i,j) of the matrices contained in A.
 
@@ -228,7 +228,7 @@ function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) w
 end
 
 
-function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T
+function matrix_vector(A::KronMat, x::ktensor)
 
     # Compute the matrix vector products 
     #   
@@ -256,9 +256,9 @@ function matrix_vector(A::KronMat{T}, x::ktensor)::AbstractVector where T
 end
 
 function mask_matrix_collection(
-    YZ::FMatrices{T},
+    YZ    ::FMatrices{T},
     mask_s::BitVector, mask_r::BitVector, 
-    i::Int, j::Int) where T
+    i     ::Int, j::Int) where T
 
     mask = mask_s .⊻ mask_r
     
@@ -272,7 +272,7 @@ function evalmvnorm(
     YZ     ::FMatrices{T},
     Z_inner::FMatrices{T},
     i::Int, j::Int, 
-    mask_s, mask_r) where T
+    mask_s, mask_r)::T where T
 
     α  = maskprod(Y[.!(mask_s .|| mask_r)], i, j)
     β = mask_matrix_collection(YZ, mask_s, mask_r, i, j)
@@ -369,9 +369,9 @@ end
 function compressed_residual(
     Ly::FMatrices{T},
     Λ ::AbstractMatrix{T},
-    H ::KronMat{T},
+    H ::KronMat{T, U},
     y ::ktensor,
-    b ::KronProd{T}) where T 
+    b ::KronProd{T}) where {T, U<:Instance}
 
     # We know that 
     
@@ -394,11 +394,11 @@ end
 
 
 function residual_norm!(
-    H                  ::KronMat{T},
+    H                  ::KronMat{T, U},
     y                  ::ktensor,
     𝔎                  ::Vector{Int},
     subdiagonal_entries::Vector{T},
-    b                  ::KronProd{T}) where T
+    b                  ::KronProd{T}) where {T, U<:Instance}
     
     # Compute squared norm of the residual according to Lemma 3.4 of paper.
     
@@ -447,7 +447,7 @@ function normalize!(rhs::KronProd{T}) where T
 
 end
 
-function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T}) where T
+function initialize_compressed_rhs(b::KronProd{T}, V::KronMat{T, U}) where {T<:AbstractFloat, U<:Instance}
 
         b̃        = [ zeros( size(b[s]) )  for s in eachindex(b) ]
         b_minors = principal_minors(b̃, 1)
@@ -469,7 +469,7 @@ function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) w
 
 end
 
-function basis_tensor_mul!(x::ktensor, V::KronMat{T}, y::ktensor) where T
+function basis_tensor_mul!(x::ktensor, V::KronMat, y::ktensor) 
 
     x.lambda = copy(y.lambda)
 
@@ -491,34 +491,20 @@ function compute_minors(tensor_decomp::TensorDecomposition{T}, rhs::KronProd{T},
     
 end
 
-function Base.first(A::KronMat{T}, ::LanczosUnion{T}) where T  
-    
-    tmp = Symmetric(Matrix(first(A)), :L)
-
-    return SymTridiagonal(tmp)
-
-end
-    
-Base.first(A::KronMat{T}, ::Type{TensorArnoldi{T}}) where T = Matrix(first(A))
 
 function matrix_exponential_vector!(
     y::ktensor,
-    A::KronMat{T},
+    A::KronMat{T, U},
     b::KronProd{T},
-    γ::T, k::Int,
-    orthogonalization::Type{<:TensorDecomposition{T}}) where T
+    γ::T, 
+    k::Int) where {T, U<:Instance}
 
-    #tmp = Matrix(copy(A[1]))
-    #Base.display(first(A))
-    tmp = first(A, orthogonalization)
+    tmp = γ * first(A)
 
-    expA = exp(γ * tmp)
+    expA = exp(tmp)
 
     for s = 1:length(A)
 
-        #tmp = Matrix(copy(A[s]))
-        #y.fmat[s][:, k] =  exp(γ * tmp) * b[s] # Update kth column
-        
         y.fmat[s][:, k] =  expA * b[s] # Update kth column
 
     end

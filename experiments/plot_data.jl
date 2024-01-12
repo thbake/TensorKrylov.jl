@@ -3,10 +3,9 @@ using LaTeXStrings
 
 include("reproduction_spd.jl")
 
-const ConvVec{T} = Vector{ConvergenceData{T}} 
 
 
-# Define Type Recipe for Experiment{T} 
+# Define Type Recipe for Reproduction{T} 
 @recipe function f(::Type{Reproduction{T}}, experiment::Reproduction{T}) where T<:AbstractFloat
     
     # type recipe for vector of ConvergenceData{T} is called recursively
@@ -144,7 +143,6 @@ struct ProjResidualPlot <: CustomPlot
     end
 
 end
-
 
 function compute_labels(experiment::Reproduction) 
 

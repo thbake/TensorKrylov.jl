@@ -8,17 +8,22 @@ using Serialization
 
 Random.seed!(12345)
 
+# Aliases
+const ConvData{T} = ConvergenceData{T}
+const ConvVec{T} = Vector{ConvData{T}} 
+
+# Structs
 abstract type Experiment{T} end
 
 mutable struct Reproduction{T}<:Experiment{T}
 
     dimensions::Vector{Int}
     niterations::Int
-    conv_data_vector::Vector{ConvergenceData{T}}
+    conv_data_vector::ConvVec{T}
 
     function Reproduction{T}(problem_dimensions::Vector{Int}, nmax::Int) where T<:AbstractFloat
 
-        convergence_results = [ ConvergenceData{T}(nmax) for _ in 1:length(problem_dimensions) ]
+        convergence_results = [ ConvData{T}(nmax) for _ in 1:length(problem_dimensions) ]
 
         new(problem_dimensions, nmax, convergence_results)
 
@@ -32,7 +37,7 @@ mutable struct Reproduction{T}<:Experiment{T}
         complete_path        = "experiments/data/" * datadir
         files               = cd(readdir, joinpath(pkg_path, complete_path))
         nfiles              = length(files)
-        convergence_results = Vector{ConvergenceData{T}}(undef, nfiles)
+        convergence_results = Vector{ConvData{T}}(undef, nfiles)
 
         regex   = r"[0-9]+"
         matches = match.(regex, files)
@@ -53,7 +58,7 @@ mutable struct Reproduction{T}<:Experiment{T}
                 types = column_types
             )
 
-            convergence_data = ConvergenceData{T}( nrow(df) )
+            convergence_data = ConvData{T}( nrow(df) )
 
             convergence_data.iterations              = df[:, 1]
             convergence_data.relative_residual_norm  = df[:, 2]
@@ -180,9 +185,4 @@ function deserialize_to_file(filename::AbstractString)
     end
 
     return experiment
-
-        
-
-
-     
 end
