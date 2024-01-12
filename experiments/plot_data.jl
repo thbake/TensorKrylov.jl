@@ -7,7 +7,7 @@ const ConvVec{T} = Vector{ConvergenceData{T}}
 
 
 # Define Type Recipe for Experiment{T} 
-@recipe function f(::Type{Experiment{T}}, experiment::Experiment{T}) where T<:AbstractFloat
+@recipe function f(::Type{Reproduction{T}}, experiment::Reproduction{T}) where T<:AbstractFloat
     
     # type recipe for vector of ConvergenceData{T} is called recursively
     return experiment.conv_data_vector
@@ -54,8 +54,10 @@ end
     marker     --> :circle
     markersize --> 1.5
 
-    x := x
-    y := y
+    stride = 2:5:199
+
+    x := x[stride]
+    y := y[stride]
     seriestype := :path
 end
 @shorthands(orthogonalityloss)
@@ -143,30 +145,15 @@ struct ProjResidualPlot <: CustomPlot
 
 end
 
-#struct SpectrumPlot{T} <: CustomPlot
-#
-#    conv_data_vector::ConvVec{T}
-#
-#    function SpectrumPlot{T}(conv_data_vector::ConvVec{T}) where T<:AbstractFloat
-#
-#        spectra_data = [ conv_data_vector.relative_residual_norm[i] for i in 1:length(conv_data_vector) ]
-#
-#        new(conv_data_vector)
-#
-#    end
-#
-#end
 
-
-
-function compute_labels(experiment::Experiment) 
+function compute_labels(experiment::Reproduction) 
 
     return "d = " .* string.(experiment.dimensions)
 
 end
 
 function plot_experiment(
-    experiment ::Experiment,
+    experiment ::Reproduction,
     custom_plot::Type{<:CustomPlot}) 
 
     x        = get_iterations(experiment)
