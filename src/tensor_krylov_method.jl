@@ -133,6 +133,8 @@ function tensor_krylov!(
                 println("Early termination at k = " * string(k) * " due to compressed norm breakdown")
                 convergence_data.niterations = k - 1
 
+                resize!(convergence_data, convergence_data.niterations)
+
                 return
 
             end

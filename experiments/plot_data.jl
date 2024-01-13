@@ -3,13 +3,17 @@ using LaTeXStrings
 
 include("reproduction_spd.jl")
 
+function getstride(v::Vector{<:AbstractVector{T}}, s::Int) where T
 
+    return [ 1:s:length(v[i]) for i in 1:length(v) ]
+
+end
 
 # Define Type Recipe for Reproduction{T} 
 @recipe function f(::Type{Reproduction{T}}, experiment::Reproduction{T}) where T<:AbstractFloat
     
     # type recipe for vector of ConvergenceData{T} is called recursively
-    return experiment.conv_data_vector
+    return experiment.conv_vector
 
 end
 
@@ -29,10 +33,14 @@ end
     marker     --> :circle
     markersize --> 1.5
 
-    stride = 2:5:199
+    #stride = 2:5:199
+    #x := x[stride]
+    #y := y[stride]
+    
+    stride = getstride(x, 5)
+    x := getindex.(x, stride)
+    y := getindex.(y, stride)
 
-    x := x[stride]
-    y := y[stride]
     seriestype := :path
 
 end
@@ -104,9 +112,9 @@ struct ResidualPlot <: CustomPlot
     data  ::Vector{Vector}
     series::Symbol 
 
-    function ResidualPlot(conv_data_vector::ConvVec{T}) where T<:AbstractFloat
+    function ResidualPlot(conv_vector::ConvVec{T}) where T<:AbstractFloat
 
-        relative_residuals = [ conv_data_vector[i].relative_residual_norm for i in 1:length(conv_data_vector) ]
+        relative_residuals = [ conv_vector[i].relative_residual_norm for i in 1:length(conv_vector) ]
 
         new(relative_residuals, :relativeresidual)
 
@@ -119,9 +127,9 @@ struct OrthogonalityPlot <: CustomPlot
     data  ::Vector{Vector}
     series::Symbol 
 
-    function OrthogonalityPlot(conv_data_vector::ConvVec{T}) where T<:AbstractFloat
+    function OrthogonalityPlot(conv_vector::ConvVec{T}) where T<:AbstractFloat
 
-        orthogonality = [ conv_data_vector[i].orthogonality_data for i in 1:length(conv_data_vector) ]
+        orthogonality = [ conv_vector[i].orthogonality_data for i in 1:length(conv_vector) ]
 
         new(orthogonality, :orthogonalityloss)
 
@@ -134,9 +142,9 @@ struct ProjResidualPlot <: CustomPlot
     data  ::Vector{Vector}
     series::Symbol
 
-    function ProjResidualPlot(conv_data_vector::ConvVec{T}) where T<:AbstractFloat
+    function ProjResidualPlot(conv_vector::ConvVec{T}) where T<:AbstractFloat
 
-        projected_residuals = [ conv_data_vector[i].projected_residual_norm for i in 1:length(conv_data_vector) ]
+        projected_residuals = [ conv_vector[i].projected_residual_norm for i in 1:length(conv_vector) ]
 
         new(projected_residuals, :proj)
 
@@ -156,7 +164,7 @@ function plot_experiment(
 
     x        = get_iterations(experiment)
     labels   = compute_labels(experiment)  # Add labels
-    res_plot = custom_plot(experiment.conv_data_vector)
+    res_plot = custom_plot(experiment.conv_vector)
 
     plot(x, res_plot, labels, seriestype = res_plot.series)
 

@@ -1,23 +1,6 @@
-using TensorKrylov
-using LinearAlgebra
-using SparseArrays
-using DataFrames
-using CSV
-using Random
-using Serialization
+include("experiment_common.jl")
 
-Random.seed!(12345)
-
-# Aliases
-const ConvData{T} = ConvergenceData{T}
-const ConvVec{T}  = Vector{ConvData{T}} 
-const TDecomp{T}  = TensorDecomposition{T}
-const rhsVec{T}   = Vector{Vector{Vector{T}}}
-
-# Structs
-abstract type Experiment{T} end
-
-mutable struct Reproduction{T}<:Experiment{T}
+mutable struct Reproduction{T} <: Experiment{T}
 
     dimensions  ::Vector{Int}
     matrix_size ::Int
@@ -91,40 +74,9 @@ mutable struct Reproduction{T}<:Experiment{T}
 
 end
 
-function Base.length(experiment::Reproduction{T}) where T
-
-    return length(experiment.dimensions)
-
-end
-
-function get_iterations(experiment::Reproduction{T}) where T<:AbstractFloat
-
-    return [ experiment.conv_vector[i].iterations for i in 1:length(experiment) ]
-
-end
-
-function get_relative_residuals(experiment::Reproduction{T}) where T<:AbstractFloat
-
-    return [ experiment.conv_vector[i].relative_residual_norm for i in 1:length(experiment) ]
-
-end
-
-function get_projected_residuals(experiment::Reproduction{T}) where T<:AbstractFloat
-
-    return [ experiment.conv_vector[i].projected_residual_norm for i in 1:length(experiment) ]
-
-end
-
-function get_convergence_data(experiment::Reproduction{T}) where T<:AbstractFloat
-
-    return experiment.conv_vector
-
-end
-    
-
 function run_experiments!(experiment::Reproduction{T}, tol::T = 1e-9) where T
 
-    println("Performing experiments")
+    println("Performing reproduction experiments")
 
     for i in eachindex(experiment.dimensions)
 
@@ -149,6 +101,26 @@ function run_experiments!(experiment::Reproduction{T}, tol::T = 1e-9) where T
 
 end
 
+function get_relative_residuals(experiment::Reproduction) 
+
+    return [ experiment.conv_vector[i].relative_residual_norm for i in 1:length(experiment) ]
+
+end
+
+function get_projected_residuals(experiment::Reproduction) 
+
+    return [ experiment.conv_vector[i].projected_residual_norm for i in 1:length(experiment) ]
+
+end
+
+function get_convergence_data(experiment::Reproduction) 
+
+    return experiment.conv_vector
+
+end
+    
+
+
 function exportresults(exportdir::AbstractString, experiment::Reproduction{T}) where T<:AbstractFloat
 
     for i in 1:length(experiment)
@@ -172,32 +144,3 @@ function exportresults(exportdir::AbstractString, experiment::Reproduction{T}) w
 
 end
 
-function serialize_to_file(filename::AbstractString, experiment::Reproduction{T}) where T
-
-    complete_path = "experiments/data/serialized_data/" * filename
-
-    open(complete_path, "w") do file
-
-        s = Serializer(file)
-
-        serialize(s, experiment)
-
-    end
-
-
-end
-
-function deserialize_to_file(filename::AbstractString) 
-
-    complete_path = "experiments/data/serialized_data/" * filename
-
-    experiment = open(complete_path, "r") do file
-
-        s = Serializer(file)
-
-        deserialize(s)
-
-    end
-
-    return experiment
-end

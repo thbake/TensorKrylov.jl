@@ -74,15 +74,7 @@ Base.eachindex(A::KroneckerMatrix)        = eachindex(A.𝖳)
 
 Base.first(A::KroneckerMatrix{T, Instance}) where T = first(A.𝖳)
 
-#function Base.first(A::KroneckerMatrix{T, SymInstance}) where T  
-#    
-#    tmp = Symmetric(Matrix(first(A.𝖳)), :L)
-#
-#    return SymTridiagonal(tmp)
-#
-#end
-    
-Base.first(A::KroneckerMatrix{T, SymInstance}) where T = Symmetric(first(A.𝖳), :L)
+Base.first(A::KroneckerMatrix{T, SymInstance}) where T    = Symmetric(first(A.𝖳), :L)
 Base.first(A::KroneckerMatrix{T, NonSymInstance}) where T = Matrix(first(A.𝖳))
 
 function Base.getindex(A::KroneckerMatrix{T, U}, multiindex::Matrix{<:Int}) where {T, U<:Instance}
