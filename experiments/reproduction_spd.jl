@@ -10,22 +10,36 @@ Random.seed!(12345)
 
 # Aliases
 const ConvData{T} = ConvergenceData{T}
-const ConvVec{T} = Vector{ConvData{T}} 
+const ConvVec{T}  = Vector{ConvData{T}} 
+const TDecomp{T}  = TensorDecomposition{T}
+const rhsVec{T}   = Vector{Vector{Vector{T}}}
 
 # Structs
 abstract type Experiment{T} end
 
 mutable struct Reproduction{T}<:Experiment{T}
 
-    dimensions::Vector{Int}
-    niterations::Int
-    conv_data_vector::ConvVec{T}
+    dimensions  ::Vector{Int}
+    matrix_size ::Int
+    nmax        ::Int
+    instance    ::Type{<:Instance}
+    matrix_class::Type{<:MatrixGallery{T}}
+    orth_method ::Type{<:TDecomp{T}}
+    rhs_vec     ::rhsVec{T}
+    conv_vector::ConvVec{T}
 
-    function Reproduction{T}(problem_dimensions::Vector{Int}, nmax::Int) where T<:AbstractFloat
+    function Reproduction{T}(
+        dims    ::Vector{Int},
+        n       ::Int,
+        nmax    ::Int,
+        instance::Type{<:Instance},
+        class   ::Type{<:MatrixGallery{T}},
+        orth    ::Type{<:TDecomp{T}},
+        rhs     ::rhsVec{T}) where T
 
-        convergence_results = [ ConvData{T}(nmax) for _ in 1:length(problem_dimensions) ]
+        conv_results = [ ConvData{T}(nmax, instance) for _ in 1:length(dims) ]
 
-        new(problem_dimensions, nmax, convergence_results)
+        new(dims, n, nmax, instance, class, orth, rhs, conv_results)
 
     end
 
@@ -85,52 +99,53 @@ end
 
 function get_iterations(experiment::Reproduction{T}) where T<:AbstractFloat
 
-    return [ experiment.conv_data_vector[i].iterations for i in 1:length(experiment) ]
+    return [ experiment.conv_vector[i].iterations for i in 1:length(experiment) ]
 
 end
 
 function get_relative_residuals(experiment::Reproduction{T}) where T<:AbstractFloat
 
-    return [ experiment.conv_data_vector[i].relative_residual_norm for i in 1:length(experiment) ]
+    return [ experiment.conv_vector[i].relative_residual_norm for i in 1:length(experiment) ]
 
 end
 
 function get_projected_residuals(experiment::Reproduction{T}) where T<:AbstractFloat
 
-    return [ experiment.conv_data_vector[i].projected_residual_norm for i in 1:length(experiment) ]
+    return [ experiment.conv_vector[i].projected_residual_norm for i in 1:length(experiment) ]
 
 end
 
 function get_convergence_data(experiment::Reproduction{T}) where T<:AbstractFloat
 
-    return experiment.conv_data_vector
+    return experiment.conv_vector
 
 end
     
 
-function run_experiments(
-    dimensions             ::Vector{Int},
-    n                      ::Int,
-    nmax                   ::Int,
-    matrix_instance        ::Type{<:MatrixGallery{T}},
-    b                      ::Vector{<:KronProd{T}},
-    orthonormalization_type::Type{<:TensorDecomposition{T}},
-    tol                    ::T = 1e-9) where T<:AbstractFloat
+function run_experiments!(experiment::Reproduction{T}, tol::T = 1e-9) where T
 
     println("Performing experiments")
 
-    systems = [ TensorizedSystem{T}( KronMat{T}(dimensions[i], n, matrix_instance), b[i], orthonormalization_type) for i in eachindex(dimensions) ]
+    for i in eachindex(experiment.dimensions)
 
-    experiment = Reproduction{T}(dimensions, nmax)
+        println("d = " * string(experiment.dimensions[i]))
 
-    for i in eachindex(dimensions)
+        A = KronMat{T, experiment.instance}(
+            experiment.dimensions[i],
+            experiment.matrix_size,
+            experiment.matrix_class
+        )
 
-        println("d = " * string(dimensions[i]))
-        experiment.conv_data_vector[i] = solve_tensorized_system(systems[i], nmax, tol)
+        system = TensorizedSystem{T, experiment.instance}(A, experiment.rhs_vec[i])
+
+        experiment.conv_vector[i] = solve_tensorized_system(
+            system,
+            experiment.nmax,
+            experiment.orth_method,
+            tol
+        )
 
     end
-
-    return experiment
 
 end
 
@@ -139,7 +154,7 @@ function exportresults(exportdir::AbstractString, experiment::Reproduction{T}) w
     for i in 1:length(experiment)
 
         d    = experiment.dimensions[i]
-        data = experiment.conv_data_vector[i]
+        data = experiment.conv_vector[i]
 
         df = DataFrame(
 

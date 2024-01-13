@@ -24,7 +24,7 @@ struct TensorizedSystem{T, U}
         b                     ::KronProd{T},
         normalize_rhs         ::Bool = true) where {T, U<:Instance}
 
-        @assert length(A) == length(b)
+        @assert length(A)          == length(b)
         @assert all(dimensions(A) .== size.(b, 1))
 
         d = length(A)
