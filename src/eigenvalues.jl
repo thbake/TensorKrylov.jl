@@ -1,6 +1,7 @@
 using Combinatorics
 export analytic_eigenvalues, assemble_matrix,bisection, initial_interval,
-       kronsumeigs, next_coefficients!, sign_changes,  qr_algorithm
+       kronsumeigs, next_coefficients!, possiblesums, sign_changes,
+       qr_algorithm
 
 
 # Data structure d sets of Sturm sequences of polynomials

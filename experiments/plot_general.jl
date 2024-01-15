@@ -1,48 +1,43 @@
+export OrthogonalityPlot, ProjResidualPlot, ResidualPlot
+export plot_experiment
+
 using Plots
-using LaTeXStrings
 
-include("reproduction_spd.jl")
+function getstride(v::Vector{T}, s::Int) where T
 
-function getstride(v::Vector{<:AbstractVector{T}}, s::Int) where T
-
-    return [ 1:s:length(v[i]) for i in 1:length(v) ]
+    return 1:s:length(v) 
 
 end
 
 # Define Type Recipe for Reproduction{T} 
-@recipe function f(::Type{Reproduction{T}}, experiment::Reproduction{T}) where T<:AbstractFloat
+@recipe function f(::Type{<:Experiment{T}}, experiment::Experiment{T}) where T
     
     # type recipe for vector of ConvergenceData{T} is called recursively
     return experiment.conv_vector
 
 end
 
-# Define Plot Recipe for displaying experiments
-@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot) 
 
+# Define Plot Recipe for displaying experiments
+@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot; n::Int, point_sep = 1) # Here n is a kw-arg
     x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     xlabel     --> L"k"
     ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
-    xlims      --> (1, 200)
-    ylims      --> (1e-8, 1e+2)
+    xlims      --> (1, n)
+    #ylims      --> (1e-8, 1e+2)
     yscale     --> :log10
-    yticks     --> 10.0 .^collect(-8:2:2)
+    #yticks     --> 10.0 .^collect(-8:2:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
     marker     --> :circle
     markersize --> 1.5
 
-    #stride = 2:5:199
-    #x := x[stride]
-    #y := y[stride]
-    
-    stride = getstride(x, 5)
-    x := getindex.(x, stride)
-    y := getindex.(y, stride)
+    point_sep_array = getstride(x, point_sep)
+    x := x[point_sep_array]
+    y := y[point_sep_array]
 
     seriestype := :path
-
 end
 @shorthands(relativeresidual)
 
@@ -51,7 +46,7 @@ end
     x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     xlabel     --> L"k"
     ylabel     --> L"$||\mathcal{V}_\mathfrak{K}^{H}\mathcal{V}_\mathfrak{K} - I_\mathfrak{K}||$"
-    xlims      --> (1, 200)
+    xlims      --> (1, length(x))
     ylims      --> (1e-16, 1e+2)
     yscale     --> :log10
     yticks     --> 10.0 .^collect(-16:2:2)
@@ -152,20 +147,17 @@ struct ProjResidualPlot <: CustomPlot
 
 end
 
-function compute_labels(experiment::Reproduction) 
-
-    return "d = " .* string.(experiment.dimensions)
-
-end
 
 function plot_experiment(
-    experiment ::Reproduction,
-    custom_plot::Type{<:CustomPlot}) 
+    experiment ::Experiment,
+    custom_plot::Type{<:CustomPlot}, 
+    point_sep::Int = 1) 
 
     x        = get_iterations(experiment)
     labels   = compute_labels(experiment)  # Add labels
     res_plot = custom_plot(experiment.conv_vector)
+    
 
-    plot(x, res_plot, labels, seriestype = res_plot.series)
+    relativeresidual(x, res_plot, labels, n = experiment.matrix_size, point_sep = point_sep)
 
 end

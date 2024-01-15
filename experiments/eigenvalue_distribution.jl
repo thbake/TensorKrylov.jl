@@ -1,47 +1,58 @@
-include("experiment_common.jl")
+export EigValDist
+export clusterone, clusterzero
 
-mutable struct EigValsDist{T} <: Experiment{T}
-    dimensions ::Vector{Int}
-    matrix_size::Int
-    nmax       ::Int
-    rhs_vec    ::rhsVec{T}
-    conv_vector::ConvVec{T}
+mutable struct EigValDist{T} <: AbstractExperiment{T}
+
+    experiment ::Experiment{T}
     eigenvalues::Vector{T}
 
-    function EigValsDist{T}(
+    function EigValDist{T}(
         dims       ::Vector{Int},
         eigenvalues::Vector{T},
         nmax       ::Int,
         rhs        ::rhsVec{T}) where T
 
-        conv_results = [ ConvData{T}(nmax, SymInstance) for _ in 1:length(dims) ]
+        instance   = SymInstance
+        experiment = Experiment{T}(
+            dims,
+            length(eigenvalues),
+            nmax,
+            instance,
+            EigValMat{T},
+            TensorLanczosReorth{T},
+            rhs)
 
-            new(dims, length(eigenvalues), nmax, rhs, conv_results, eigenvalues)
+        new(experiment, eigenvalues)
 
     end
 
 end
 
-function run_experiments!(experiment::EigValsDist{T}, tol = 1e-9) where T
+
+function run_experiments!(distexp::EigValDist{T}, tol = 1e-9) where T
 
     println("Performing eigenvalue experiments")
 
-    for i in eachindex(experiment.dimensions)
+    experiment = distexp.experiment
 
-        println("d = " * string(experiment.dimensions[i]))
+    for i in eachindex(experiment.dims)
 
-        A = KronMat{T, SymInstance}(
-            experiment.dimensions[i],
-            experiment.eigenvalues,
-            EigValMat{T}
+        println("d = " * string(experiment.dims[i]))
+
+
+        A = KronMat{T, experiment.instance}(
+            experiment.dims[i],
+            distexp.eigenvalues,
+            experiment.matrix_class
         )
 
-        system = TensorizedSystem{T, SymInstance}(A, experiment.rhs_vec[i])
+        system = TensorizedSystem{T, experiment.instance}(A, experiment.rhs_vec[i])
+        
 
-        experiment.conv_vector[i] = solve_tensorized_system(
+        distexp.experiment.conv_vector[i] = solve_tensorized_system(
             system,
             experiment.nmax,
-            TensorLanczosReorth{T},
+            experiment.orth_method,
             tol
         )
 
