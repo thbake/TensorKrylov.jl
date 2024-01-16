@@ -1,5 +1,5 @@
 export KroneckerMatrix
-export ConvDiff, EigValMat, Laplace, MatrixGallery, RandSPD 
+export ConvDiff, EigValMat, Laplace, LaplaceDense, MatrixGallery, RandSPD 
 export Instance, SymInstance, NonSymInstance
 export assemble_matrix, dimensions, kroneckervectorize,  kronproddot, 
        kronprodnorm, kth_columns, mul!, nentries, principal_minors,  
@@ -8,10 +8,11 @@ export assemble_matrix, dimensions, kroneckervectorize,  kronproddot,
 const KronStruct{T} = Vector{<:AbstractVecOrMat{T}}
 
 abstract type MatrixGallery{T} end
-struct Laplace{T}   <: MatrixGallery{T} end 
-struct ConvDiff{T}  <: MatrixGallery{T} end
-struct EigValMat{T} <: MatrixGallery{T} end
-struct RandSPD{T}   <: MatrixGallery{T} end
+struct LaplaceDense{T} <: MatrixGallery{T} end
+struct Laplace{T}      <: MatrixGallery{T} end 
+struct ConvDiff{T}     <: MatrixGallery{T} end
+struct EigValMat{T}    <: MatrixGallery{T} end
+struct RandSPD{T}      <: MatrixGallery{T} end
 
 abstract type Instance end
 struct SymInstance    <: Instance end
@@ -111,14 +112,17 @@ getinstancetype(::KroneckerMatrix{T, U}) where {T, U<:Instance} = U
 
 nentries(A::KroneckerMatrix) = prod(dimensions(A))
 
-function assemble_matrix(n::Int, ::Type{Laplace{T}}) where T
+function assemble_matrix(n::Int, ::Type{LaplaceDense{T}}) where T
 
     h  = inv(n + 1)
-    Aₛ = inv(h^2) * sparse(SymTridiagonal(2ones(n), -ones(n)))
+    Aₛ = inv(h^2) * SymTridiagonal(2ones(n), -ones(n))
 
     return Aₛ
 
 end
+
+assemble_matrix(n::Int, ::Type{Laplace{T}}) where T = sparse( assemble_matrix(n, LaplaceDense{T}) )
+
 
 function assemble_matrix(n::Int, ::Type{ConvDiff{T}}, c::AbstractFloat = 10.0)  where T
 

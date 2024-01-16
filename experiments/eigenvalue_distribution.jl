@@ -33,26 +33,24 @@ function run_experiments!(distexp::EigValDist{T}, tol = 1e-9) where T
 
     println("Performing eigenvalue experiments")
 
-    experiment = distexp.experiment
+    for i in eachindex(distexp.experiment.dims)
 
-    for i in eachindex(experiment.dims)
-
-        println("d = " * string(experiment.dims[i]))
+        println("d = " * string(distexp.experiment.dims[i]))
 
 
-        A = KronMat{T, experiment.instance}(
-            experiment.dims[i],
+        A = KronMat{T, distexp.experiment.instance}(
+            distexp.experiment.dims[i],
             distexp.eigenvalues,
-            experiment.matrix_class
+            distexp.experiment.matrix_class
         )
 
-        system = TensorizedSystem{T, experiment.instance}(A, experiment.rhs_vec[i])
+        system = TensorizedSystem{T, distexp.experiment.instance}(A, distexp.experiment.rhs_vec[i])
         
 
         distexp.experiment.conv_vector[i] = solve_tensorized_system(
             system,
-            experiment.nmax,
-            experiment.orth_method,
+            distexp.experiment.nmax,
+            distexp.experiment.orth_method,
             tol
         )
 
