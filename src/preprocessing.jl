@@ -14,17 +14,16 @@ mutable struct ApproximationData{T, U<:Instance}
     condition_order        ::Int
 
     function ApproximationData{T, SymInstance}(tol::T) where T<:AbstractFloat
+        package_dir = compute_package_directory()
+        df          = compute_dataframe(package_dir)
 
-        new(DataFrame(), 0, zeros(), zeros(), tol, 0, 0)
+        new(df, 0, zeros(), zeros(), tol, 0, 0) 
 
     end
 
     function ApproximationData{T, NonSymInstance}(tol::T) where T<:AbstractFloat
 
-        package_dir = compute_package_directory()
-        df          = compute_dataframe(package_dir)
-
-        new(df, 0, zeros(), zeros(), tol, 0, 0) 
+        new(DataFrame(), 0, zeros(), zeros(), tol, 0, 0)
 
     end
 

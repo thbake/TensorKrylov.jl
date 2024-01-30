@@ -200,6 +200,16 @@ function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) wher
 
 end
 
+function compute_lower_triangles!(LowerTriangles::FMatrices{T}, M::FMatrices{T}) where T
+
+    for s = 1:length(LowerTriangles)
+
+        BLAS.syrk!('L', 'T', 1.0, M[s], 1.0, LowerTriangles[s])
+
+    end
+
+end
+
 function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) where T 
 
     # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
@@ -283,15 +293,19 @@ function evalmvnorm(
 end
 
 
-function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMatrices{T}) where T
+function MVnorm(y::ktensor, Λ::AbstractMatrix{T}, Ly::FMatrices{T}, Z::FMatrices{T}) where T
+
+    d    = length(Ly)
+    rank = length(y.lambda)
 
     Λ_complete = Symmetric(Λ, :L)
-    X          = Symmetric.(lowerX, :L)
-    Z_inner    = [ Z[s]'Z[s]      for s in 1:length(Z)]
-    XZ         = [ x.fmat[s]'Z[s] for s in 1:ndims(x) ]
+    Lz         = [ zeros(rank, rank) for _ in 1:d ]
+    X          = [ y.fmat[s]'Z[s]    for s in 1:d ]
 
-    d    = length(lowerX)
-    rank = length(x.lambda)
+    compute_lower_triangles!(Lz, Z) # Compute lower triangular parts
+    
+    Lz = Symmetric.(Lz, :L)         # Symmetrize
+
 
     mask_s = falses(d)
     mask_r = falses(d)
@@ -306,7 +320,7 @@ function MVnorm(x::ktensor, Λ::AbstractMatrix{T}, lowerX::FMatrices{T}, Z::FMat
 
             mask_r[r] = true
 
-            MVnorm += evalmvnorm(Λ_complete, X, XZ, Z_inner, i, j, mask_s, mask_r)
+            MVnorm += evalmvnorm(Λ_complete, Ly, X, Lz, i, j, mask_s, mask_r)
 
             mask_r[r] = false
 
@@ -379,7 +393,6 @@ function compressed_residual(
 
     # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
     Z  = matrix_vector(H, y)
-    Ly = Symmetric.(Ly, :L)
 
     Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z) # First we compute ||Hy||²
     Hy_b    = tensorinnerprod(Z, y, b)           # <Hy, b>₂
