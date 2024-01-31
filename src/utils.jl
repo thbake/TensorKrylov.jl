@@ -265,28 +265,25 @@ function matrix_vector(A::KronMat, x::ktensor)
 
 end
 
-function mask_matrix_collection(
-    YZ    ::FMatrices{T},
-    mask_s::BitVector, mask_r::BitVector, 
-    i     ::Int, j::Int) where T
+function f(X::FMatrices{T}, mask_s::BitVector, mask_r::BitVector, i::Int, j::Int) where T
 
     mask = mask_s .⊻ mask_r
     
-    return !any(mask) ? 1.0 : maskprod(YZ[mask_s], i, j) * maskprod(YZ[mask_r], j, i)
+    return !any(mask) ? 1.0 : maskprod(X[mask_s], i, j) * maskprod(X[mask_r], j, i)
 
 end
 
 function evalmvnorm(
-    Λ      ::AbstractMatrix{T},
-    Y      ::FMatrices{T},
-    YZ     ::FMatrices{T},
-    Z_inner::FMatrices{T},
+    Λ ::AbstractMatrix{T},
+    Ly ::FMatrices{T},
+    X ::FMatrices{T},
+    Lz::FMatrices{T},
     i::Int, j::Int, 
     mask_s, mask_r)::T where T
 
-    α  = maskprod(Y[.!(mask_s .|| mask_r)], i, j)
-    β = mask_matrix_collection(YZ, mask_s, mask_r, i, j)
-    γ = maskprod(Z_inner[mask_s .&& mask_r], i, j)
+    α  = maskprod(Ly[.!(mask_s .|| mask_r)], i, j)
+    β = f(X, mask_s, mask_r, i, j)
+    γ = maskprod(Lz[mask_s .&& mask_r], i, j)
 
     return Λ[i, j] * α * β * γ
 
@@ -305,6 +302,7 @@ function MVnorm(y::ktensor, Λ::AbstractMatrix{T}, Ly::FMatrices{T}, Z::FMatrice
     compute_lower_triangles!(Lz, Z) # Compute lower triangular parts
     
     Lz = Symmetric.(Lz, :L)         # Symmetrize
+    Ly = Symmetric.(Ly, :L)         # Symmetrize
 
 
     mask_s = falses(d)
