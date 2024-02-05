@@ -63,7 +63,7 @@ clusterzero(n::Int) = [j^2 * inv(400) for j in 1:n]
 function clusterone(n::Int)
 
     values    = zeros(n)
-    values[1] = 1 * inv(400)
+    values[1] = inv(400)
 
     tmp = log(n)
 
@@ -76,4 +76,6 @@ function clusterone(n::Int)
     return values
 
 end
+
+
 

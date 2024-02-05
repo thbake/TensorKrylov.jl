@@ -97,9 +97,9 @@ function get_convergence_data(experiment::Experiment)
 
 end
 
-compute_labels(experiment::Experiment) =  "d = " .* string.(experiment.dims)
+compute_labels(experiment::Experiment) =  "dim = " .* string.(experiment.dims)
 
-compute_labels(dims::Vector{Int}) = "d = " .* string.(dims)
+compute_labels(dims::Vector{Int}) = "dim = " .* string.(dims)
 
 function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) where T
 

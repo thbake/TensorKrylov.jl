@@ -1,7 +1,8 @@
 using Combinatorics
 export analytic_eigenvalues, assemble_matrix,bisection, initial_interval,
-       kronsumeigs, next_coefficients!, possiblesums, sign_changes,
-       qr_algorithm
+       kronsumeigs, next_coefficients!, possiblesums, sign_changes
+       #qr_algorithm
+export EVC, EVPerm, EVReps 
 
 
 # Data structure d sets of Sturm sequences of polynomials
@@ -204,14 +205,19 @@ end
 #
 #end
 
-possiblesums(eigenvalues1d::Array, d::Int) = sum.( with_replacement_combinations(eigenvalues1d, d) )
+abstract type EVC end # Eigenvalue combinatorics
+struct EVReps <: EVC end
+struct EVPerm <: EVC end
+
+possiblesums(eigvals1d::Array, d::Int, ::EVReps) = sum.( with_replacement_combinations(eigvals1d, d) )
+possiblesums(eigvals1d::Array, d::Int, ::EVPerm) = sum.( multiset_permutations(eigvals1d, d) )
 
 function kronsumeigs(A::KronMat)
 
     tmp    = Matrix( first(A) )
     values = eigvals( tmp )
 
-    eigenvalues = possiblesums(values, length(A))
+    eigenvalues = possiblesums(values, length(A), EVReps())
 
     return eigenvalues
 

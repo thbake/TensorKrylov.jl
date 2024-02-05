@@ -31,7 +31,7 @@ end
     ls         --> :solid
     lw         --> 1.5
     marker     --> :circle
-    markersize --> 1.5
+    markersize --> 3
 
     point_sep_array = getstride(x, point_sep)
     x := x[point_sep_array]
