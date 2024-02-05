@@ -1,5 +1,6 @@
 export Experiment
 export serialize_to_file, deserialize_from_file, get_iterations
+export ConvData, ConvVec, rhsVec, TDecomp
 
 # Aliases
 const ConvData{T} = ConvergenceData{T}
@@ -103,7 +104,7 @@ compute_labels(dims::Vector{Int}) = "dim = " .* string.(dims)
 
 function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) where T
 
-    complete_path = "experiments/data/reproduction_data/" * filename
+    complete_path = "experiments/data/" * filename
 
     open(complete_path, "w") do file
 
@@ -118,7 +119,7 @@ end
 
     function deserialize_from_file(filename::AbstractString) 
 
-    complete_path = "experiments/data/reproduction_data/" * filename
+    complete_path = "experiments/data/" * filename
 
     experiment = open(complete_path, "r") do file
 

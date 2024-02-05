@@ -1,5 +1,8 @@
+using Random 
 export EigValDist
-export clusterone, clusterzero
+export clusterone, clusterzero, eigenvalue_experiment
+
+Random.seed!(1234)
 
 mutable struct EigValDist{T} <: AbstractExperiment{T}
 
@@ -77,5 +80,23 @@ function clusterone(n::Int)
 
 end
 
+function eigenvalue_experiment(tol::T = 1e-9) where T
 
+    dims = [5, 10, 50, 100]
+    n    = 15
+    nmax = 14
+    b    = multiple_rhs(dims, n)
+    
+    eigszero = clusterzero(n)
+    eigsone  = clusterone(n)
+
+    distzero = EigValDist{T}(dims, eigszero, nmax, b)
+    distone  = EigValDist{T}(dims, eigsone,  nmax, b)
+
+    run_experiments!(distzero, tol)
+    run_experiments!(distone,  tol)
+
+    return distzero, distone
+
+end
 
