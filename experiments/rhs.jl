@@ -1,5 +1,5 @@
 export RHSExperiment, Smoothness, Smooth, NonSmooth
-export special_rhs
+export special_rhs, rhs_experiment
 
 abstract type Smoothness end
 struct Smooth    <: Smoothness end # Right hand sides are chosen so that solution of linear
@@ -47,7 +47,7 @@ end
 
 function run_experiments!(rhsexp::RHSExperiment{T}, tol = 1e-9) where T
 
-    println("Performing eigenvalue experiments")
+    println("Performing right-hand side experiments")
 
     for i in eachindex(rhsexp.experiment.dims)
 
@@ -74,7 +74,18 @@ function run_experiments!(rhsexp::RHSExperiment{T}, tol = 1e-9) where T
 
 end
 
+function rhs_experiment(tol::T = 1e-9) where T
 
+    dims = [5, 10, 50, 100]
+    n    = 200
+    nmax  = n - 1
 
+    smooth_rhs    = RHSExperiment{T}(dims, n, nmax, Smooth)
+    nonsmooth_rhs = RHSExperiment{T}(dims, n, nmax, NonSmooth)
 
+    run_experiments!(smooth_rhs)
+    run_experiments!(nonsmooth_rhs)
 
+    return smooth_rhs, nonsmooth_rhs
+
+end
