@@ -1,5 +1,5 @@
 using TensorKrylov, Test
-using Kronecker, TensorToolbox, LinearAlgebra
+using Kronecker, LinearAlgebra
 
 @testset "Computation of matrix exponentials" begin
 

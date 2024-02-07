@@ -71,7 +71,7 @@ function solve_tensorized_system(
 
     convergencedata = ConvergenceData{T}(nmax, getinstancetype(system))
 
-    tensor_krylov!(
+    tensorkrylov!(
         convergencedata, system.A,
         system.b,
         tol,

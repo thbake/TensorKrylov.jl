@@ -68,7 +68,7 @@ end
     Hs = diagm( log.( ones(n) ) )              # exp(Hs) = I(n)
     H  = KronMat{Float64, Instance}([ Hs for _ in 1:d ])
     b  = [ ones(n) for _ in 1:d ]              # exp(Hs) * bs = [1, ..., 1]ᵀ
-    y = ktensor(ones(rank), [ ones(n, rank) for _ in 1:d ])
+    y = KruskalTensor{Float64}(ones(rank), [ ones(n, rank) for _ in 1:d ])
 
 
     @testset "Matrix exponential vector" begin
@@ -94,12 +94,12 @@ end
         rank = 4
 
         # Example of linearly dependent factor matrices in CP-decomposition
-        Mᵢ  = [ Tridiagonal(-ones(n-1), 2ones(n), -ones(n-1)) for _ in 1:d ]
+        Mᵢ  = [ SymTridiagonal(2ones(n), -ones(n-1)) for _ in 1:d ]
         M   = KroneckerMatrix{Float64, SymInstance}(Mᵢ)
         mat = rand(n, rank)
         X   = [ rand() .* mat for _ in 1:d ] # Only passes for linearly dependent factor matrices
         #X   = [ rand(n, rank) for _ in 1:d ]
-        x   = ktensor(ones(rank), X)
+        x   = KruskalTensor{Float64}(ones(rank), X)
 
         Λ, lowerX, Z = initialize_matrix_products(M, x)
 
@@ -137,7 +137,7 @@ end
         M   = KroneckerMatrix{Float64, NonSymInstance}([ assemble_matrix(n, ConvDiff{Float64}) for _ in 1:d])
         mat = rand(n, rank)
         X   = [ rand() .* mat for _ in 1:d ] # Only passes for linearly dependent factor matrices
-        x   = ktensor(ones(rank), X)
+        x   = KruskalTensor{Float64}(ones(rank), X)
 
         Λ, lowerX, Z = initialize_matrix_products(M, x)
 
@@ -195,7 +195,7 @@ end
     Y2 = [3.0 4.0; 3.0 4.0]
     Y3 = [2.0 2.0; 2.0 2.0]
     A  = [Y1, Y2, Y3]
-    y  = ktensor(A)
+    y  = KruskalTensor{Float64}(A)
 
     v1 = Float64.([22, 22, 22, 22])
     v2 = Float64.([20, 20, 22, 22])

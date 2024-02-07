@@ -1,6 +1,6 @@
 module TensorKrylov
     
-    using LinearAlgebra, TensorToolbox, Kronecker, SparseArrays, Logging
+    using LinearAlgebra, Kronecker, SparseArrays, Logging
     import LinearAlgebra: norm, mul!
 
     # Tensor structures representing componets of linear systems

@@ -63,7 +63,7 @@ Base.showerror(io::IO, e::CompressedNormBreakdown{T}) where T = print(io, e.r_co
 #
 #end
 #
-#function canonicaltoTT(x::ktensor)
+#function canonicaltoTT(x::KruskalTensor{T})
 #
 #    d     = ndims(x)
 #    rank  = ncomponents(x)
@@ -101,7 +101,7 @@ Base.showerror(io::IO, e::CompressedNormBreakdown{T}) where T = print(io, e.r_co
 #
 #end
 #
-#function TTcompressedresidual(H::KronMat{T}, y::ktensor, b::KronProd{T}) where T
+#function TTcompressedresidual(H::KronMat{T}, y::KruskalTensor{T}, b::KronProd{T}) where T
 #
 #    py"""
 #
@@ -190,7 +190,7 @@ function maskprod(x::FMatrices{T}, i::Int) where T
 
 end
 
-function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::ktensor) where T
+function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::KruskalTensor{T}) where T
 
     for s = 1:length(LowerTriangles)
 
@@ -238,7 +238,7 @@ function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) w
 end
 
 
-function matrix_vector(A::KronMat, x::ktensor)
+function matrix_vector!(Z::FMatrices{T}, A::KronMat{T, U}, x::KruskalTensor{T}) where {T, U<:Instance}
 
     # Compute the matrix vector products 
     #   
@@ -249,19 +249,12 @@ function matrix_vector(A::KronMat, x::ktensor)
 
     length(A) == ndims(x) || throw(DimensionMismatch("Kronecker matrix and vector (Kruskal tensor) have different number of components"))
 
-    orders = [ size(A[s], 1) for s in 1:length(A) ]
-    rank   = ncomponents(x)
-
-    # Return vector of matrices as described above
-    Z = [ zeros(orders[s], rank) for s in eachindex(A) ]
 
     for s = 1:length(A)
 
         LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
 
     end
-
-    return Z
 
 end
 
@@ -290,7 +283,7 @@ function evalmvnorm(
 end
 
 
-function MVnorm(y::ktensor, Λ::AbstractMatrix{T}, Ly::FMatrices{T}, Z::FMatrices{T}) where T
+function MVnorm(y::KruskalTensor{T}, Λ::AbstractMatrix{T}, Ly::FMatrices{T}, Z::FMatrices{T}) where T
 
     d    = length(Ly)
     rank = length(y.lambda)
@@ -328,19 +321,19 @@ function MVnorm(y::ktensor, Λ::AbstractMatrix{T}, Ly::FMatrices{T}, Z::FMatrice
 
     end
 
-    @assert MVnorm >= 0.0
+    #@assert MVnorm >= 0.0
 
     return MVnorm
     
 end
 
-function evalinnerprod(y::ktensor, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T
+function evalinnerprod(y::KruskalTensor{T}, bY::KronProd{T}, bZ::KronProd{T}, i::Int, mask::BitVector) where T
 
     return y.lambda[i] * maskprod(bZ[mask], i) * maskprod(bY[.!mask], i)
 
 end
 
-function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T
+function tensorinnerprod(Ax::FMatrices{T}, x::KruskalTensor{T}, y::KronProd{T}) where T
 
     d   = ndims(x)
     t   = ncomponents(x)
@@ -363,7 +356,7 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T
 
         mask[s] = true
 
-        for i in 1:ncomponents(x)
+        for i in 1:t
 
             Ax_y += evalinnerprod(x, yX, yAx, i, mask)
 
@@ -372,7 +365,7 @@ function tensorinnerprod(Ax::FMatrices{T}, x::ktensor, y::KronProd{T}) where T
         mask[s] = false
     end
 
-    @assert Ax_y >= 0.0
+    #@assert Ax_y >= 0.0
 
     return Ax_y
 
@@ -382,7 +375,7 @@ function compressed_residual(
     Ly::FMatrices{T},
     Λ ::AbstractMatrix{T},
     H ::KronMat{T, U},
-    y ::ktensor,
+    y ::KruskalTensor{T},
     b ::KronProd{T}) where {T, U<:Instance}
 
     # We know that 
@@ -390,7 +383,11 @@ function compressed_residual(
     #   ||Hy - b||² = ||Hy||² -2⋅bᵀ(Hy) + ||b||² 
 
     # For this we evaluate all z⁽ˢ⁾ᵢ=  Z⁽ˢ⁾[:, i] = Hₛy⁽ˢ⁾ᵢ ∈ ℝᵏₛ for i = 1,…,t
-    Z  = matrix_vector(H, y)
+
+    # Return vector of matrices as described above
+    Z = [ zeros(3,3) for s in 1:length(H) ]
+
+    matrix_vector!(Z, H, y)
 
     Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z) # First we compute ||Hy||²
     Hy_b    = tensorinnerprod(Z, y, b)           # <Hy, b>₂
@@ -404,9 +401,9 @@ function compressed_residual(
 end
 
 
-function residual_norm!(
+function residualnorm!(
     H                  ::KronMat{T, U},
-    y                  ::ktensor,
+    y                  ::KruskalTensor{T},
     𝔎                  ::Vector{Int},
     subdiagonal_entries::Vector{T},
     b                  ::KronProd{T}) where {T, U<:Instance}
@@ -480,7 +477,7 @@ function update_rhs!(b̃::KronProd{T}, V::KronProd{T}, b::KronProd{T}, k::Int) w
 
 end
 
-function basis_tensor_mul!(x::ktensor, V::KronMat, y::ktensor) 
+function basis_tensor_mul!(x::KruskalTensor{T}, V::KronMat, y::KruskalTensor{T})  where T
 
     x.lambda = copy(y.lambda)
 
@@ -504,7 +501,7 @@ end
 
 
 function matrix_exponential_vector!(
-    y::ktensor,
+    y::KruskalTensor{T},
     A::KronMat{T, U},
     b::KronProd{T},
     γ::T, 

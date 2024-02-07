@@ -1,4 +1,4 @@
-export KronMat, KronProd, LowerTriangle, FMatrices
+export KronMat, KronProd, LowerTriangle
 
 # Aliases
 
@@ -11,5 +11,3 @@ const KronMat{T, I}    = KroneckerMatrix{T, I}
 # Collection of lower triangular matrices
 const LowerTriangle{T} = LowerTriangular{T, <:AbstractMatrix{T}} 
 
-# Collection of matrices
-const FMatrices{T}     = Vector{<:AbstractMatrix{T}} 

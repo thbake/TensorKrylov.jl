@@ -1,11 +1,13 @@
-export KroneckerMatrix
+export KroneckerMatrix, KruskalTensor
 export ConvDiff, EigValMat, Laplace, LaplaceDense, MatrixGallery, RandSPD 
 export Instance, SymInstance, NonSymInstance
 export assemble_matrix, dimensions, kroneckervectorize,  kronproddot, 
-       kronprodnorm, kth_columns, mul!, nentries, principal_minors,  
+       kronprodnorm, kth_columns, mul!, ncomponents, ndims, nentries, principal_minors,  
        randkronmat, size, trikronmat 
 
 const KronStruct{T} = Vector{<:AbstractVecOrMat{T}}
+const FMatrices{T}  = Vector{<:AbstractMatrix{T}}
+#const CoeffMat{T}   = Vector{}
 
 abstract type MatrixGallery{T} end
 struct LaplaceDense{T} <: MatrixGallery{T} end
@@ -24,17 +26,17 @@ struct NonSymInstance <: Instance end
 
 struct KroneckerMatrix{T, U} 
     
-    𝖳           ::KronStruct{T} # We only store the d matrices explicitly in a vector.
+    𝖳           ::FMatrices{T} # We only store the d matrices explicitly in a vector.
     matrix_class::Type{<:MatrixGallery{T}}
 
-    function KroneckerMatrix{T, U}(Aₛ::KronStruct{T}) where {T, U<:Instance}
+    function KroneckerMatrix{T, U}(Aₛ::FMatrices{T}) where {T, U<:Instance}
 
         new{T, U}(Aₛ, MatrixGallery{T})
 
     end
 
     function KroneckerMatrix{T, U}(
-        Aₛ   ::KronStruct{T},
+        Aₛ   ::FMatrices{T},
         class::Type{<:MatrixGallery{T}}) where {T, U<:Instance}# Constructor with vector of matrix coefficients
 
         new{T, U}(Aₛ, class)
@@ -197,6 +199,103 @@ function kronprodnorm(v::KronStruct{T}) where T
 
 end
 
+mutable struct KruskalTensor{T}
+
+    lambda::Vector{T}
+    fmat  ::Vector{Matrix{T}}
+
+    function KruskalTensor{T}(lambda::AbstractVector{T}, fmat::KronStruct{T}) where T<:Number
+
+        #@assert all(size(fmat[1], 2) .== size.(fmat, 2))
+        #@assert length(lambda) == size(fmat[1], 2)
+
+        new(lambda, fmat)
+
+    end
+    
+    function KruskalTensor{T}(lambda::AbstractVector{T}, M::AbstractMatrix{T}) where T 
+
+        KruskalTensor{T}(lambda, collect(M))
+
+    end
+
+    function KruskalTensor{T}(fmat::KronStruct{T}) where T 
+
+        KruskalTensor{T}(ones(size(fmat[1], 2)), fmat)
+
+    end
+
+
+end
+
+
+ncomponents(x::KruskalTensor{T}) where T = length(x.lambda)
+
+ndims(x::KruskalTensor{T}) where T = length(x.fmat)
+
+Base.size(x::KruskalTensor) = tuple([size(x.fmat[n], 1) for n in 1:length(x.fmat)]...)
+
+function redistribute!(x::KruskalTensor, mode::Int) 
+
+    for j in 1:ncomponents(x)
+
+        x.fmat[mode][:, j] = x.lambda[j] * @view x.fmat[mode][:, j]
+
+    end
+
+end
+
+function display(x::KruskalTensor{T}, name="KruskalTensor") where T
+
+    println("Kruskal tensor of size ", size(x), ":\n")
+
+    println("$name.lambda: ")
+
+        flush(stdout)
+
+        Base.display(x.lambda)
+
+    for n in 1:ndims(x)
+
+        println("\n\n$name.fmat[$n]:")
+
+            flush(stdout)
+
+            Base.display(x.fmat[n])
+
+    end
+
+end
+
+Base.show(::IO, x::KruskalTensor{T}) where T = display(x)
+
+
+
+function kroneckervectorize(x::KruskalTensor{T}) where T
+
+    N    = prod(size(x))
+    vecx = zeros(N)
+
+    redistribute!(x, 1)
+
+    for i in 1:ncomponents(x) 
+
+        tmp = @view(x.fmat[end][:, i])
+
+        for j in ndims(x) - 1 : - 1 : 1
+
+            tmp = kron(tmp, @view(x.fmat[j][:, i]))
+
+        end
+
+        vecx += tmp
+
+    end
+
+    return vecx
+
+end
+
 function principal_minors(v::KronStruct{T}, i::Int) where T
 
     return [ @view(v[s][1:i]) for s in 1:length(v)]
@@ -215,9 +314,9 @@ function principal_minors(KM::KroneckerMatrix{T, U}, i::Int, j::Int) where {T, U
 
 end
 
-function principal_minors(x::ktensor, i::Int) 
+function principal_minors(x::KruskalTensor{T}, i::Int) where T
 
-    return ktensor(x.lambda, [ (x.fmat[s][1:i, :]) for s in 1:ndims(x) ] )
+    return KruskalTensor{T}(x.lambda, [ (x.fmat[s][1:i, :]) for s in 1:ndims(x) ] )
 
 end
 
@@ -252,7 +351,7 @@ LinearAlgebra.transpose(A::KroneckerMatrix) = transpose.(A.𝖳)
 
 # Additional functionality for Kruskal tensors
 # ============================================
-function Base.getindex(CP::ktensor, i::Int)
+function Base.getindex(CP::KruskalTensor{T}, i::Int) where T
 
     # Returns a vector containing the i-th column of each factor matrix of CP.
 
@@ -260,7 +359,7 @@ function Base.getindex(CP::ktensor, i::Int)
 
 end
 
-function LinearAlgebra.mul!(result::KronStruct{T}, y::KronStruct{T}, x::ktensor) where T 
+function LinearAlgebra.mul!(result::KronStruct{T}, y::KronStruct{T}, x::KruskalTensor{T}) where T 
 
     # Compute product between elementary tensor and factor matrices of Kruskal tensor.
     nᵢ = ndims(x)
@@ -274,25 +373,3 @@ function LinearAlgebra.mul!(result::KronStruct{T}, y::KronStruct{T}, x::ktensor)
 
 end
 
-function kroneckervectorize(x::ktensor)
-
-    N    = prod(size(x))
-    vecx = zeros(N)
-
-    for i in 1:ncomponents(x) 
-
-        tmp = @view(x.fmat[end][:, i])
-
-        for j in ndims(x) - 1 : - 1 : 1
-
-            tmp = kron(tmp, @view(x.fmat[j][:, i]))
-
-        end
-
-        vecx += tmp
-
-    end
-
-    return vecx
-
-end

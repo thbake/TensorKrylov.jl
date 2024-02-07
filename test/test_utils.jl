@@ -1,4 +1,4 @@
-using LinearAlgebra, Kronecker,  TensorToolbox, TensorKrylov, SparseArrays
+using LinearAlgebra, Kronecker, TensorKrylov, SparseArrays
 using TensorKrylov: compressed_residual, compute_lower_outer!, 
                     compute_lower_triangles!, cp_tensor_coefficients,
                     maskprod, matrix_exponential_vector!, matrix_vector, MVnorm, 
@@ -60,7 +60,7 @@ function initialize_matrix_products(M, x)
 
 end
 
-function exact_solution(M::KronMat, x::ktensor)
+function exact_solution(M::KronMat, x::KruskalTensor{T}) where T
 
     M_kroneckersum = kroneckersum(M.𝖳...)
     x_explicit     = kroneckervectorize(x)
@@ -70,7 +70,7 @@ function exact_solution(M::KronMat, x::ktensor)
 end
 
 function error_MVnorm(
-    x       ::ktensor,
+    x       ::KruskalTensor{T},
     Λ       ::AbstractMatrix{T},
     lowerX  ::Vector{<:AbstractMatrix{T}},
     Z       ::Vector{<:AbstractMatrix{T}},
@@ -86,7 +86,7 @@ end
 
 function error_tensorinnerprod(
     Z::Vector{Matrix{T}},
-    x::ktensor,
+    x::KruskalTensor{T},
     b::KronProd{T},
     solution::Vector{T}) where T
 
@@ -105,7 +105,7 @@ function error_compressed_residualnorm(
     Λ       ::AbstractMatrix{T},
     lowerX  ::Vector{Matrix{T}},
     M       ::KronMat{T, U},
-    x       ::ktensor) where {T, U<:Instance}
+    x       ::KruskalTensor{T}) where {T, U<:Instance}
 
     # Explicit compressed residual norm
     exp_comp_res_norm    = norm(kron(b...) - solution)^2
@@ -118,7 +118,7 @@ end
 
 
 
-function tensorsquarednorm(x::ktensor)
+function tensorsquarednorm(x::KruskalTensor{T}) where T
 
     d = length(x.fmat)
     t = length(x.lambda)
