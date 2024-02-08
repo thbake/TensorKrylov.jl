@@ -7,52 +7,9 @@ abstract type Mode       end
 struct DebugMode  <:Mode end
 struct SilentMode <:Mode end
 
-#function log_convergence_data(
-#    debuglogger::ConsoleLogger,
-#    convergencedata::ConvergenceData{T},
-#    k::Int,
-#    ::Type{LanczosUnion{T}}) where T
-#
-#    with_logger(debuglogger) do
-#        @debug "Condition: " convergencedata.spectraldata[k].κ
-#        @debug "Iteration: " k "relative residual norm:" convergencedata.relative_residual_norm[k]
-#
-#    end
-#
-#end
-#
-#function log_convergence_data(
-#    debuglogger::ConsoleLogger,
-#    convergencedata::ConvergenceData{T},
-#    k::Int,
-#    ::Type{TensorArnoldi{T}}) where T
-#
-#    with_logger(debuglogger) do
-#
-#        @debug "Smallest eigenvalue: " convergencedata.spectraldata[k].λ_min
-#        @debug "Iteration: " k "relative residual norm:" convergencedata.relative_residual_norm[k]
-#
-#    end
-#
-#end
-#
-#function process_log(::ConvergenceData{T}, k::Int, ::Type{SilentMode}, ::Type{<:TensorDecomposition{T}}) where T
-#
-#    return
-#
-#end
-#
-#function process_log(convergencedata::ConvergenceData{T}, k::Int, ::Type{DebugMode}, orthonormalization_type::Type{<:TensorDecomposition{T}}) where T
-#
-#    debuglogger = ConsoleLogger(stdout, Logging.Debug)
-#
-#    log_convergence_data(debuglogger, convergencedata, k, orthonormalization_type) 
-#
-#end
-
 function solve_compressed_system(
-    H         ::KronMat{T, U},
-    b         ::KronProd{T},
+    H,         
+    b,
     approxdata::ApproximationData{T, U},
     λ_min     ::T) where {T, U<:Instance}
 
@@ -75,16 +32,14 @@ function solve_compressed_system(
     return yₜ
 end
 
-distancetosingularity(H::KronMat{T}) where T = cond(first(H))
-
 function tensorkrylov!(
     convergence_data       ::ConvergenceData{T},
-    A                      ::KronMat{T, U},
+    A                      ::KronMat{matT, U},
     b                      ::KronProd{T},
     tol                    ::T,
     nmax                   ::Int,
-    orthonormalization_type::Type{<:TensorDecomposition{T}},
-    mode                   ::Type{<:Mode} = SilentMode) where {T, U<:Instance}
+    orthonormalization_type::Type{<:TensorDecomposition},
+    mode                   ::Type{<:Mode} = SilentMode) where {matT, T, U<:Instance}
 
     d      = length(A)
     n      = dimensions(A)[1]
@@ -94,12 +49,11 @@ function tensorkrylov!(
 
     tensor_decomp = orthonormalization_type(A)
 
-    initial_orthonormalization!(tensor_decomp, b, tensor_decomp.orthonormalization)
+    orthonormalize!(tensor_decomp, b)
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
     
-    set_matrix!(convergence_data.spectraldata, first(A))
-
+    spectraldata = SpectralData{matT, T, U}(A, nmax)
     approxdata   = ApproximationData{T, U}(tol)
     r_comp       = Inf
     r_norm       = Inf
@@ -107,16 +61,17 @@ function tensorkrylov!(
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        orthonormal_basis!(tensor_decomp, k)
+        orthonormalize!(tensor_decomp, k)
 
         H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
         columns                      = kth_columns(tensor_decomp.V, k)
 
         update_rhs!(b_minors, columns, b, k) # b̃ = Vᵀb
-        update_data!(convergence_data.spectraldata, d, A.matrix_class())
-        update_data!(approxdata, convergence_data.spectraldata)
+        update_data!(spectraldata, d, A.matrixclass())
+        update_data!(approxdata, spectraldata)
 
-        y  = solve_compressed_system(H_minors, b_minors, approxdata, convergence_data.spectraldata.λ_min[k]) # Hy = b̃ 
+
+        y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min[k]) # Hy = b̃ 
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
@@ -195,11 +150,11 @@ function tensorkrylov!(
     energynormdata         ::Vector{T},
     convergence_data       ::ConvergenceData{T},
     exactsolution          ::Vector{T},
-    A                      ::KronMat{T, U},
+    A                      ::KronMat{matT, U},
     b                      ::KronProd{T},
     tol                    ::T,
     nmax                   ::Int,
-    orthonormalization_type::Type{<:TensorDecomposition{T}}) where {T, U<:Instance}
+    orthonormalization_type::Type{<:TensorDecomposition}) where {matT, T, U<:Instance}
 
     d      = length(A)
     n      = dimensions(A)[1]
@@ -212,28 +167,28 @@ function tensorkrylov!(
 
     tensor_decomp = orthonormalization_type(A)
 
-    initial_orthonormalization!(tensor_decomp, b, tensor_decomp.orthonormalization)
+    orthonormalize!(tensor_decomp, b, tensor_decomp.orthonormalization)
 
     b̃ = initialize_compressed_rhs(b, tensor_decomp.V) 
     
-    set_matrix!(convergence_data.spectraldata, first(A))
 
+    spectraldata = SpectralData{matT, T, U}(A, nmax)
     approxdata   = ApproximationData{T, U}(tol)
     A_norm       = Inf
 
     for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
-        orthonormal_basis!(tensor_decomp, k)
+        orthonormalize!(tensor_decomp, k)
 
         H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
         columns                      = kth_columns(tensor_decomp.V, k)
 
         update_rhs!(b_minors, columns, b, k) # b̃ = Vᵀb
-        update_data!(convergence_data.spectraldata, d, A.matrix_class())
-        update_data!(approxdata, convergence_data.spectraldata)
+        update_data!(spectraldata, d, A.matrix_class())
+        update_data!(approxdata, spectraldata)
 
-        y  = solve_compressed_system(H_minors, b_minors, approxdata, convergence_data.spectraldata.λ_min[k]) # Hy = b̃ 
+        y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min[k]) # Hy = b̃ 
         𝔎 .= k 
 
         x = KruskalTensor{T}( y.lambda, [ zeros(n, approxdata.rank) for s in 1:d ])

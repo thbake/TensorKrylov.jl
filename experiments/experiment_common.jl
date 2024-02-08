@@ -5,49 +5,51 @@ export ConvData, ConvVec, rhsVec, TDecomp
 # Aliases
 const ConvData{T} = ConvergenceData{T}
 const ConvVec{T}  = Vector{ConvData{T}} 
-const TDecomp{T}  = TensorDecomposition{T}
+const TDecomp  = TensorDecomposition
 const rhsVec{T}   = Vector{Vector{Vector{T}}}
 
 # Structs
-abstract type AbstractExperiment{T} end
+abstract type AbstractExperiment end
 
-mutable struct Experiment{T} <: AbstractExperiment{T}
+mutable struct Experiment <: AbstractExperiment
 
     dims        ::Vector{Int}
     matrix_size ::Int
     nmax        ::Int
     instance    ::Type{<:Instance}
-    matrix_class::Type{<:MatrixGallery{T}}
-    orth_method ::Type{<:TDecomp{T}}
-    rhs_vec     ::rhsVec{T}
-    conv_vector::ConvVec{T}
+    matrix_class::Type{<:MatrixGallery}
+    orth_method ::Type{<:TDecomp}
+    rhs_vec     ::rhsVec{Float64}
+    conv_vector::ConvVec{Float64}
 
-    function Experiment{T}(
+    function Experiment(
         dims    ::Vector{Int},
         n       ::Int,
         nmax    ::Int,
         instance::Type{<:Instance},
-        class   ::Type{<:MatrixGallery{T}},
-        orth    ::Type{<:TDecomp{T}},
-        rhs     ::rhsVec{T}) where T
+        class   ::Type{<:MatrixGallery},
+        orth    ::Type{<:TDecomp},
+        rhs     ::rhsVec{Float64}) 
 
-        conv_results = [ ConvData{T}(nmax, instance) for _ in 1:length(dims) ]
+        #T = eltype(first(rhs))
+
+        conv_results = [ ConvData{Float64}(nmax) for _ in 1:length(dims) ]
 
         new(dims, n, nmax, instance, class, orth, rhs, conv_results)
 
     end
 end
 
-function Base.show(io::IO, experiment::Experiment{T}) where T
+function Base.show(io::IO, experiment::Experiment) 
 
     println(io, "\n", typeof(experiment), " experiment:")
     println(io, "Dimensions d = ", experiment.dims, " with matrix size n = ", experiment.matrix_size,"\n")
 
 end
 
-Base.length(experiment::Experiment{T}) where T = length(experiment.dims)
+Base.length(experiment::Experiment) = length(experiment.dims)
 
-function run_experiments!(experiment::Experiment{T}, tol::T = 1e-9) where T
+function run_experiments!(experiment::Experiment, tol::T = 1e-9) where T
 
     println("Performing reproduction experiments")
 
@@ -55,13 +57,13 @@ function run_experiments!(experiment::Experiment{T}, tol::T = 1e-9) where T
 
         println("d = " * string(experiment.dims[i]))
 
-        A = KronMat{T, experiment.instance}(
+        A = KronMat{experiment.instance}(
             experiment.dims[i],
             experiment.matrix_size,
             experiment.matrix_class
         )
 
-        system = TensorizedSystem{T, experiment.instance}(A, experiment.rhs_vec[i])
+        system = TensorizedSystem{experiment.instance}(A, experiment.rhs_vec[i])
 
         experiment.conv_vector[i] = solve_tensorized_system(
             system,
@@ -74,7 +76,7 @@ function run_experiments!(experiment::Experiment{T}, tol::T = 1e-9) where T
 
 end
 
-function get_iterations(experiment::Experiment{T}) where T
+function get_iterations(experiment::Experiment) 
 
     return [ experiment.conv_vector[i].iterations for i in 1:length(experiment) ]
 
@@ -102,7 +104,7 @@ compute_labels(experiment::Experiment) =  "dim = " .* string.(experiment.dims)
 
 compute_labels(dims::Vector{Int}) = "dim = " .* string.(dims)
 
-function serialize_to_file(filename::AbstractString, experiment::Experiment{T}) where T
+function serialize_to_file(filename::AbstractString, experiment::Experiment) 
 
     complete_path = "experiments/data/" * filename
 

@@ -51,7 +51,7 @@ end
 
 function plot_laplace(T::Type{<:EVC}, dims = [5, 7, 9], n = 15)
 
-    L      = assemble_matrix(n, Laplace{Float64})
+    L      = assemble_matrix(n, Laplace)
     values = eigvals(Matrix(L))
 
     distributions = compute_eigdist(dims, values, T)

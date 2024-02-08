@@ -10,7 +10,7 @@ function getstride(v::Vector{T}, s::Int) where T
 end
 
 # Define Type Recipe for Reproduction{T} 
-@recipe function f(::Type{<:Experiment{T}}, experiment::Experiment{T}) where T
+@recipe function f(::Type{<:Experiment}, experiment::Experiment) 
     
     # type recipe for vector of ConvergenceData{T} is called recursively
     return experiment.conv_vector
@@ -91,7 +91,7 @@ end
 end
 @shorthands(proj)
 
-abstract type CustomPlot end
+abstract type CustomPlot{T} end
 
 # Define Type Recipe for a vector of ConvergenceData{T}
 @recipe function f(::Type{<:CustomPlot}, custom_plot::CustomPlot) 
@@ -102,46 +102,46 @@ abstract type CustomPlot end
 
 end
 
-struct ResidualPlot <: CustomPlot
+struct ResidualPlot{T} <: CustomPlot{T}
 
-    data  ::Vector{Vector}
+    data  ::Vector{Vector{T}}
     series::Symbol 
 
     function ResidualPlot(conv_vector::ConvVec{T}) where T<:AbstractFloat
 
         relative_residuals = [ conv_vector[i].relative_residual_norm for i in 1:length(conv_vector) ]
 
-        new(relative_residuals, :relativeresidual)
+        new{T}(relative_residuals, :relativeresidual)
 
     end
 
 end
 
-struct OrthogonalityPlot <: CustomPlot   
+struct OrthogonalityPlot{T} <: CustomPlot{T}
 
-    data  ::Vector{Vector}
+    data  ::Vector{Vector{T}}
     series::Symbol 
 
     function OrthogonalityPlot(conv_vector::ConvVec{T}) where T<:AbstractFloat
 
         orthogonality = [ conv_vector[i].orthogonality_data for i in 1:length(conv_vector) ]
 
-        new(orthogonality, :orthogonalityloss)
+        new{T}(orthogonality, :orthogonalityloss)
 
     end
 
 end
 
-struct ProjResidualPlot <: CustomPlot
+struct ProjResidualPlot{T} <: CustomPlot{T}
 
-    data  ::Vector{Vector}
+    data  ::Vector{Vector{T}}
     series::Symbol
 
     function ProjResidualPlot(conv_vector::ConvVec{T}) where T<:AbstractFloat
 
         projected_residuals = [ conv_vector[i].projected_residual_norm for i in 1:length(conv_vector) ]
 
-        new(projected_residuals, :proj)
+        new{T}(projected_residuals, :proj)
 
     end
 
@@ -150,7 +150,7 @@ end
 
 function plot_experiment(
     experiment ::Experiment,
-    custom_plot::Type{<:CustomPlot}, 
+    custom_plot::CustomPlot, 
     point_sep::Int = 1) 
 
     x        = get_iterations(experiment)

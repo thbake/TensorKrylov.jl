@@ -7,8 +7,8 @@ mutable struct ApproximationData{T, U<:Instance}
 
     df                     ::DataFrame
     rank                   ::Int
-    α                      ::AbstractArray{T}
-    ω                      ::AbstractArray{T}
+    α                      ::Vector{T}
+    ω                      ::Vector{T}
     tol                    ::T
     first_digit            ::Int
     condition_order        ::Int
@@ -17,19 +17,19 @@ mutable struct ApproximationData{T, U<:Instance}
         package_dir = compute_package_directory()
         df          = compute_dataframe(package_dir)
 
-        new(df, 0, zeros(), zeros(), tol, 0, 0) 
+        new(df, 0, zeros(1), zeros(1), tol, 0, 0) 
 
     end
 
     function ApproximationData{T, NonSymInstance}(tol::T) where T<:AbstractFloat
 
-        new(DataFrame(), 0, zeros(), zeros(), tol, 0, 0)
+        new(DataFrame(), 0, zeros(1), zeros(1), tol, 0, 0)
 
     end
 
 end
 
-function compute_package_directory()::AbstractString
+function compute_package_directory()::String
 
     pkg_path    = pathof(TensorKrylov)
     regex       = r"src/TensorKrylov.jl"
@@ -41,7 +41,7 @@ function compute_package_directory()::AbstractString
 
 end
 
-function compute_dataframe(coefficients_dir::AbstractString)
+function compute_dataframe(coefficients_dir::String)
 
     # Read csv file into dataframe
     column_types = [ fill(Float64, 64)... ]
@@ -86,8 +86,8 @@ end
 nonsymmetric_bound(λ::T, rank::Int) where T = 2.75 * inv(λ) * exp(-π * sqrt(rank / 2))
 
 function compute_rank!(
-    approxdata::ApproximationData{T, NonSymInstance},
-    spectraldata::SpectralData{T}) where T<:AbstractFloat
+    approxdata  ::ApproximationData{T, NonSymInstance},
+    spectraldata::SpectralData{matT, T, NonSymInstance}) where {matT, T<:AbstractFloat}
 
     λ_min, _, _ = current_data(spectraldata)
 
@@ -157,7 +157,7 @@ function exponential_sum_parameters!(data::ApproximationData{T, NonSymInstance})
 
 end
 
-function update_data!(approxdata::ApproximationData{T, SymInstance}, spectraldata::SpectralData{T, SymInstance}) where T<:AbstractFloat
+function update_data!(approxdata::ApproximationData{T, SymInstance}, spectraldata::SpectralData{matT, T, SymInstance}) where {matT, T<:AbstractFloat}
 
     package_dir                = compute_package_directory()
     approxdata.df              = compute_dataframe(package_dir)
@@ -167,7 +167,7 @@ function update_data!(approxdata::ApproximationData{T, SymInstance}, spectraldat
 
 end
 
-function update_data!(approxdata::ApproximationData{T, NonSymInstance}, spectraldata::SpectralData{T, NonSymInstance}) where T<:AbstractFloat
+function update_data!(approxdata::ApproximationData{T, NonSymInstance}, spectraldata::SpectralData{matT, T, NonSymInstance}) where {matT, T<:AbstractFloat}
 
     compute_rank!(approxdata, spectraldata)
     exponential_sum_parameters!(approxdata)

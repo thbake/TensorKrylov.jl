@@ -264,34 +264,27 @@ function analytic_eigenvalues(d::Int, n::Int, k::Int)
 end
 
 
-mutable struct SpectralData{T, U}
+mutable struct SpectralData{matT, T, U}
 
-    A    ::AbstractMatrix{T}
+    A    ::matT
     λ_min::Vector{T}
     λ_max::Vector{T}
     κ    ::Vector{T}
     k    ::Int      # Current iteration
 
-    function SpectralData{T, U}(nmax::Int) where {T, U<:Instance}
+    function SpectralData{matT, T, U}(A::KronMat, nmax::Int) where {matT, T, U<:Instance}
+        
+        Aₛ = first(A)
 
-        new(zeros(nmax, nmax), fill(Inf, nmax), fill(Inf, nmax), fill(Inf, nmax), 1)
+        new(Aₛ, fill(Inf, nmax), fill(Inf, nmax), fill(Inf, nmax), 1)
 
     end
 
 end
 
-set_matrix!(data::SpectralData{T, U}, A::AbstractMatrix{T}) where {T, U<:Instance} = data.A = Matrix(A)
-
 Base.getindex(s::SpectralData, k::Int) = s.λ_min[k], s.λ_max[k], s.κ[k]
 
-function Base.setindex!(
-    data     ::SpectralData,
-    iter_data::Tuple{T, T, T},
-    k        ::Int) where T  
-
-    data[k] = iter_data
-
-end
+Base.setindex!(data::SpectralData, iter_data::Tuple{T, T, T}, k::Int) where T  =  data[k] = iter_data
 
 function current_data(data::SpectralData)  
 
@@ -344,9 +337,15 @@ extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals
 
 extreme_eigvals(data::SpectralData, d::Int, ::EigValMat) = getextreme(d, @view diag(data.A)[1:data.k])
 
-extreme_eigvals(data::SpectralData, d::Int, ::ConvDiff)  = minimum(eigvals(@view data.A[1:data.k, 1:data.k])) * d
+function extreme_eigvals(data::SpectralData{matT, T, NonSymInstance}, d::Int, ::MatrixGallery) where {matT, T}
 
-function update_data!(data::SpectralData{T, SymInstance}, d::Int, class::MatrixGallery{T}) where T
+    A = Matrix(data.A)
+    
+    return minimum(eigvals(@view A[1:data.k, 1:data.k])) * d
+
+end
+
+function update_data!(data::SpectralData{matT, T, SymInstance}, d::Int, class::MatrixGallery) where {matT, T}
 
 
     data.k += 1
@@ -358,7 +357,7 @@ function update_data!(data::SpectralData{T, SymInstance}, d::Int, class::MatrixG
 end
 
 
-function update_data!(data::SpectralData{T, NonSymInstance}, d::Int, class::MatrixGallery{T}) where T
+function update_data!(data::SpectralData{matT, T, NonSymInstance}, d::Int, class::MatrixGallery) where {matT, T}
 
     data.k            += 1
     data.λ_min[data.k] = extreme_eigvals(data, d, class)

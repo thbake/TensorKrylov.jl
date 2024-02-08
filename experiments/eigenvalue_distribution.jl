@@ -4,9 +4,9 @@ export clusterone, clusterzero, eigenvalue_experiment
 
 Random.seed!(1234)
 
-mutable struct EigValDist{T} <: AbstractExperiment{T}
+mutable struct EigValDist{T}
 
-    experiment ::Experiment{T}
+    experiment ::Experiment
     eigenvalues::Vector{T}
 
     function EigValDist{T}(
@@ -16,13 +16,13 @@ mutable struct EigValDist{T} <: AbstractExperiment{T}
         rhs        ::rhsVec{T}) where T
 
         instance   = SymInstance
-        experiment = Experiment{T}(
+        experiment = Experiment(
             dims,
             length(eigenvalues),
             nmax,
             instance,
-            EigValMat{T},
-            TensorLanczosReorth{T},
+            EigValMat,
+            TensorLanczosReorth,
             rhs)
 
         new(experiment, eigenvalues)
@@ -41,13 +41,13 @@ function run_experiments!(distexp::EigValDist{T}, tol = 1e-9) where T
         println("d = " * string(distexp.experiment.dims[i]))
 
 
-        A = KronMat{T, distexp.experiment.instance}(
+        A = KronMat{distexp.experiment.instance}(
             distexp.experiment.dims[i],
             distexp.eigenvalues,
             distexp.experiment.matrix_class
         )
 
-        system = TensorizedSystem{T, distexp.experiment.instance}(A, distexp.experiment.rhs_vec[i])
+        system = TensorizedSystem{distexp.experiment.instance}(A, distexp.experiment.rhs_vec[i])
         
 
         distexp.experiment.conv_vector[i] = solve_tensorized_system(

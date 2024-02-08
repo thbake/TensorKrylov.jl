@@ -12,17 +12,17 @@ end
 
 multiple_rhs(dims::Array{Int}, n::Int) = [ random_rhs(d, n) for d ∈ dims ]
 
-struct TensorizedSystem{T, U} 
+struct TensorizedSystem{U} 
 
     d                      ::Int
     n                      ::Int
-    A                      ::KronMat{T, U}
-    b                      ::KronProd{T}
+    A                      ::KronMat
+    b                      ::KronProd
 
-    function TensorizedSystem{T, U}(
-        A                     ::KronMat{T, U},
-        b                     ::KronProd{T},
-        normalize_rhs         ::Bool = true) where {T, U<:Instance}
+    function TensorizedSystem{U}(
+        A                     ::KronMat{matT, U},
+        b                     ::KronProd,
+        normalize_rhs         ::Bool = true) where {matT, U<:Instance}
 
         @assert length(A)          == length(b)
         @assert all(dimensions(A) .== size.(b, 1))
@@ -36,14 +36,13 @@ struct TensorizedSystem{T, U}
 
         end
 
-
-        new(d, n, A, b)
+        new{U}(d, n, A, b)
 
     end
 
 end
 
-getinstancetype(::TensorizedSystem{T, U}) where {T, U} = U
+getinstancetype(::TensorizedSystem{U}) where {U} = U
 
 function display(system::TensorizedSystem) 
 
@@ -64,12 +63,12 @@ function Base.show(::IO, system::TensorizedSystem)
 end
 
 function solve_tensorized_system(
-    system                ::TensorizedSystem{T, U},
+    system                ::TensorizedSystem,
     nmax                  ::Int,
-    orthogonalization_type::Type{<:TensorDecomposition{T}},
-    tol                   ::T = 1e-9) where {T, U<:Instance}
+    orthogonalization_type::Type{<:TensorDecomposition},
+    tol                   ::T = 1e-9) where {T}
 
-    convergencedata = ConvergenceData{T}(nmax, getinstancetype(system))
+    convergencedata = ConvergenceData{T}(nmax)
 
     tensorkrylov!(
         convergencedata, system.A,

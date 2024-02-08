@@ -50,7 +50,7 @@ end
         bs = rand(n)
         b  = [ bs for _ in 1:d ]
         b̃  = [ zeros(n) for _ in eachindex(b) ]
-        V  = KronMat{Float64, SymInstance}([ rand(n, k) for _ in 1:d ])
+        V  = KronMat{SymInstance}([ rand(n, k) for _ in 1:d ])
 
         @test test_update_rhs(b̃, V, b, k)
         
@@ -66,7 +66,7 @@ end
     n    = 4
     rank = 2
     Hs = diagm( log.( ones(n) ) )              # exp(Hs) = I(n)
-    H  = KronMat{Float64, Instance}([ Hs for _ in 1:d ])
+    H  = KronMat{Instance}([ Hs for _ in 1:d ])
     b  = [ ones(n) for _ in 1:d ]              # exp(Hs) * bs = [1, ..., 1]ᵀ
     y = KruskalTensor{Float64}(ones(rank), [ ones(n, rank) for _ in 1:d ])
 
@@ -95,7 +95,7 @@ end
 
         # Example of linearly dependent factor matrices in CP-decomposition
         Mᵢ  = [ SymTridiagonal(2ones(n), -ones(n-1)) for _ in 1:d ]
-        M   = KroneckerMatrix{Float64, SymInstance}(Mᵢ)
+        M   = KroneckerMatrix{SymInstance}(Mᵢ)
         mat = rand(n, rank)
         X   = [ rand() .* mat for _ in 1:d ] # Only passes for linearly dependent factor matrices
         #X   = [ rand(n, rank) for _ in 1:d ]
@@ -134,7 +134,7 @@ end
 
         # Example of linearly dependent factor matrices in CP-decomposition
         #M   = KroneckerMatrix{Float64}([ rand(n, n) for _ in 1:d ])
-        M   = KroneckerMatrix{Float64, NonSymInstance}([ assemble_matrix(n, ConvDiff{Float64}) for _ in 1:d])
+        M   = KroneckerMatrix{NonSymInstance}([ assemble_matrix(n, ConvDiff) for _ in 1:d])
         mat = rand(n, rank)
         X   = [ rand() .* mat for _ in 1:d ] # Only passes for linearly dependent factor matrices
         x   = KruskalTensor{Float64}(ones(rank), X)
@@ -173,7 +173,7 @@ end
 
         # Example of linearly dependent factor matrices in CP-decomposition
         Mᵢ  = [ sparse(inv(h^2) .* Tridiagonal(-ones(n-1), 2ones(n), -ones(n-1))) for _ in 1:d ]
-        M   = KroneckerMatrix{Float64, SymInstance}(Mᵢ)
+        M   = KroneckerMatrix{SymInstance}(Mᵢ)
         b   = [ rand(n) for _ in 1:d ]
         nmax = 10
 

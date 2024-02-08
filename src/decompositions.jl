@@ -1,13 +1,9 @@
 export Arnoldi, Lanczos, TensorDecomposition, TensorArnoldi, TensorLanczos, 
-       TensorLanczosReorth, LanczosReorth, MGS, LanczosUnion
+       TensorLanczosReorth, LanczosReorth,  LanczosUnion
 
-const MatrixView{T}    = AbstractMatrix{T}
-
-abstract type Decomposition{T}       end
-abstract type TensorDecomposition{T} end
+abstract type Decomposition{matT, T}          end
+abstract type TensorDecomposition{matT, T, U} end
 abstract type CheapOrthogonalityLoss end
-
-struct MGS end
 
 function order(decomposition::Decomposition)
 
@@ -29,48 +25,43 @@ function Base.getindex(tensordecomp::TensorDecomposition, i::Int)
 
 end
 
-mutable struct Arnoldi{T} <: Decomposition{T}
+mutable struct Arnoldi{matT, T} <: Decomposition{matT, T}
 
-    A::MatrixView{T}
-    V::MatrixView{T}
-    H::MatrixView{T}
+    A::matT
+    V::Matrix{T}
+    H::Matrix{T}
 
-    function Arnoldi{T}(
-                A::MatrixView{T},
-                V::MatrixView{T},
-                H::MatrixView{T},
-                b::AbstractVector{T}) where T
+    function Arnoldi(A::matT, V::Matrix{T}, H::Matrix{T}, b::Vector{T}) where {matT, T}
 
         initialize_decomp!(V, b)
 
-        new(A, V, H)
+        new{matT, T}(A, V, H)
 
     end
 
-    function Arnoldi{T}(
-                A::MatrixView{T},
-                V::MatrixView{T},
-                H::MatrixView{T}) where T
+    function Arnoldi(A::matT, V::Matrix{T}, H::Matrix{T}) where {matT, T}
 
-        new(A, V, H)
+        new{matT, T}(A, V, H)
+
+    end
+    
+    function Arnoldi(A::matT, V::Matrix{T}, H::Matrix{T}, ::Int) where {matT, T}
+
+        Arnoldi(A, V, H)
 
     end
                        
 end
 
-mutable struct Lanczos{T} <: Decomposition{T}
+mutable struct Lanczos{matT, T} <: Decomposition{matT, T}
 
-    A::MatrixView{T}
-    V::MatrixView{T}
-    H::MatrixView{T}
-    β::T                # Last off-diagonal coefficient in H
-    v::AbstractArray{T} # Last basis vector
+    A::matT
+    V::Matrix{T}
+    H::Matrix{T}
+    β::T         # Last off-diagonal coefficient in H
+    v::Vector{T} # Last basis vector
 
-    function Lanczos{T}(
-                A::MatrixView{T},
-                V::MatrixView{T},
-                H::MatrixView{T},
-                b::AbstractVector{T}) where T
+    function Lanczos(A::matT, V::Matrix{T}, H::Matrix{T}, b::Vector{T}) where {matT, T}
 
         # β₀ = 0, v₀ = 0
         β = 0.0
@@ -78,59 +69,47 @@ mutable struct Lanczos{T} <: Decomposition{T}
 
         initialize_decomp!(V, b)
 
-        new(A, V, H, β, v)
+        new{matT, T}(A, V, H, β, v)
 
     end
 
-    function Lanczos{T}(
-                A::MatrixView{T},
-                V::MatrixView{T},
-                H::MatrixView{T},
-                k::Int) where T
+    function Lanczos(A::matT, V::Matrix{T}, H::Matrix{T}, k::Int) where {matT, T}
 
         β = H[k - 1, k]
         v = @view(V[:, k - 1])
 
-        new(A, V, H, β, v)
+        new{matT, T}(A, V, H, β, v)
 
     end
 
 end
 
-mutable struct LanczosReorth{T} <: Decomposition{T}
-    A::MatrixView{T}
-    V::MatrixView{T}
-    H::MatrixView{T}
-    β::T                # Last off-diagonal coefficient in H
-    v::AbstractVector{T} # Last basis vector
+mutable struct LanczosReorth{matT, T} <: Decomposition{matT, T}
+    A::matT
+    V::Matrix{T}
+    H::Matrix{T}
+    β::T         # Last off-diagonal coefficient in H
+    v::Vector{T} # Last basis vector
 
-    function LanczosReorth{T}(
-                A::MatrixView{T},
-                V::MatrixView{T},
-                H::MatrixView{T},
-                b::AbstractVector{T}) where T
-                
-        lanczos = Lanczos{T}(A, V, H, b)
+    function LanczosReorth(A::matT, V::Matrix{T}, H::Matrix{T}, b::Vector{T}) where {matT, T}
 
-        new(lanczos.A, lanczos.V, lanczos.H, lanczos.β, lanczos.v)
+        lanczos = Lanczos(A, V, H, b)
+
+        new{matT, T}(lanczos.A, lanczos.V, lanczos.H, lanczos.β, lanczos.v)
 
     end
 
-    function LanczosReorth{T}(
-                A::MatrixView{T},
-                V::MatrixView{T},
-                H::MatrixView{T},
-                k::Int) where T
+    function LanczosReorth(A::matT, V::Matrix{T}, H::Matrix{T}, k::Int) where {matT, T}
 
-        lanczos = Lanczos{T}(A, V, H, k)
+        lanczos = Lanczos(A, V, H, k)
 
-        new(lanczos.A, lanczos.V, lanczos.H, lanczos.β, lanczos.v)
+        new{matT, T}(lanczos.A, lanczos.V, lanczos.H, lanczos.β, lanczos.v)
 
     end
 
 end
 
-function initialize_decomp!(V::MatrixView{T}, b::AbstractArray{T}) where T
+function initialize_decomp!(V::Matrix{T}, b::Vector{T}) where T
 
         # Normalize first basis vector
 
@@ -138,76 +117,67 @@ function initialize_decomp!(V::MatrixView{T}, b::AbstractArray{T}) where T
 
 end
 
-mutable struct TensorArnoldi{T} <: TensorDecomposition{T}
+mutable struct TensorArnoldi{matT, T, U} <: TensorDecomposition{matT, T, U}
 
-    A::KronMat # Original matrix
-    V::KronMat # Matrix representing basis of Krylov subspace
-    H::KronMat # Upper Hessenberg matrix
-    orthonormalization::Type{Arnoldi{T}}
+    A::KronMat{ matT, U}      # Original matrix
+    V::KronComp{Matrix{T}}    # Matrix representing basis of Krylov subspace
+    H::KronMat{ Matrix{T}, U} # Upper Hessenberg matrix
+    orthonormalization::Type{Arnoldi}
 
-    function TensorArnoldi{T}(A::KronMat{T, U}) where {T, U<:Instance}
+    function TensorArnoldi(A::KronMat{matT, U}) where {matT, U<:Instance}
 
-        V = KronMat{T, Instance}(dimensions(A))
-        H = KronMat{T, U}(
+        T = eltype(matT)
+        V = KronComp{Matrix{T}}(dimensions(A))
+        H = KronMat{Matrix{T}, U}(dimensions(A))
 
-            [ UpperHessenberg( zeros( size(A[s]) ) ) for s in 1:length(A) ]
-
-        )
-
-        new(A, V, H, Arnoldi{T})
+        new{matT, T, U}(A, V, H, Arnoldi)
 
     end
 
 end
    
 
-mutable struct TensorLanczos{T} <: TensorDecomposition{T}
+mutable struct TensorLanczos{matT, T, U} <: TensorDecomposition{matT, T, U}
 
-    A::KronMat # Original matrix
-    V::KronMat # Matrix representing basis of Krylov subspace
-    H::KronMat # Upper Hessenberg matrix
-    orthonormalization::Type{Lanczos{T}}
+    A::KronMat{matT, U}    # Original matrix
+    V::KronComp{Matrix{T}} # Matrix representing basis of Krylov subspace
+    H::KronMat{Matrix{T}, U}    # Upper Hessenberg matrix
+    orthonormalization::Type{Lanczos}
 
-    function TensorLanczos{T}(A::KronMat{T, U}) where {T, U<:Instance}
+    function TensorLanczos(A::KronMat{matT, U}) where {matT, U<:Instance}
 
-        V = KronMat{T, Instance}(dimensions(A))
-        H = KronMat{T, U}(
+        T = eltype(matT)
+        V = KronComp{Matrix{T}}(dimensions(A))
+        H = KronMat{Matrix{T}, U}(dimensions(A))
 
-            [ sparse(SymTridiagonal( zeros( size(A[s]) ) ))  for s in 1:length(A) ]
-
-        )
-
-        new(A, V, H, Lanczos{T})
+        new{matT, T, U}(A, V, H, Lanczos)
 
     end
 
 end
 
-mutable struct TensorLanczosReorth{T} <: TensorDecomposition{T}
+mutable struct TensorLanczosReorth{matT, T, U} <: TensorDecomposition{matT, T, U}
 
-    A::KronMat # Original matrix
-    V::KronMat # Matrix representing basis of Krylov subspace
-    H::KronMat # Upper Hessenberg matrix
-    orthonormalization::Type{LanczosReorth{T}}
+    A::KronMat{matT, U}      # Original matrix
+    V::KronComp{Matrix{T}}   # Matrix representing basis of Krylov subspace
+    H::KronMat{Matrix{T}, U} # Upper Hessenberg matrix
+    orthonormalization::Type{LanczosReorth}
 
-    function TensorLanczosReorth{T}(A::KronMat{T, U}) where {T, U<:Instance}
+    function TensorLanczosReorth(A::KronMat{matT, U}) where {matT, U<:Instance}
 
-        V = KronMat{T, Instance}(dimensions(A))
-        H = KronMat{T, U}(
+        T = eltype(matT)
+        V = KronComp{Matrix{T}}(dimensions(A))
+        H = KronMat{Matrix{T}, U}(dimensions(A))
 
-            [ sparse(SymTridiagonal( zeros( size(A[s]) ) ))  for s in 1:length(A) ]
-
-        )
-
-        new(A, V, H, LanczosReorth{T})
+        new{matT, T, U}(A, V, H, LanczosReorth)
 
     end
 
 end
 
-const LanczosUnion{T, U} = Union{Type{TensorLanczos{T}}, Type{TensorLanczosReorth{T}}}
+const LanczosUnion{matT, T, U} = Union{Type{TensorLanczos{matT, T, U}}, Type{TensorLanczosReorth{matT, T, U}}}
 
-function update_subdiagonals!(H::AbstractMatrix{T}, k::Int, β::T) where T
+function update_subdiagonals!(H::Matrix{T}, k::Int, β::T) where T
 
     indices = [CartesianIndex(k + 1, k), CartesianIndex(k, k + 1)]
 

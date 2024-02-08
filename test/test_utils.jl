@@ -62,7 +62,7 @@ end
 
 function exact_solution(M::KronMat, x::KruskalTensor{T}) where T
 
-    M_kroneckersum = kroneckersum(M.𝖳...)
+    M_kroneckersum = kroneckersum(M.M...)
     x_explicit     = kroneckervectorize(x)
     
     return M_kroneckersum * x_explicit
@@ -104,8 +104,8 @@ function error_compressed_residualnorm(
     solution::Vector{T},
     Λ       ::AbstractMatrix{T},
     lowerX  ::Vector{Matrix{T}},
-    M       ::KronMat{T, U},
-    x       ::KruskalTensor{T}) where {T, U<:Instance}
+    M       ::KronMat,
+    x       ::KruskalTensor{T}) where {T}
 
     # Explicit compressed residual norm
     exp_comp_res_norm    = norm(kron(b...) - solution)^2
@@ -143,7 +143,7 @@ end
 
 # test/tensor_krylov_method.jl functions
 
-function solvecompressed(H::KronMat{T, U}, b::Vector{<:AbstractVector{T}}) where {T, U<:Instance}
+function solvecompressed(H::KronMat, b::Vector{<:AbstractVector{T}}) where {T}
 
     H_expanded = Symmetric(kroneckersum(H.𝖳...))
     b_expanded = kron(b...)
@@ -153,9 +153,9 @@ function solvecompressed(H::KronMat{T, U}, b::Vector{<:AbstractVector{T}}) where
 
 end
 
-function exactresidualnorm(A::KronMat{T, U}, b::Vector{<:AbstractVector{T}}, xₖ::AbstractVector{T}) where {T, U<:Instance}
+function exactresidualnorm(A::KronMat, b::Vector{<:AbstractVector{T}}, xₖ::AbstractVector{T}) where {T}
 
-    A_expanded = kroneckersum(A.𝖳...)
+    A_expanded = kroneckersum(A.M...)
     b_expanded = kron(b...)
     tmp        = zeros(size(A_expanded, 1))
 
@@ -186,7 +186,7 @@ function monotonic_decrease(errors::Vector{T}) where T
 
 end
 
-function tensor_krylov_exact(A::KronMat{T, U}, b::KronProd{T}, nmax::Int, orthonormalization_type::Type{<:TensorDecomposition{T}}, tol = 1e-9) where {T, U<:Instance}
+function tensor_krylov_exact(A::KronMat, b::KronProd{T}, nmax::Int, orthonormalization_type::Type{<:TensorDecomposition}, tol = 1e-9) where {T}
 
     d  = length(A)
     xₖ = Vector{T}(undef, nentries(A))

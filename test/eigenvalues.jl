@@ -10,10 +10,10 @@ using LinearAlgebra
     A = Tridiagonal(-ones(n - 1), 2ones(n), -ones(n - 1))
     v = inv(sqrt(n)) .* ones(n)
 
-    lanczos = Lanczos{Float64}(A, zeros(n, k + 1), zeros(k + 1, k + 1), v)
+    lanczos = Lanczos(A, zeros(n, k + 1), zeros(k + 1, k + 1), v)
 
     initialize_decomp!(lanczos.V, v)
-    orthonormal_basis_vector!(lanczos, 1)
+    orthonormalize!(lanczos, 1, TTR())
 
     # Initialize sequence of characteristic polynomials
     char_polynomials = [ [1], [ lanczos.H[1, 1], -1.0] ]
@@ -21,7 +21,7 @@ using LinearAlgebra
 
     for j in 2:k 
 
-        orthonormal_basis_vector!(lanczos, j)
+        orthonormalize!(lanczos, j, TTR())
         γⱼ = lanczos.H[j, j]
         βⱼ = lanczos.H[j, j - 1]
         next_coefficients!(char_polynomials, j, γⱼ, βⱼ)

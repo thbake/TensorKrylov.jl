@@ -1,8 +1,16 @@
-export orthonormal_basis!, orthonormal_basis_vector!, 
-       initial_orthonormalization!, initialize_decomp!, isorthonormal,
+export orthonormalize!,  initialize_decomp!, isorthonormal,
        arnoldi_algorithm, lanczos_algorithm, orthogonality_loss
+export MGS, TTR
 
-function orthonormal_basis_vector!(decomposition::Decomposition{T}, k::Int, ::MGS) where T<:AbstractFloat
+abstract type OrthAlg end
+struct MGS <: OrthAlg end # Modified Gram-Schmidt
+struct TTR <: OrthAlg end # Three-term recurrence
+
+get_orthogonalization(::TensorArnoldi)       = MGS
+get_orthogonalization(::TensorLanczos)       = TTR
+get_orthogonalization(::TensorLanczosReorth) = TTR
+
+function orthonormalize!(decomposition::Decomposition, k::Int, ::MGS) 
 
     n = order(decomposition)
     v = zeros(n)
@@ -26,7 +34,7 @@ function orthonormal_basis_vector!(decomposition::Decomposition{T}, k::Int, ::MG
     decomposition.V[:, k + 1] = v .* inv(decomposition.H[k + 1, k])
 end
 
-function orthonormal_basis_vector!(lanczos::Lanczos{T}, k::Int) where T<:AbstractFloat
+function orthonormalize!(lanczos::Lanczos, k::Int, ::TTR) 
 
     n = order(lanczos)
     u = ones(n)
@@ -54,7 +62,6 @@ function orthonormal_basis_vector!(lanczos::Lanczos{T}, k::Int) where T<:Abstrac
     # Update Jacobi matrix
     update_subdiagonals!(lanczos.H, k, lanczos.β)
     
-
 end
 
 function normalizecolumns!(A::AbstractMatrix{T}) where T<:AbstractFloat
@@ -69,29 +76,7 @@ function normalizecolumns!(A::AbstractMatrix{T}) where T<:AbstractFloat
 
 end
 
-#function goodRitzVectors(
-#    reorth_struct::Reorthogonalize{T},
-#    lanczos      ::Lanczos{T}, β::T, k::Int) where T<:AbstractFloat
-#
-#    n = size(lanczos.V, 1)
-#    Θ, Z = eigen(@view lanczos.H[1:k, 1:k]) # Compute eigenpairs pairs {θᵢ, zᵢ}
-#
-#    good_threshold    = abs(β) .* abs.(@view Z[k, :])
-#    machine_threshold = sqrt(reorth_struct.u) * norm(lanczos.A)
-#    println("Machine threshold ", machine_threshold)
-#    indices           = good_threshold .<= machine_threshold
-#    println(indices)
-#    m                 = sum(indices)
-#    Y    = zeros(n, k)
-#    mul!(Y, @view(lanczos.V[:, 1:k]), Z)
-#
-#    goodRitz = normalizecolumns!(Y[:, indices])
-#
-#    return goodRitz
-#
-#end
-
-function reorthogonalize!(X::MatrixView{T}, lanczos::Lanczos{T}, k::Int) where T<:AbstractFloat
+function reorthogonalize!(X::MatrixView{T}, lanczos::Lanczos, k::Int) where T<:AbstractFloat
 
     u = copy(lanczos.V[:, k + 1])
     for i in 1:size(X, 2)
@@ -108,10 +93,7 @@ function reorthogonalize!(X::MatrixView{T}, lanczos::Lanczos{T}, k::Int) where T
 end
 
 
-function orthonormal_basis_vector!(
-    lanczos      ::LanczosReorth{T},
-    k            ::Int) where T<:AbstractFloat
-    
+function orthonormalize!(lanczos::LanczosReorth, k::Int, ::TTR) 
     n = order(lanczos)
     r = ones(n)
 
@@ -134,9 +116,11 @@ function orthonormal_basis_vector!(
 
     loss = orthogonality_loss(lanczos.V, k + 1)
 
+    T = eltype(lanczos.V)
+
     if loss > sqrt(eps(T))
 
-        orthonormal_basis_vector!(lanczos, k, MGS())
+        orthonormalize!(lanczos, k, MGS())
 
         lanczos.β = lanczos.H[k + 1, k]
         
@@ -153,88 +137,52 @@ function orthonormal_basis_vector!(
 end
 
 
-function initial_orthonormalization!(
-    t_decomp   ::TensorDecomposition{T},
-    b          ::KronProd{T},
-    decomp_type::Type{<:Decomposition{T}}) where T<:AbstractFloat
+function orthonormalize!(t_decomp::TensorDecomposition, b::KronProd) 
     
 
     # This method performs the first orthonormalization step of both TensorArnoldi 
     # and TensorLanczos data structures.
 
+    orth_alg = get_orthogonalization(t_decomp)
+
     for s in 1:length(t_decomp)
 
         # Initialize d Arnoldi/Lanczos decompositions
-        decomposition = decomp_type(t_decomp[s]..., b[s])
+        decomposition = t_decomp.orthonormalization(t_decomp[s]..., b[s])
 
         # First orthonormalization step for each of the coefficient matrices
-        if decomp_type == Arnoldi{T} 
-
-            orthonormal_basis_vector!(decomposition, 1, MGS())
-
-        else
-
-            orthonormal_basis_vector!(decomposition, 1)
-        end
+        orthonormalize!(decomposition, 1, orth_alg())
 
     end
 
 end
 
-function orthonormal_basis!(t_arnoldi::TensorArnoldi{T}, k::Int) where T<:AbstractFloat
+function orthonormalize!(t_decomp::TensorDecomposition, k::Int) 
 
     # This method performs not initial orthonormalization steps for the 
     # TensorArnoldi data structure.
 
-    for s in 1:length(t_arnoldi)
+    orth_alg = get_orthogonalization(t_decomp)
 
-        arnoldi = Arnoldi{T}(t_arnoldi[s]...)
+    for s in 1:length(t_decomp)
 
-        orthonormal_basis_vector!(arnoldi, k, MGS())
+        decomposition = t_decomp.orthonormalization(t_decomp[s]..., k)
 
-    end
-
-end
-
-function orthonormal_basis!(t_lanczos::TensorLanczos{T}, k::Int) where T<:AbstractFloat
-
-    # This method performs not initial orthonormalization steps for the 
-    # TensorLanczos data structure.
-
-    for s in 1:length(t_lanczos)
-
-        lanczos = Lanczos{T}(t_lanczos[s]..., k)
-
-        orthonormal_basis_vector!(lanczos, k)
+        orthonormalize!(decomposition, k, orth_alg())
 
     end
 
 end
 
-function orthonormal_basis!(t_lanczos::TensorLanczosReorth{T}, k::Int) where T<:AbstractFloat
-
-    # This method performs not initial orthonormalization steps for the 
-    # TensorLanczos data structure.
-
-    for s in 1:length(t_lanczos)
-
-        lanczos = LanczosReorth{T}(t_lanczos[s]..., k)
-
-        orthonormal_basis_vector!(lanczos, k)
-
-    end
-
-end
-
-function arnoldi_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) where T<:AbstractFloat
+function arnoldi_algorithm(A::matT, b::Vector{T}, k::Int) where {matT<:AbstractMatrix, T<:AbstractFloat}
 
     n = size(A, 1)
 
-    arnoldi = Arnoldi{T}(A, zeros(n, k + 1), zeros(k + 1, k), b)
+    arnoldi = Arnoldi(A, zeros(n, k + 1), zeros(k + 1, k), b)
 
     for j in 1:k
 
-        orthonormal_basis_vector!(arnoldi, j, MGS())
+        orthonormalize!(arnoldi, j, MGS())
 
     end
 
@@ -243,14 +191,15 @@ function arnoldi_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) w
 end
 
 
-function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) where T<:AbstractFloat
+function lanczos_algorithm(A::matT, b::Vector{T}, k::Int) where {matT<:AbstractMatrix, T<:AbstractFloat}
+
     n = size(A, 1)
 
-    lanczos = Lanczos{T}(A, zeros(n, k), zeros(k, k), b)
+    lanczos = Lanczos(A, zeros(n, k), zeros(k, k), b)
 
     for j in 1:k-1
 
-        orthonormal_basis_vector!(lanczos, j)
+        orthonormalize!(lanczos, j, TTR())
 
     end
 
@@ -258,19 +207,15 @@ function lanczos_algorithm(A::AbstractMatrix{T}, b::AbstractVector{T}, k::Int) w
 
 end
 
-function lanczos_algorithm(
-    A::AbstractMatrix{T},
-    b::AbstractVector{T},
-    k::Int,
-     ::MGS) where T<:AbstractFloat
+function lanczos_algorithm(A::matT, b::Vector{T}, k::Int, ::Type{LanczosReorth}) where {matT<:AbstractMatrix, T<:AbstractFloat}
 
     n = size(A, 1)
 
-    lanczos = LanczosReorth{T}(A, zeros(n, k), zeros(k, k), b)
+    lanczos = LanczosReorth(A, zeros(n, k), zeros(k,k), b)
     
     for j in 1:k-1
 
-        orthonormal_basis_vector!(lanczos, j)
+        orthonormalize!(lanczos, j, TTR())
 
     end
 
@@ -288,7 +233,7 @@ function rank_k_update!(result::AbstractMatrix{T}, A::AbstractMatrix{T}, k::Int)
 
 end
 
-function rank_k_update(A::KronMat{T, U}, k::Int) where {T<:AbstractFloat, U<:Instance}
+function rank_k_update(A::KronComp, k::Int) 
 
     result          = [ zeros(k, k) for _ in 1:length(A) ]
     matrix_products = [ rank_k_update!(result[s], A[s], k) for s in 1:length(A)  ]
@@ -314,13 +259,13 @@ function isorthonormal(V::AbstractMatrix{T}, k::Int, tol::T = 1e-8)::Bool where 
 
 end
 
-function isorthonormal(decomposition::Decomposition{T}, k::Int)::Bool where T<:AbstractFloat
+function isorthonormal(decomposition::Decomposition, k::Int)::Bool 
 
     return isorthonormal(decomposition.V, k)
 
 end
 
-function isorthonormal(tensor_decomp::TensorDecomposition{T}, k::Int)::Bool where T<:AbstractFloat
+function isorthonormal(tensor_decomp::TensorDecomposition, k::Int)::Bool 
 
     boolean = true
 

@@ -22,9 +22,9 @@ module TestSets
             include("eigenvalues.jl")
         end
 
-        #@testset "Kronecker product structures" begin
-        #    include("tensor_struct.jl")
-        #end
+        @testset "Kronecker product structures" begin
+            include("tensor_struct.jl")
+        end
 
         @testset "Utils tests" begin
             include("utils.jl")

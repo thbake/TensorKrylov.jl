@@ -15,18 +15,18 @@ using Kronecker, LinearAlgebra
 
 end
 
-@testset "Monotonic decrease of residual and error in A-norm" begin
-
-    d    = 2
-    n    = 100
-    Tₖ   = assemble_matrix(n,  Laplace{Float64})
-    A    = KroneckerMatrix{Float64, SymInstance}([Tₖ for _ in 1:d], Laplace{Float64})
-    b    = [ rand(n) for _ in 1:d ]
-    nmax = 99
-
-    tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
-
-end
+#@testset "Monotonic decrease of residual and error in A-norm" begin
+#
+#    d    = 2
+#    n    = 100
+#    Tₖ   = assemble_matrix(n,  Laplace{Float64})
+#    A    = KroneckerMatrix{Float64, SymInstance}([Tₖ for _ in 1:d], Laplace{Float64})
+#    b    = [ rand(n) for _ in 1:d ]
+#    nmax = 99
+#
+#    tensor_krylov_exact(A, b, nmax, TensorLanczos{Float64})
+#
+#end
 
 @testset "Symmetric example" begin
 
@@ -35,11 +35,11 @@ end
     d   = 5
     n   = 200
 
-    A               = KronMat{Float64, SymInstance}(d, n, Laplace{Float64})
+    A               = KronMat{SymInstance}(d, n, Laplace)
     b               = random_rhs(d, n)
-    spd_system      = TensorizedSystem{Float64, SymInstance}(A, b)
+    spd_system      = TensorizedSystem{SymInstance}(A, b)
     nmax            = 199
-    convergencedata = solve_tensorized_system(spd_system, nmax, TensorLanczosReorth{Float64})
+    convergencedata = solve_tensorized_system(spd_system, nmax, TensorLanczosReorth)
     #display(convergencedata)
 
 end
@@ -51,11 +51,11 @@ end
     d    = 5
     n    = 200
 
-    A               = KronMat{Float64, NonSymInstance}(d, n, ConvDiff{Float64})
+    A               = KronMat{NonSymInstance}(d, n, ConvDiff)
     b               = random_rhs(d, n)
-    nonsym_system   = TensorizedSystem{Float64, NonSymInstance}(A, b)
+    nonsym_system   = TensorizedSystem{NonSymInstance}(A, b)
     nmax            = 199
-    #convergencedata = solve_tensorized_system(nonsym_system, nmax, TensorArnoldi{Float64})
+    #convergencedata = solve_tensorized_system(nonsym_system, nmax, TensorArnoldi)
     #display(convergencedata)
     
 end

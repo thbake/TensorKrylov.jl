@@ -23,23 +23,23 @@ end
     d  = 5
     n = 200
 
-    Aₛ = assemble_matrix(n, Laplace{Float64})
-    A  = KroneckerMatrix{Float64, SymInstance}([Aₛ for _ in 1:d])
+    Aₛ = assemble_matrix(n, Laplace)
+    A  = KronMat{SymInstance}([Aₛ for _ in 1:d])
     b  = [ rand(n) for _ in 1:d ]
 
     k = 50
 
     # Initialize Arnoldi and Lanczos decompositions
-    t_arnoldi = TensorArnoldi{Float64}(A)
-    t_lanczos = TensorLanczos{Float64}(A)
+    t_arnoldi = TensorArnoldi(A)
+    t_lanczos = TensorLanczos(A)
 
-    initial_orthonormalization!(t_arnoldi, b, Arnoldi{Float64})
-    initial_orthonormalization!(t_lanczos, b, Lanczos{Float64})
+    orthonormalize!(t_arnoldi, b)
+    orthonormalize!(t_lanczos, b)
 
     for j in 2:k
 
-        orthonormal_basis!(t_arnoldi, j)
-        orthonormal_basis!(t_lanczos, j)
+        orthonormalize!(t_arnoldi, j)
+        orthonormalize!(t_lanczos, j)
 
     end
 

@@ -6,17 +6,15 @@ mutable struct ConvergenceData{T}
     iterations             ::Vector{Int}
     relative_residual_norm ::Vector{T}
     projected_residual_norm::Vector{T}
-    spectraldata           ::SpectralData{T}
     orthogonality_data     ::Vector{T}
 
-    function ConvergenceData{T}(nmax::Int, instance::Type{<:Instance}) where T<:AbstractFloat
+    function ConvergenceData{T}(nmax::Int) where T<:AbstractFloat
 
         new(
             nmax,
             collect(1:nmax),
             ones(nmax),
             ones(nmax),
-            SpectralData{T, instance}(nmax),
             ones(nmax))
 
     end
@@ -29,7 +27,6 @@ function Base.resize!(convergencedata::ConvergenceData{T}, k::Int) where T<:Abst
     resize!(convergencedata.iterations, k)
     resize!(convergencedata.relative_residual_norm, k)
     resize!(convergencedata.projected_residual_norm, k)
-    resize!(convergencedata.spectraldata, k)
     resize!(convergencedata.orthogonality_data, k)
 
 end
@@ -39,7 +36,6 @@ function Base.show(io::IO, convergencedata::ConvergenceData{T}) where T<:Abstrac
     println(io, "Convergence data: ")
     println(io, " - Relative residual norm:  ", typeof(convergencedata.relative_residual_norm))
     println(io, " - Projected residual norm: ", typeof(convergencedata.projected_residual_norm))
-    println(io, " - Spectral data:           ", typeof(convergencedata.spectraldata))
     println(io, " - Orthogonality data:      ", typeof(convergencedata.orthogonality_data))
 
     println(io, "\nComputations ran for ",  convergencedata.niterations, " iterations.")

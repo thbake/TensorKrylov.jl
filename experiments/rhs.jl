@@ -8,7 +8,7 @@ struct NonSmooth <: Smoothness end # system exhibit different levels of "smoothn
 
 function special_rhs(d::Int, n::Int, smoothness::Type{<:Smoothness})
 
-    A    = assemble_matrix(n, LaplaceDense{Float64})
+    A    = assemble_matrix(n, LaplaceDense)
     Λ, Y = eigen(A)
     bs   = f(Λ, Y, smoothness)
 
@@ -19,23 +19,23 @@ end
 f( ::Vector, Y::Matrix, ::Type{Smooth})    = Y            * ones(size(Y, 1))
 f(Λ::Vector, Y::Matrix, ::Type{NonSmooth}) = diagm(Λ) * Y * ones(size(Y, 1))
 
-struct RHSExperiment{T} 
+struct RHSExperiment 
 
-    experiment::Experiment{T}
+    experiment::Experiment
     smoothness::Type{<:Smoothness}
 
-    function RHSExperiment{T}(
+    function RHSExperiment(
         dims      ::Vector{Int},
         n         ::Int,
         nmax      ::Int,
-        smoothness::Type{<:Smoothness}) where T
+        smoothness::Type{<:Smoothness}) 
 
-        rhs = [ special_rhs(d, n, smoothness) for d ∈ dims ]
-        experiment = Experiment{T}(
+        rhs        = [ special_rhs(d, n, smoothness) for d ∈ dims ]
+        experiment = Experiment(
             dims, n, nmax,
             SymInstance, 
-            Laplace{T},
-            TensorLanczosReorth{T},
+            Laplace,
+            TensorLanczosReorth,
             rhs
         )
 
@@ -45,7 +45,7 @@ struct RHSExperiment{T}
 
 end
 
-function run_experiments!(rhsexp::RHSExperiment{T}, tol = 1e-9) where T
+function run_experiments!(rhsexp::RHSExperiment, tol::T = 1e-9) where T
 
     println("Performing right-hand side experiments")
 
@@ -54,13 +54,13 @@ function run_experiments!(rhsexp::RHSExperiment{T}, tol = 1e-9) where T
         println("d = " * string(rhsexp.experiment.dims[i]))
 
 
-        A = KronMat{T, rhsexp.experiment.instance}(
+        A = KronMat{rhsexp.experiment.instance}(
             rhsexp.experiment.dims[i],
             rhsexp.experiment.matrix_size,
             rhsexp.experiment.matrix_class
         )
 
-        system = TensorizedSystem{T, rhsexp.experiment.instance}(A, rhsexp.experiment.rhs_vec[i])
+        system = TensorizedSystem{rhsexp.experiment.instance}(A, rhsexp.experiment.rhs_vec[i])
         
 
         rhsexp.experiment.conv_vector[i] = solve_tensorized_system(
@@ -80,11 +80,11 @@ function rhs_experiment(tol::T = 1e-9) where T
     n    = 200
     nmax  = n - 1
 
-    smooth_rhs    = RHSExperiment{T}(dims, n, nmax, Smooth)
-    nonsmooth_rhs = RHSExperiment{T}(dims, n, nmax, NonSmooth)
+    smooth_rhs    = RHSExperiment(dims, n, nmax, Smooth)
+    nonsmooth_rhs = RHSExperiment(dims, n, nmax, NonSmooth)
 
-    run_experiments!(smooth_rhs)
-    run_experiments!(nonsmooth_rhs)
+    run_experiments!(smooth_rhs,    tol)
+    run_experiments!(nonsmooth_rhs, tol)
 
     return smooth_rhs, nonsmooth_rhs
 

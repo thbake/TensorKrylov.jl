@@ -7,14 +7,48 @@ export assemble_matrix, dimensions, kroneckervectorize,  kronproddot,
 
 const KronStruct{T} = Vector{<:AbstractVecOrMat{T}}
 const FMatrices{T}  = Vector{<:AbstractMatrix{T}}
-#const CoeffMat{T}   = Vector{}
+const CoeffMat{matT} = Vector{matT}
+const MatrixView{matT, T} = Array{SubArray{T, 2, matT, Tuple{UnitRange{Int}, UnitRange{Int}}, false}, 1}
 
-abstract type MatrixGallery{T} end
-struct LaplaceDense{T} <: MatrixGallery{T} end
-struct Laplace{T}      <: MatrixGallery{T} end 
-struct ConvDiff{T}     <: MatrixGallery{T} end
-struct EigValMat{T}    <: MatrixGallery{T} end
-struct RandSPD{T}      <: MatrixGallery{T} end
+abstract type MatrixGallery end
+struct LaplaceDense <: MatrixGallery end
+struct Laplace      <: MatrixGallery end 
+struct ConvDiff     <: MatrixGallery end
+struct EigValMat    <: MatrixGallery end
+struct RandSPD      <: MatrixGallery end
+
+function assemble_matrix(n::Int, ::Type{LaplaceDense}) 
+
+    h  = inv(n + 1)
+    Aₛ = inv(h^2) * SymTridiagonal(2ones(n), -ones(n))
+
+    return Aₛ
+
+end
+
+assemble_matrix(n::Int, ::Type{Laplace}) = sparse( assemble_matrix(n, LaplaceDense) )
+
+
+function assemble_matrix(n::Int, ::Type{ConvDiff}, c::AbstractFloat = 10.0)  
+
+    h  = inv(n + 1)
+    L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
+    Aₛ = L + sparse( (c * inv(4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
+
+    return Aₛ
+
+end
+
+assemble_matrix(eigenvalues::Vector, ::Type{EigValMat}) = diagm(eigenvalues)
+
+
+function assemble_matrix(n::Int, ::Type{RandSPD})
+
+    R = rand(n, n)
+
+    return  Symmetric(R'R, :L)
+
+end
 
 abstract type Instance end
 struct SymInstance    <: Instance end
@@ -24,63 +58,24 @@ struct NonSymInstance <: Instance end
 # or sums thereof, since all of these can be represented as vectors of abstract arrays
 # or matrices
 
-struct KroneckerMatrix{T, U} 
-    
-    𝖳           ::FMatrices{T} # We only store the d matrices explicitly in a vector.
-    matrix_class::Type{<:MatrixGallery{T}}
+abstract type AbstractKroneckerMatrix{matT} end
 
-    function KroneckerMatrix{T, U}(Aₛ::FMatrices{T}) where {T, U<:Instance}
-
-        new{T, U}(Aₛ, MatrixGallery{T})
-
-    end
-
-    function KroneckerMatrix{T, U}(
-        Aₛ   ::FMatrices{T},
-        class::Type{<:MatrixGallery{T}}) where {T, U<:Instance}# Constructor with vector of matrix coefficients
-
-        new{T, U}(Aₛ, class)
-
-    end
-
-    function KroneckerMatrix{T, U}(orders::Array{Int}) where {T, U<:Instance}
-
-        new{T, U}([ zeros(orders[s], orders[s]) for s in 1:length(orders) ], MatrixGallery{T})
-
-    end
-
-    function KroneckerMatrix{T, U}(
-        d::Int, n   ::Int,
-        matrix_class::Type{<:MatrixGallery{T}}) where {T, U<:Instance}
-
-        A = assemble_matrix(n, matrix_class)
-
-        KroneckerMatrix{T, U}( [ A for _ in 1:d ], matrix_class)
-
-    end
-
-    function KroneckerMatrix{T, U}(d::Int, eigenvalues, class::Type{EigValMat{T}}) where {T, U<:Instance}
-
-        A = assemble_matrix(eigenvalues, class)
-        KroneckerMatrix{T, U}( [ A for _ in 1:d ], class)
-
-    end
-
-end
 # Basic functions for KroneckerMatrix types
 # ==========================================
-Base.length(A::KroneckerMatrix)           = length(A.𝖳)
+Base.length(A::AbstractKroneckerMatrix)           = length(A.M)
 
-Base.getindex(A::KroneckerMatrix, i::Int) = A.𝖳[i]
+Base.getindex(A::AbstractKroneckerMatrix, i::Int) = A.M[i]
 
-Base.eachindex(A::KroneckerMatrix)        = eachindex(A.𝖳)
+Base.eachindex(A::AbstractKroneckerMatrix)        = eachindex(A.M)
 
-Base.first(A::KroneckerMatrix{T, Instance}) where T = first(A.𝖳)
+function Base.getindex(A::AbstractKroneckerMatrix, i::Int, j::Int)
 
-Base.first(A::KroneckerMatrix{T, SymInstance}) where T    = Symmetric(first(A.𝖳), :L)
-Base.first(A::KroneckerMatrix{T, NonSymInstance}) where T = Matrix(first(A.𝖳))
+    # Return the entry (i, j) of all d coefficient matrices
+    return [ A[s][i, j] for s in 1:length(A) ]
 
-function Base.getindex(A::KroneckerMatrix{T, U}, multiindex::Matrix{<:Int}) where {T, U<:Instance}
+end
+
+function Base.getindex(A::AbstractKroneckerMatrix, multiindex::Matrix{<:Int}) 
 
     # Implement multiindexing of KroneckerProduct structures. To be precise
     # index a KroneckerProduct structure with a pair of multiindices ℑ₁, ℑ₂.
@@ -102,55 +97,34 @@ function Base.getindex(A::KroneckerMatrix{T, U}, multiindex::Matrix{<:Int}) wher
 
 end
 
-function Base.setindex!(A::KroneckerMatrix, M::Matrix, i::Int) 
+function Base.setindex!(A::AbstractKroneckerMatrix, M::Matrix, i::Int) 
 
-    1 <= i <= length(A.𝖳) || throw(BoundsError(A, i))
+    1 <= i <= length(A.M) || throw(BoundsError(A, i))
 
-    A.𝖳[i] = M
-
-end
-
-getinstancetype(::KroneckerMatrix{T, U}) where {T, U<:Instance} = U
-
-nentries(A::KroneckerMatrix) = prod(dimensions(A))
-
-function assemble_matrix(n::Int, ::Type{LaplaceDense{T}}) where T
-
-    h  = inv(n + 1)
-    Aₛ = inv(h^2) * SymTridiagonal(2ones(n), -ones(n))
-
-    return Aₛ
+    A.M[i] = M
 
 end
 
-assemble_matrix(n::Int, ::Type{Laplace{T}}) where T = sparse( assemble_matrix(n, LaplaceDense{T}) )
+function Base.size(A::AbstractKroneckerMatrix)::Array{Tuple{Int, Int}} 
 
-
-function assemble_matrix(n::Int, ::Type{ConvDiff{T}}, c::AbstractFloat = 10.0)  where T
-
-    h  = inv(n + 1)
-    L  =     sparse( inv(h^2) .* SymTridiagonal( 2ones(n), -ones(n - 1)) )
-    Aₛ = L + sparse( (c * inv(4 * h)) .* diagm(-1 => ones(n-1), 0 => 3ones(n), 1 => -5ones(n - 1), 2 => ones(n - 2)) )
-
-    return Aₛ
-
-end
-
-assemble_matrix(eigenvalues::Vector, ::Type{EigValMat{T}}) where T= diagm(eigenvalues)
-
-
-function assemble_matrix(n::Int, ::Type{RandSPD{T}}) where T
-
-    R = rand(n, n)
-
-    return  Symmetric(R'R, :L)
-
-end
-
-
+    # Return size of each KroneckerMatrix element
     
+    factor_sizes = Array{Tuple{Int, Int}}(undef, length(A))
 
-function Base.show(::IO, A::KroneckerMatrix) 
+    for s = 1:length(A)
+        
+        factor_sizes[s] = size(A[s])
+
+    end
+
+    return factor_sizes
+end
+
+dimensions(A::AbstractKroneckerMatrix) = [ size(A[s], 1) for s in 1:length(A) ]
+
+nentries(A::AbstractKroneckerMatrix) = prod(dimensions(A))
+
+function Base.show(::IO, A::AbstractKroneckerMatrix) 
 
     d = length(A)
     n = size(A[1], 1)
@@ -159,12 +133,93 @@ function Base.show(::IO, A::KroneckerMatrix)
 
 end
 
-dimensions(A::KroneckerMatrix) = [ size(A[s], 1) for s in 1:length(A) ]
+randkronmat(orders::Array{Int}) = AbstractKroneckerMatrix([ rand(n, n) for n ∈ orders ])
+
+mutable struct KroneckerMatrix{matT, U} <: AbstractKroneckerMatrix{matT}
+    
+    M          ::CoeffMat{matT} # We only store the d matrices explicitly in a vector.
+    matrixclass::Type{<:MatrixGallery}
+
+    function KroneckerMatrix{U}(Aₛ::CoeffMat{matT}) where {matT, U<:Instance}
+
+        new{matT, U}(Aₛ, MatrixGallery)
+
+    end
+
+    function KroneckerMatrix{U}(Aₛ::CoeffMat{matT}, class::Type{<:MatrixGallery}) where {matT, U<:Instance}
+
+        new{matT, U}(Aₛ, class)
+
+    end
+
+    function KroneckerMatrix{U}(Aₛ::CoeffMat) where {U}
+
+        new{eltype(Aₛ), U}(Aₛ, MatrixGallery)
+
+    end
+
+    function KroneckerMatrix{U}(A_view::MatrixView{matT, T}) where {matT, T, U<:Instance}
+
+        new{matT, U}(A_view, MatrixGallery)
+
+    end
 
 
-randkronmat(orders::Array{Int}) = KroneckerMatrix{Float64, Instance}([ rand(n, n) for n ∈ orders ])
+    function KroneckerMatrix{matT, U}(orders::Vector{Int}) where {matT, U<:Instance}
 
+        new([ zeros(orders[s], orders[s]) for s in 1:length(orders) ], MatrixGallery)
 
+    end
+
+    function KroneckerMatrix{U}(
+        d::Int, n   ::Int,
+        class::Type{<:MatrixGallery}) where {U<:Instance}
+
+        A = assemble_matrix(n, class)
+
+        KroneckerMatrix{U}( [ A for _ in 1:d ], class)
+
+    end
+
+    function KroneckerMatrix{U}(d::Int, eigenvalues, class::Type{EigValMat}) where {U<:Instance}
+
+        A = assemble_matrix(eigenvalues, class)
+        KroneckerMatrix{U}( [ A for _ in 1:d ], class)
+
+    end
+
+end
+
+mutable struct KroneckerMatrixCompact{matT} <: AbstractKroneckerMatrix{matT}
+
+    M::CoeffMat{matT} # We only store the d matrices explicitly in a vector.
+
+    function KroneckerMatrixCompact{matT}(Aₛ::CoeffMat{matT}) where matT
+
+        new(Aₛ)
+
+    end
+    
+    function KroneckerMatrixCompact{matT}(A_view::MatrixView{matT, T}) where {matT, T}
+
+        new(A_view)
+
+    end
+
+    function KroneckerMatrixCompact{matT}(orders::Array{Int}) where matT
+
+        new{matT}([ zeros(orders[s], orders[s]) for s in 1:length(orders) ])
+
+    end
+
+end
+
+Base.first(A::KroneckerMatrix{matT,       Instance}) where matT = first(A.M)
+Base.first(A::KroneckerMatrixCompact) = first(A.M)
+Base.first(A::KroneckerMatrix{matT,    SymInstance}) where matT = Symmetric(first(A.M), :L)
+Base.first(A::KroneckerMatrix{matT, NonSymInstance}) where matT = Matrix(first(A.M))
+
+getinstancetype(::KroneckerMatrix{matT, U}) where {matT, U<:Instance} = U
 
 function trikronmat(orders::Array{Int})
 
@@ -172,20 +227,6 @@ function trikronmat(orders::Array{Int})
 
 end
 
-function Base.size(KM::KroneckerMatrix)::Array{Tuple{Int, Int}} 
-
-    # Return size of each KroneckerMatrix element
-    
-    factor_sizes = Array{Tuple{Int, Int}}(undef, length(KM))
-
-    for s = 1:length(KM)
-        
-        factor_sizes[s] = size(KM[s])
-
-    end
-
-    return factor_sizes
-end
 
 function kronproddot(v::KronStruct{T}) where T
 
@@ -213,7 +254,7 @@ mutable struct KruskalTensor{T}
 
     end
     
-    function KruskalTensor{T}(lambda::AbstractVector{T}, M::AbstractMatrix{T}) where T 
+    function KruskalTensor{T}(lambda::Vector{T}, M::Matrix{T}) where T 
 
         KruskalTensor{T}(lambda, collect(M))
 
@@ -298,21 +339,22 @@ end
 
 function principal_minors(v::KronStruct{T}, i::Int) where T
 
-    return [ @view(v[s][1:i]) for s in 1:length(v)]
+    return [ @view(v[s][1:i]) for s in 1:length(v) ]
 
 end
 
-function principal_minors(KM::KroneckerMatrix{T, U}, i::Int) where {T, U<:Instance}
+function principal_minors(A::KroneckerMatrix{matT, U}, i::Int) where {matT, U}
 
-    return KroneckerMatrix{T, U}( [ @view(KM[s][1:i, 1:i]) for s in 1:length(KM)] )
+    return KroneckerMatrix{U}( [ @view(A[s][1:i, 1:i]) for s in 1:length(A)] )
+
+end
+
+function principal_minors(A::KroneckerMatrixCompact{matT}, i::Int, j::Int) where {matT}
+
+    return KroneckerMatrixCompact{matT}( [ @view(A[s][1:i, 1:j]) for s in 1:length(A)] )
 
 end
 
-function principal_minors(KM::KroneckerMatrix{T, U}, i::Int, j::Int) where {T, U<:Instance}
-
-    return KroneckerMatrix{T, U}( [ @view(KM[s][1:i, 1:j]) for s in 1:length(KM)] )
-
-end
 
 function principal_minors(x::KruskalTensor{T}, i::Int) where T
 
@@ -320,22 +362,16 @@ function principal_minors(x::KruskalTensor{T}, i::Int) where T
 
 end
 
-function Base.getindex(KM::KroneckerMatrix, i::Int, j::Int)
 
-    # Return the entry (i, j) of all d coefficient matrices
-    return [ KM[s][i, j] for s in 1:length(KM) ]
+function kth_rows(A::KroneckerMatrix, k::Int)
 
-end
-
-function kth_rows(KM::KroneckerMatrix, k::Int)
-
-    return [ @view(KM[s][k, :]) for s in 1:length(KM) ]
+    return [ @view(A[s][k, :]) for s in 1:length(A) ]
 
 end
 
-function kth_columns(KM::KroneckerMatrix, k::Int)
+function kth_columns(A::KroneckerMatrix, k::Int)
 
-    return [ @view(KM[s][:, k]) for s in 1:length(KM) ]
+    return [ @view(A[s][:, k]) for s in 1:length(A) ]
 
 end
 
@@ -346,8 +382,8 @@ function kth_columns(A, k::Int)
 end
 
 # Linear algebra for Kronecker matrices
-LinearAlgebra.adjoint(A::KroneckerMatrix)   = adjoint.(A.𝖳)
-LinearAlgebra.transpose(A::KroneckerMatrix) = transpose.(A.𝖳)
+LinearAlgebra.adjoint(  A::AbstractKroneckerMatrix)   = adjoint.(A.M)
+LinearAlgebra.transpose(A::AbstractKroneckerMatrix) = transpose.(A.M)
 
 # Additional functionality for Kruskal tensors
 # ============================================
