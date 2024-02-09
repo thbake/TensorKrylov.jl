@@ -135,7 +135,7 @@ function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T
 
     t = size(L, 1)
 
-    for j = 1:t, i = j:t
+    @inbounds for j = 1:t, i = j:t
 
         L[i, j] = γ[i] * γ[j]
 
@@ -192,7 +192,7 @@ end
 
 function compute_lower_triangles!(LowerTriangles::FMatrices{T}, x::KruskalTensor{T}) where T
 
-    for s = 1:length(LowerTriangles)
+    @inbounds for s = 1:length(LowerTriangles)
 
         BLAS.syrk!('L', 'T', 1.0, x.fmat[s], 1.0, LowerTriangles[s])
 
@@ -202,7 +202,7 @@ end
 
 function compute_lower_triangles!(LowerTriangles::FMatrices{T}, M::FMatrices{T}) where T
 
-    for s = 1:length(LowerTriangles)
+    @inbounds for s = 1:length(LowerTriangles)
 
         BLAS.syrk!('L', 'T', 1.0, M[s], 1.0, LowerTriangles[s])
 
@@ -228,7 +228,7 @@ function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) w
 
     value = 0.0
 
-    for k = 1:t, i = 1:t
+    @inbounds for k = 1:t, i = 1:t
 
         value += Γ[i, k] * maskprod(Y_masked, i, k)
 
@@ -254,7 +254,7 @@ function matrix_vector(A::KronMat, x::KruskalTensor)
 
     Z = [ zeros(orders[s], rank) for s in eachindex(A) ]
 
-    for s = 1:length(A)
+    @inbounds for s = 1:length(A)
 
         LinearAlgebra.mul!(Z[s], A[s], x.fmat[s])
 
@@ -309,7 +309,7 @@ function MVnorm(y::KruskalTensor, Λ::AbstractMatrix, Ly, Z)
 
     MVnorm = 0.0
 
-    for j = 1:rank, i = 1:rank
+    @inbounds for j = 1:rank, i = 1:rank
 
         for s in 1:d, r in 1:d
 
@@ -317,7 +317,7 @@ function MVnorm(y::KruskalTensor, Λ::AbstractMatrix, Ly, Z)
 
             mask_r[r] = true
 
-            MVnorm += evalmvnorm(Λ_complete, Ly, X, Lz, i, j, mask_s, mask_r)
+            MVnorm += @inline evalmvnorm(Λ_complete, Ly, X, Lz, i, j, mask_s, mask_r)
 
             mask_r[r] = false
 
@@ -358,13 +358,13 @@ function tensorinnerprod(Ax::FMatrices{T}, x::KruskalTensor{T}, y::KronProd{T}) 
 
     mask = falses(d)
     
-    for s in 1:d
+    @inbounds for s in 1:d
 
         mask[s] = true
 
         for i in 1:t
 
-            Ax_y += evalinnerprod(x, yX, yAx, i, mask)
+            Ax_y += @inline evalinnerprod(x, yX, yAx, i, mask)
 
         end
 
@@ -432,7 +432,7 @@ function residualnorm!(
     res_norm = 0.0
     mask     = trues(d)
 
-    for s = 1:d
+    @inbounds for s = 1:d
 
         Γ = Symmetric(cp_tensor_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
 
@@ -473,7 +473,7 @@ end
 function update_rhs!(b̃, V, b, k::Int) 
     # b̃ = Vᵀb = ⨂ Vₛᵀ ⋅ ⨂ bₛ = ⨂ Vₛᵀbₛ
     
-    for s in eachindex(b̃)
+    @inbounds for s in eachindex(b̃)
 
         # Update one entry of each component of b̃ by performing a single inner product 
         b̃[s][k] = dot(V[s], b[s])
@@ -486,7 +486,7 @@ function basis_tensor_mul!(x::KruskalTensor{T}, V::KronComp, y::KruskalTensor{T}
 
     x.lambda = copy(y.lambda)
 
-    for s in eachindex(V)
+    @inbounds for s in eachindex(V)
 
         LinearAlgebra.mul!(x.fmat[s], V[s], y.fmat[s])
 
@@ -516,7 +516,7 @@ function matrix_exponential_vector!(
 
     expA = exp(tmp)
 
-    for s = 1:length(A)
+    @inbounds for s = 1:length(A)
 
         y.fmat[s][:, k] =  expA * b[s] # Update kth column
 

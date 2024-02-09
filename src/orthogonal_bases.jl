@@ -17,13 +17,13 @@ function orthonormalize!(decomposition::Decomposition, k::Int, ::MGS)
 
     mul!(v, decomposition.A, @view decomposition.V[:, k])
 
-    for i = 1:k
+    @inbounds for i = 1:k
 
         decomposition.H[i, k] = dot(v, @view decomposition.V[:, i])
         v                   .-= decomposition.H[i, k] * @view decomposition.V[:, i]
     end
 
-    for i = 1:k
+    @inbounds for i = 1:k
 
         decomposition.H[i, k] += dot(v, decomposition.V[:, i])
         v                     -= dot(v, @view decomposition.V[:, i]) * decomposition.V[:, i]
@@ -145,7 +145,7 @@ function orthonormalize!(t_decomp::TensorDecomposition, b::KronProd)
 
     orth_alg = get_orthogonalization(t_decomp)
 
-    for s in 1:length(t_decomp)
+    @inbounds for s in 1:length(t_decomp)
 
         # Initialize d Arnoldi/Lanczos decompositions
         decomposition = t_decomp.orthonormalization(t_decomp[s]..., b[s])
@@ -164,7 +164,7 @@ function orthonormalize!(t_decomp::TensorDecomposition, k::Int)
 
     orth_alg = get_orthogonalization(t_decomp)
 
-    for s in 1:length(t_decomp)
+    @inbounds for s in 1:length(t_decomp)
 
         decomposition = t_decomp.orthonormalization(t_decomp[s]..., k)
 

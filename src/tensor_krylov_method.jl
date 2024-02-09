@@ -21,7 +21,7 @@ function solve_compressed_system(
     λ_inv = inv(λ_min)
     yₜ    = KruskalTensor{T}(λ_inv .* approxdata.ω, [ ones(k[s], t) for s in 1:length(H)] )
 
-    for k = 1:t
+    @inbounds for k = 1:t
 
         γ = -approxdata.α[k] * λ_inv
 
@@ -58,7 +58,7 @@ function tensorkrylov!(
     r_comp       = Inf
     r_norm       = Inf
 
-    for k = 2:nmax
+    @inbounds for k = 2:nmax
 
         # Compute orthonormal basis and Hessenberg factor of each Krylov subspace 𝓚ₖ(Aₛ, bₛ) 
         orthonormalize!(tensor_decomp, k)
