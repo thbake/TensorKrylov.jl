@@ -266,6 +266,12 @@ mutable struct KruskalTensor{T}
 
     end
 
+    function KruskalTensor{T}() where T
+
+        KruskalTensor{T}(ones(1), [ zeros(1,1) ])
+
+    end
+
 
 end
 

@@ -163,12 +163,6 @@ function cp_tensor_coefficients(Λ::LowerTriangle{T}, δ::Array{T}) where T
 
 end
 
-function skipindex(index::Int, range::UnitRange{Int})
-
-    return Iterators.filter(r -> r != index, range)
-
-end
-
 function maskprod(A::KronStruct{T}, i::Int, j::Int) where T
 
     # Compute product of entries (i,j) of the matrices contained in A.
@@ -176,7 +170,6 @@ function maskprod(A::KronStruct{T}, i::Int, j::Int) where T
     return prod(getindex.(A, i, j)) 
 
 end
-
 
 function maskprod(x::AbstractVector{<:AbstractVector{T}}, i::Int) where T
 
@@ -300,8 +293,8 @@ function MVnorm(y::KruskalTensor, Λ::AbstractMatrix, Ly, Z)
 
     compute_lower_triangles!(Lz, Z) # Compute lower triangular parts
     
-    Lz = Symmetric.(Lz, :L)         # Symmetrize
-    Ly = Symmetric.(Ly, :L)         # Symmetrize
+    SLz = Symmetric.(Lz, :L)         # Symmetrize
+    SLy = Symmetric.(Ly, :L)         # Symmetrize
 
 
     mask_s = falses(d)
@@ -317,7 +310,7 @@ function MVnorm(y::KruskalTensor, Λ::AbstractMatrix, Ly, Z)
 
             mask_r[r] = true
 
-            MVnorm += @inline evalmvnorm(Λ_complete, Ly, X, Lz, i, j, mask_s, mask_r)
+            MVnorm += @inline evalmvnorm(Λ_complete, SLy, X, SLz, i, j, mask_s, mask_r)
 
             mask_r[r] = false
 

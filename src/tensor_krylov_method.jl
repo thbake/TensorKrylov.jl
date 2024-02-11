@@ -45,7 +45,7 @@ function tensorkrylov!(
     n      = dimensions(A)[1]
     𝔎      = Vector{Int}(undef, d) # Initialize multiindex 𝔎
     b_norm = kronprodnorm(b)
-    x      = nothing # Declare approximate solution
+    x      = KruskalTensor{T}() # Declare approximate solution
 
     tensor_decomp = orthonormalization_type(A)
 
@@ -105,10 +105,9 @@ function tensorkrylov!(
 
         if rel_res_norm < tol
 
-            x        = KruskalTensor{T}( ones(approxdata.rank), [ zeros(size(A[s], 1), approxdata.rank) for s in 1:d ])
-            x_minors = principal_minors(x, k)
+            x = KruskalTensor{T}( ones(approxdata.rank), [ zeros(size(A[s], 1), approxdata.rank) for s in 1:d ])
 
-            basis_tensor_mul!(x_minors, V_minors, y)
+            basis_tensor_mul!(x, V_minors, y)
 
             println("Convergence")
 
@@ -119,6 +118,7 @@ function tensorkrylov!(
     end
 
     println("No convergence")
+
 
 end
 

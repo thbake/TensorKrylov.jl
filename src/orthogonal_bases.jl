@@ -1,3 +1,5 @@
+using Base.Threads
+
 export orthonormalize!,  initialize_decomp!, isorthonormal,
        arnoldi_algorithm, lanczos_algorithm, orthogonality_loss
 export MGS, TTR
@@ -139,19 +141,19 @@ end
 
 function orthonormalize!(t_decomp::TensorDecomposition, b::KronProd) 
     
-
     # This method performs the first orthonormalization step of both TensorArnoldi 
     # and TensorLanczos data structures.
 
     orth_alg = get_orthogonalization(t_decomp)
 
-    @inbounds for s in 1:length(t_decomp)
+    @sync for s in 1:length(t_decomp)
 
-        # Initialize d Arnoldi/Lanczos decompositions
-        decomposition = t_decomp.orthonormalization(t_decomp[s]..., b[s])
+        @async begin 
 
-        # First orthonormalization step for each of the coefficient matrices
-        orthonormalize!(decomposition, 1, orth_alg())
+            @inbounds decomposition = t_decomp.orthonormalization(t_decomp[s]..., b[s])
+
+            orthonormalize!(decomposition, 1, orth_alg())
+        end
 
     end
 
@@ -159,16 +161,19 @@ end
 
 function orthonormalize!(t_decomp::TensorDecomposition, k::Int) 
 
-    # This method performs not initial orthonormalization steps for the 
-    # TensorArnoldi data structure.
+    # This method performs initial orthonormalization steps 
 
     orth_alg = get_orthogonalization(t_decomp)
 
-    @inbounds for s in 1:length(t_decomp)
+    @sync for s in 1:length(t_decomp)
 
-        decomposition = t_decomp.orthonormalization(t_decomp[s]..., k)
+        @async begin 
 
-        orthonormalize!(decomposition, k, orth_alg())
+            @inbounds decomposition = t_decomp.orthonormalization(t_decomp[s]..., k)
+
+            orthonormalize!(decomposition, k, orth_alg())
+
+        end
 
     end
 

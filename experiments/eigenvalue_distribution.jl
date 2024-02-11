@@ -80,11 +80,10 @@ function clusterone(n::Int)
 
 end
 
-function eigenvalue_experiment(tol::T = 1e-9) where T
+function eigenvalue_experiment(n::Int = 15, tol::T = 1e-9) where T
 
     dims = [5, 10, 50, 100]
-    n    = 15
-    nmax = 14
+    nmax = n - 1
     b    = multiple_rhs(dims, n)
     
     eigszero = clusterzero(n)
