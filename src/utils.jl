@@ -135,7 +135,7 @@ function compute_lower_outer!(L::AbstractMatrix{T}, γ::Array{T}) where T
 
     t = size(L, 1)
 
-    @inbounds for j = 1:t, i = j:t
+    @inbounds for j = 1:t i = j:t
 
         L[i, j] = γ[i] * γ[j]
 
@@ -205,29 +205,24 @@ end
 
 function squared_tensor_entries(Y_masked::FMatrices{T}, Γ::AbstractMatrix{T}) where T
 
-    # Compute Σ |y_𝔏|² with formula in paper, when y is given in CP format:
-    #
-    #   Σ |y_𝔏|² = ||Σᵢ eₖₛᵀ yᵢ⁽ˢ⁾ ⨂ ⱼ≠ ₛ yᵢ⁽ʲ⁾||², 
-    #
-    # where δ represents the vector holding kₛ-th entry of each column of the 
-    # s-th factor matrix of y.
-    #
-    # We use the symmetry of the inner products and only require to iterate in
-    # the correct way:
-    #
-    # 2 ⋅Σₖ₌₁ Σᵢ₌ₖ₊₁ Γ[i, k] ⋅ Πⱼ≠ ₛ<yᵢ⁽ʲ⁾,yₖ⁽ʲ⁾> + Σᵢ₌₁ Πⱼ≠ ₛ||yᵢ⁽ʲ⁾||²
-    
     t = size(Γ, 1)
 
     value = 0.0
 
-    @inbounds for k = 1:t, i = 1:t
+    @inbounds for k = 1:t
 
-        value += Γ[i, k] * maskprod(Y_masked, i, k)
+        value += Γ[k, k] .* maskprod(Y_masked, k, k)
+
+        for i = k+1:t
+
+            value +=  2 .* Γ[i, k] .* maskprod(Y_masked, i, k)
+
+        end
 
     end
 
-    return value 
+    return value
+
 end
 
 
@@ -273,7 +268,7 @@ function evalmvnorm(
     i::Int, j::Int, 
     mask_s, mask_r)::T where T
 
-    α  = maskprod(Ly[.!(mask_s .|| mask_r)], i, j)
+    α = maskprod(Ly[.!(mask_s .|| mask_r)], i, j)
     β = f(X, mask_s, mask_r, i, j)
     γ = maskprod(Lz[mask_s .&& mask_r], i, j)
 
@@ -287,36 +282,38 @@ function MVnorm(y::KruskalTensor, Λ::AbstractMatrix, Ly, Z)
     d    = length(Ly)
     rank = length(y.lambda)
 
-    Λ_complete = Symmetric(Λ, :L)
     Lz         = [ zeros(rank, rank) for _ in 1:d ]
     X          = [ y.fmat[s]'Z[s]    for s in 1:d ]
 
     compute_lower_triangles!(Lz, Z) # Compute lower triangular parts
     
-    SLz = Symmetric.(Lz, :L)         # Symmetrize
-    SLy = Symmetric.(Ly, :L)         # Symmetrize
-
 
     mask_s = falses(d)
     mask_r = falses(d)
 
     MVnorm = 0.0
 
-    @inbounds for j = 1:rank, i = 1:rank
+    @inbounds for s in 1:d, r in 1:d
 
-        for s in 1:d, r in 1:d
+        mask_s[s] = true
 
-            mask_s[s] = true
+        mask_r[r] = true
 
-            mask_r[r] = true
+        @inbounds for j = 1:rank
 
-            MVnorm += @inline evalmvnorm(Λ_complete, SLy, X, SLz, i, j, mask_s, mask_r)
+            MVnorm += @inline evalmvnorm(Λ, Ly, X, Lz, j, j, mask_s, mask_r)
 
-            mask_r[r] = false
+            for i = j+1:rank
 
-            mask_s[s] = false
+                MVnorm += @inline 2 * evalmvnorm(Λ, Ly, X, Lz, i, j, mask_s, mask_r)
+
+            end
 
         end
+
+        mask_r[r] = false
+
+        mask_s[s] = false
 
     end
 
@@ -387,7 +384,7 @@ function compressed_residual(
 
     Z = matrix_vector(H, y)
 
-    Hy_norm = MVnorm(y, Symmetric(Λ, :L), Ly, Z) # First we compute ||Hy||²
+    Hy_norm = MVnorm(y, Λ, Ly, Z) # First we compute ||Hy||²
     Hy_b    = tensorinnerprod(Z, y, b)           # <Hy, b>₂
     b_norm  = kronproddot(b)                     # squared 2-norm of b
     r_comp  = Hy_norm - 2* Hy_b + b_norm
@@ -421,13 +418,12 @@ function residualnorm!(
     compute_lower_triangles!(Ly, y)
     compute_lower_outer!(Λ, y.lambda)
 
-    Ly       = Symmetric.(Ly, :L) # Symmetrize (momentarily abandon the use of symmetry)
     res_norm = 0.0
     mask     = trues(d)
 
     @inbounds for s = 1:d
 
-        Γ = Symmetric(cp_tensor_coefficients(Λ, y.fmat[s][𝔎[s], :]), :L) # Symmetric matrix 
+        Γ = cp_tensor_coefficients(Λ, y.fmat[s][𝔎[s], :])
 
         mask[s]   = false
         y²        = squared_tensor_entries(Ly[mask], Γ)

@@ -74,19 +74,20 @@ struct ProjResidualPlot <: CustomPlot
 end
 
 # Define Plot Recipe for displaying experiments
-@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot; n::Int, point_sep = 1) # Here n is a kw-arg
+@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot; n::Int, ylow = 1e-6, point_sep = 1, legendpos = :topright) # Here n is a kw-arg
     x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     xlabel     --> L"k"
     ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
     xlims      --> (1, n)
-    #ylims      --> (1e-8, 1e+2)
+    ylims      --> (ylow, 1e+1)
     yscale     --> :log10
-    #yticks     --> 10.0 .^collect(-8:2:2)
+    yticks     --> 10.0 .^collect(-8:1:2)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
     marker     --> :circle
     markersize --> 3
+    legend     --> legendpos
 
     point_sep_array = getstride(x, point_sep)
     x := x[point_sep_array]
@@ -146,18 +147,29 @@ end
 end
 @shorthands(proj)
 
+function minresnorm(experiment::Experiment)
 
+    residuals     = get_relative_residuals(experiment)
+    min_residuals = minimum.(residuals)
+    smallestvalue = minimum(min_residuals)
+    order         = Int(floor(log10(smallestvalue)))
+
+    return 10.0^(order)
+end
 
 function plot_experiment(
     experiment ::Experiment,
     custom_plot::Type{<:CustomPlot}, 
-    point_sep::Int = 1) 
+    point_sep::Int = 1,
+    legendpos = :topright
+    ) 
 
     x        = get_iterations(experiment)
     labels   = compute_labels(experiment)  # Add labels
     res_plot = custom_plot(experiment.conv_vector)
-    
+    ylow     = minresnorm(experiment)
+    n        = get_max_iteration(experiment)
 
-    relativeresidual(x, res_plot, labels, n = experiment.matrix_size, point_sep = point_sep)
+    relativeresidual(x, res_plot, labels, n = experiment.matrix_size, ylow = ylow, point_sep = point_sep, legendpos = legendpos)
 
 end

@@ -337,6 +337,8 @@ extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals
 
 extreme_eigvals(data::SpectralData, d::Int, ::EigValMat) = getextreme(d, @view diag(data.A)[1:data.k])
 
+extreme_eigvals(data::SpectralData{matT, T, SymInstance}, d::Int, ::MatrixDep) where {matT, T} = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]) )
+
 function extreme_eigvals(data::SpectralData{matT, T, NonSymInstance}, d::Int, ::MatrixGallery) where {matT, T}
 
     A = Matrix(data.A)

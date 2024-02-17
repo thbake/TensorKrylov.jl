@@ -5,7 +5,7 @@ export ConvData, ConvVec, rhsVec, TDecomp
 # Aliases
 const ConvData{T} = ConvergenceData{T}
 const ConvVec{T}  = Vector{ConvData{T}} 
-const TDecomp  = TensorDecomposition
+const TDecomp     = TensorDecomposition
 const rhsVec{T}   = Vector{Vector{Vector{T}}}
 
 # Structs
@@ -79,6 +79,14 @@ end
 function get_iterations(experiment::Experiment) 
 
     return [ experiment.conv_vector[i].iterations for i in 1:length(experiment) ]
+
+end
+
+function get_max_iteration(experiment::Experiment)
+
+    final_iterations = [ experiment.conv_vector[i].niterations for i in 1:length(experiment) ]
+
+    return maximum(final_iterations)
 
 end
 

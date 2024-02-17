@@ -210,12 +210,11 @@ end
     compute_lower_triangles!(Ly, y)
     compute_lower_outer!(Λ, y.lambda)
 
-    Ly   = Symmetric.(Ly, :L)
     mask = trues(d)
 
     for s in 1:d
 
-        Γ                 = Symmetric(cp_tensor_coefficients(Λ, y.fmat[s][n, :]), :L)
+        Γ                 = cp_tensor_coefficients(Λ, y.fmat[s][n, :])
         mask[s]           = false
         computed_norms[s] = squared_tensor_entries(Ly[mask], Γ)
         mask[s]           = true
