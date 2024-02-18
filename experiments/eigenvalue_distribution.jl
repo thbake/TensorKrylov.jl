@@ -83,7 +83,7 @@ end
 function eigenvalue_experiment(n::Int = 15, tol::T = 1e-9) where T
 
     dims = [5, 10, 50, 100]
-    nmax = n - 1
+    nmax = n 
     b    = multiple_rhs(dims, n)
     
     eigszero = clusterzero(n)

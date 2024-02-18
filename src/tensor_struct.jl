@@ -248,7 +248,7 @@ mutable struct KroneckerMatrixCompact{matT} <: AbstractKroneckerMatrix{matT}
 
     function KroneckerMatrixCompact{matT}(orders::Array{Int}) where matT
 
-        new{matT}([ zeros(orders[s], orders[s]) for s in 1:length(orders) ])
+        new{matT}([ zeros(orders[s], orders[s] + 1) for s in 1:length(orders) ])
 
     end
 

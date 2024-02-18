@@ -61,17 +61,37 @@ function run_experiments!(condexp::ConditionExperiment, tol::T = 1e-9) where T
 end
 
 
-function condition_experiments(n::Int = 10, tol::T = 1e-9) where T
+function condition_experiments(::SymInstance, n::Int = 10, tol::T = 1e-9) where T
 
     dims = [5, 10, 50, 100]
-    nmax = n - 1
+    nmax = n
     b    = multiple_rhs(dims, n)
     b2   = multiple_rhs(dims, 13)
     b3   = multiple_rhs(dims, 20)
 
     hilbert_experiment = ConditionExperiment{T}(dims, n,  nmax, SymInstance, MatrixDep, TensorLanczosReorth, b, "hilb")
-    pascal_experiment  = ConditionExperiment{T}(dims, 13,  12, SymInstance, MatrixDep, TensorLanczosReorth, b2, "pascal")
-    moler_experiment   = ConditionExperiment{T}(dims, 20, 19, SymInstance, MatrixDep, TensorLanczosReorth, b3, "moler")
+    pascal_experiment  = ConditionExperiment{T}(dims, 13,  13, SymInstance, MatrixDep, TensorLanczosReorth, b2, "pascal")
+    moler_experiment   = ConditionExperiment{T}(dims, 20, 20, SymInstance, MatrixDep, TensorLanczosReorth, b3, "moler")
+
+    run_experiments!(hilbert_experiment, tol)
+    run_experiments!(pascal_experiment,  tol)
+    run_experiments!(moler_experiment,   tol)
+
+    return hilbert_experiment, pascal_experiment, moler_experiment
+
+end
+
+function condition_experiments(::NonSymInstance, n::Int = 10, tol::T = 1e-9) where T
+
+    dims = [5, 10, 50, 100]
+    nmax = n 
+    b    = multiple_rhs(dims, n)
+    b2   = multiple_rhs(dims, 13)
+    b3   = multiple_rhs(dims, 20)
+
+    hilbert_experiment = ConditionExperiment{T}(dims, n,  nmax, NonSymInstance, MatrixDep, TensorArnoldi, b, "hilb")
+    pascal_experiment  = ConditionExperiment{T}(dims, 13, 13,   NonSymInstance, MatrixDep, TensorArnoldi, b2, "pascal")
+    moler_experiment   = ConditionExperiment{T}(dims, 20, 20,   NonSymInstance, MatrixDep, TensorArnoldi, b3, "moler")
 
     run_experiments!(hilbert_experiment, tol)
     run_experiments!(pascal_experiment,  tol)

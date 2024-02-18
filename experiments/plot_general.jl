@@ -78,7 +78,7 @@ end
     x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     xlabel     --> L"k"
     ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
-    xlims      --> (1, n)
+    xlims      --> (1, n + 1)
     ylims      --> (ylow, 1e+1)
     yscale     --> :log10
     yticks     --> 10.0 .^collect(-8:1:2)

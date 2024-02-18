@@ -127,8 +127,8 @@ mutable struct TensorArnoldi{matT, T, U} <: TensorDecomposition{matT, T, U}
     function TensorArnoldi(A::KronMat{matT, U}) where {matT, U<:Instance}
 
         T = eltype(matT)
-        V = KronComp{Matrix{T}}(dimensions(A))
-        H = KronMat{Matrix{T}, U}(dimensions(A))
+        V = KronComp{Matrix{T}}(dimensions(A)   )
+        H = KronMat{Matrix{T}, U}(dimensions(A) .+1)
 
         new{matT, T, U}(A, V, H, Arnoldi)
 
@@ -147,8 +147,8 @@ mutable struct TensorLanczos{matT, T, U} <: TensorDecomposition{matT, T, U}
     function TensorLanczos(A::KronMat{matT, U}) where {matT, U<:Instance}
 
         T = eltype(matT)
-        V = KronComp{Matrix{T}}(dimensions(A))
-        H = KronMat{Matrix{T}, U}(dimensions(A))
+        V = KronComp{Matrix{T}}(dimensions(A)   )
+        H = KronMat{Matrix{T}, U}(dimensions(A) .+ 1)
 
         new{matT, T, U}(A, V, H, Lanczos)
 
@@ -166,8 +166,8 @@ mutable struct TensorLanczosReorth{matT, T, U} <: TensorDecomposition{matT, T, U
     function TensorLanczosReorth(A::KronMat{matT, U}) where {matT, U<:Instance}
 
         T = eltype(matT)
-        V = KronComp{Matrix{T}}(dimensions(A))
-        H = KronMat{Matrix{T}, U}(dimensions(A))
+        V = KronComp{Matrix{T}}(dimensions(A)   )
+        H = KronMat{Matrix{T}, U}(dimensions(A) .+ 1)
 
         new{matT, T, U}(A, V, H, LanczosReorth)
 
