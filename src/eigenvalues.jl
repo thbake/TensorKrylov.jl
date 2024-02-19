@@ -331,19 +331,41 @@ function extreme_eigenvals(data::SpectralData, d::Int) # Default
     
 end
 
-extreme_eigvals(data::SpectralData, d::Int, ::Laplace)   = analytic_eigenvalues(d, size(data.A, 1), data.k)
+#extreme_eigvals(data::SpectralData, d::Int, ::Laplace)   = analytic_eigenvalues(d, size(data.A, 1), data.k)
 
-extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]))
+#extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]))
 
-extreme_eigvals(data::SpectralData, d::Int, ::EigValMat) = getextreme(d, @view diag(data.A)[1:data.k])
+#extreme_eigvals(data::SpectralData, d::Int, ::EigValMat) = getextreme(d, @view diag(data.A)[1:data.k])
 
-extreme_eigvals(data::SpectralData{matT, T, SymInstance}, d::Int, ::MatrixDep) where {matT, T} = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]) )
+#extreme_eigvals(data::SpectralData{matT, T, SymInstance}, d::Int, ::MatrixDep) where {matT, T} = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]) )
+
+function extreme_eigvals(data::SpectralData, d::Int, ::Laplace)
+
+    n      = size(data.A, 1)
+    values = analytic_eigenvalues(d, size(data.A, 1), n)
+
+    return values
+
+end
+
+extreme_eigvals(data::SpectralData, d::Int, ::EigValMat) = getextreme(d, diag(data.A))
+
+extreme_eigvals(data::SpectralData{matT, T, SymInstance}, d::Int, ::MatrixDep) where {matT, T} = getextreme(d, eigvals(data.A) )
+
+#function extreme_eigvals(data::SpectralData{matT, T, NonSymInstance}, d::Int, ::MatrixGallery) where {matT, T}
+#
+#    A = Matrix(data.A)
+#    
+#    return minimum(eigvals(@view A[1:data.k, 1:data.k])) * d
+#
+#end
+
 
 function extreme_eigvals(data::SpectralData{matT, T, NonSymInstance}, d::Int, ::MatrixGallery) where {matT, T}
 
     A = Matrix(data.A)
     
-    return minimum(eigvals(@view A[1:data.k, 1:data.k])) * d
+    return minimum(eigvals(A)) * d
 
 end
 

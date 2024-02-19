@@ -10,8 +10,8 @@ module TestSets
 
     @testset "TensorKrylov tests" begin 
 
-        @testset "Preprocessing tests" begin
-            include("preprocessing.jl")
+        @testset "Low rank approximation tests" begin
+            include("approximation.jl")
         end
 
         @testset "Decomposition tests" begin

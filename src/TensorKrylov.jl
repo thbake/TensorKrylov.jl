@@ -21,7 +21,7 @@ module TensorKrylov
     include("convergence.jl")
 
     # Preprocessing
-    include("preprocessing.jl")
+    include("approximation.jl")
     
     # Utilities
     include("utils.jl")
