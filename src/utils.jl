@@ -499,34 +499,47 @@ function matrix_exponential_vector!(
     A,
     b,
     γ::T, 
-    k::Int) where T
+    k::Int,
+    ::Type{<:MatrixGallery}) where T
 
     tmp = γ * first(A)
 
     expA = exp(tmp)
 
-    @inbounds for s = 1:length(A)
+    @sync for s = 1:length(A)
 
-        y.fmat[s][:, k] =  expA * b[s] # Update kth column
+        @async begin
+
+            @inbounds y.fmat[s][:, k] =  expA * b[s] # Update kth column
+
+        end
 
     end
 
 end
 
+function matrix_exponential_vector!(
+    y::KruskalTensor{T},
+    A,
+    b,
+    γ::T, 
+    k::Int,
+    ::Type{EigValMat}) where T
 
-function exponentiate(A::AbstractMatrix{T}, γ::T) where T
 
-    tmp    = zeros(size(A))
-    result = zeros(size(A))
+    @sync for s in 1:length(A)
 
-    λ, V = LinearAlgebra.eigen(A)
+        @async begin
 
-    Λ = Diagonal(exp.(γ .* λ))
+            D = exp(γ .* A[s])
 
-    LinearAlgebra.mul!(tmp, V, Λ)
+            @inbounds y.fmat[s][:, k] =  D * b[s] # Update kth column
 
-    LinearAlgebra.mul!(result, tmp, transpose(V))
+        end
 
-    return result
+    end
 
 end
+
+exponentiate_diagonal(D) = Diagonal(exp.(diag(D)))
+

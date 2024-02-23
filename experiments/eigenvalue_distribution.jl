@@ -99,11 +99,10 @@ function clusterone(n::Int)
 
 end
 
-function eigenvalue_experiment(n::Int = 20, tol::T = 1e-9) where T
+function eigenvalue_experiment(n::Int, b, ϵ::T = 1.0, tol::T = 1e-9) where T
 
     dims = [5, 10, 50, 100]
     nmax = n 
-    b    = multiple_rhs(dims, n)
     
     eigszero = clusterzero(n)
     eigsone  = clusterone(n)
@@ -111,8 +110,8 @@ function eigenvalue_experiment(n::Int = 20, tol::T = 1e-9) where T
     distzero = EigValDist{T}(dims, eigszero, nmax, b)
     distone  = EigValDist{T}(dims, eigsone,  nmax, b)
 
-    run_experiments!(distzero, tol)
-    run_experiments!(distone,  tol)
+    run_experiments!(distzero, ϵ, tol)
+    run_experiments!(distone,  ϵ, tol)
 
     return distzero, distone
 

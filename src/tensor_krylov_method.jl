@@ -11,7 +11,8 @@ function solve_compressed_system(
     H,         
     b,
     approxdata::ApproximationData{T, U},
-    λ_min     ::T) where {T, U<:Instance}
+    λ_min     ::T,
+    class::Type{<:MatrixGallery}) where {T, U<:Instance}
 
     # Since we are considering a canonical decomposition the tensor rank of yₜ
     # is equal to 
@@ -25,7 +26,7 @@ function solve_compressed_system(
 
         γ = -approxdata.α[k] * λ_inv
 
-        matrix_exponential_vector!(yₜ, H, b, γ, k)
+        matrix_exponential_vector!(yₜ, H, b, γ, k, class)
 
     end
 
@@ -72,7 +73,7 @@ function tensorkrylov!(
         update_data!(approxdata, spectraldata)
 
 
-        y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min[k]) # Hy = b̃ 
+        y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min[k], A.matrixclass) # Hy = b̃ 
         𝔎 .= k 
 
         subdiagentries = [ tensor_decomp.H[s][k + 1, k] for s in 1:d ]
