@@ -31,8 +31,6 @@ mutable struct Experiment <: AbstractExperiment
         orth    ::Type{<:TDecomp},
         rhs     ::rhsVec{Float64}) 
 
-        #T = eltype(first(rhs))
-
         conv_results = [ ConvData{Float64}(nmax) for _ in 1:length(dims) ]
 
         new(dims, n, nmax, instance, class, orth, rhs, conv_results)

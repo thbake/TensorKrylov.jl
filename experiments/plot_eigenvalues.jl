@@ -16,7 +16,7 @@ function plot_eigdist(distributions, labels)
 
 end
 
-function plot_clusterone(T::Type{<:EVC}, dims = [3, 5, 7], n = 15)
+function plot_clusterone(T::Type{<:EVC}, dims = [3, 5, 7], n = 20)
 
     goodeigs = clusterone(n)
 
@@ -27,7 +27,7 @@ function plot_clusterone(T::Type{<:EVC}, dims = [3, 5, 7], n = 15)
 
 end
 
-function plot_clusterzero(T::Type{<:EVC}, dims = [3, 5, 7], n = 15)
+function plot_clusterzero(T::Type{<:EVC}, dims = [3, 5, 7], n = 20)
 
     badeigs = clusterzero(n)
 
@@ -38,7 +38,7 @@ function plot_clusterzero(T::Type{<:EVC}, dims = [3, 5, 7], n = 15)
 
 end
 
-function plot_dist_comparison(T::Type{<:EVC}, dims = [3, 5, 7], n = 15)
+function plot_dist_comparison(T::Type{<:EVC}, dims = [3, 5, 7], n = 20)
 
     plt1 = plot_clusterzero(T, dims, n)
     plt2 = plot_clusterone(T,  dims, n)

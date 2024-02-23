@@ -61,12 +61,18 @@ function run_experiments!(distexp::EigValDist{T}, tol = 1e-9) where T
 
 end
 
-clusterzero(n::Int) = [j^2 * inv(400) for j in 1:n]
+function clusterzero(n::Int)
+
+    κ = n^2 
+
+    return [ j^2 * inv(κ) for j in 1:n ]
+
+end
 
 function clusterone(n::Int)
 
     values    = zeros(n)
-    values[1] = inv(400)
+    values[1] = inv(n^2)
 
     tmp = log(n)
 
@@ -80,7 +86,7 @@ function clusterone(n::Int)
 
 end
 
-function eigenvalue_experiment(n::Int = 15, tol::T = 1e-9) where T
+function eigenvalue_experiment(n::Int = 20, tol::T = 1e-9) where T
 
     dims = [5, 10, 50, 100]
     nmax = n 
