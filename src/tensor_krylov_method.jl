@@ -56,7 +56,6 @@ function tensorkrylov!(
     spectraldata = SpectralData{matT, T, U}(A, nmax)
     approxdata   = ApproximationData{T, U}(tol)
 
-    update_data!(spectraldata, d, A.matrixclass())
     r_comp       = Inf
     r_norm       = Inf
 
@@ -69,6 +68,7 @@ function tensorkrylov!(
         columns                      = kth_columns(tensor_decomp.V, k)
 
         update_rhs!(b_minors, columns, b, k) # b̃ = Vᵀb
+        update_data!(spectraldata, d, A.matrixclass())
         update_data!(approxdata, spectraldata)
 
 
