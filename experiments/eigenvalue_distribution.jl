@@ -31,8 +31,19 @@ mutable struct EigValDist{T}
 
 end
 
+function perturb_matrix!(A::KronMat, ϵ::Float64)
 
-function run_experiments!(distexp::EigValDist{T}, tol = 1e-9) where T
+    d = length(A)
+
+    for s in 1:d
+
+        A[s] = d * ϵ .+ A[s] 
+
+    end
+
+end
+
+function run_experiments!(distexp::EigValDist{T}, ϵ::T = 1.0, tol = 1e-9) where T
 
     println("Performing eigenvalue experiments")
 
@@ -46,6 +57,8 @@ function run_experiments!(distexp::EigValDist{T}, tol = 1e-9) where T
             distexp.eigenvalues,
             distexp.experiment.matrix_class
         )
+
+        perturb_matrix!(A, ϵ)
 
         system = TensorizedSystem{distexp.experiment.instance}(A, distexp.experiment.rhs_vec[i])
         
