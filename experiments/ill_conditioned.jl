@@ -70,8 +70,8 @@ function condition_experiments(::SymInstance, n::Int = 10, tol::T = 1e-9) where 
     b3   = multiple_rhs(dims, 20)
 
     hilbert_experiment = ConditionExperiment{T}(dims, n,  nmax, SymInstance, MatrixDep, TensorLanczosReorth, b, "hilb")
-    pascal_experiment  = ConditionExperiment{T}(dims, 13,  13, SymInstance, MatrixDep, TensorLanczosReorth, b2, "pascal")
-    moler_experiment   = ConditionExperiment{T}(dims, 20, 20, SymInstance, MatrixDep, TensorLanczosReorth, b3, "moler")
+    pascal_experiment  = ConditionExperiment{T}(dims, 13, 13,   SymInstance, MatrixDep, TensorLanczosReorth, b2, "pascal")
+    moler_experiment   = ConditionExperiment{T}(dims, 20, 20,   SymInstance, MatrixDep, TensorLanczosReorth, b3, "moler")
 
     run_experiments!(hilbert_experiment, tol)
     run_experiments!(pascal_experiment,  tol)
