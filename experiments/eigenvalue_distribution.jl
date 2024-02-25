@@ -37,13 +37,14 @@ function perturb_matrix!(A::KronMat, ϵ::Float64)
 
     for s in 1:d
 
-        A[s] = d * ϵ .+ A[s] 
+        A[s] = (s * ϵ) .+ A[s] 
 
     end
 
 end
 
-function run_experiments!(distexp::EigValDist{T}, ϵ::T = 1.0, tol = 1e-9) where T
+
+function run_experiments!(distexp::EigValDist{T}, ϵ::T = 0.0, tol = 1e-9) where T
 
     println("Performing eigenvalue experiments")
 
@@ -99,7 +100,7 @@ function clusterone(n::Int)
 
 end
 
-function eigenvalue_experiment(n::Int, b, ϵ::T = 1.0, tol::T = 1e-9) where T
+function eigenvalue_experiment(n::Int, b, ϵ::T = 0.0, tol::T = 1e-9) where T
 
     dims = [5, 10, 50, 100]
     nmax = n 
