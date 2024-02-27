@@ -17,6 +17,8 @@ module NumericalExperiments
 
     include("ill_conditioned.jl")
 
+    include("parametrized_systems.jl")
+
     # Plots
     include("plot_general.jl")
     

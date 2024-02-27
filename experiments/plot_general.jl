@@ -170,6 +170,6 @@ function plot_experiment(
     ylow     = minresnorm(experiment)
     n        = get_max_iteration(experiment)
 
-    relativeresidual(x, res_plot, labels, n = experiment.matrix_size, ylow = ylow, point_sep = point_sep, legendpos = legendpos)
+    relativeresidual(x, res_plot, labels, n = experiment.matrixsize, ylow = ylow, point_sep = point_sep, legendpos = legendpos)
 
 end

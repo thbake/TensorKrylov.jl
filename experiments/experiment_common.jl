@@ -14,10 +14,10 @@ abstract type AbstractExperiment end
 mutable struct Experiment <: AbstractExperiment
 
     dims        ::Vector{Int}
-    matrix_size ::Int
+    matrixsize ::Int
     nmax        ::Int
     instance    ::Type{<:Instance}
-    matrix_class::Type{<:MatrixGallery}
+    matrixclass::Type{<:MatrixGallery}
     orth_method ::Type{<:TDecomp}
     rhs_vec     ::rhsVec{Float64}
     conv_vector::ConvVec{Float64}
@@ -41,7 +41,7 @@ end
 function Base.show(io::IO, experiment::Experiment) 
 
     println(io, "\n", typeof(experiment), " experiment:")
-    println(io, "Dimensions d = ", experiment.dims, " with matrix size n = ", experiment.matrix_size,"\n")
+    println(io, "Dimensions d = ", experiment.dims, " with matrix size n = ", experiment.matrixsize,"\n")
 
 end
 
@@ -57,8 +57,8 @@ function run_experiments!(experiment::Experiment, tol::T = 1e-9) where T
 
         A = KronMat{experiment.instance}(
             experiment.dims[i],
-            experiment.matrix_size,
-            experiment.matrix_class
+            experiment.matrixsize,
+            experiment.matrixclass
         )
 
         system = TensorizedSystem{experiment.instance}(A, experiment.rhs_vec[i])
@@ -109,6 +109,8 @@ end
 compute_labels(experiment::Experiment) =  "dim = " .* string.(experiment.dims)
 
 compute_labels(dims::Vector{Int}) = "dim = " .* string.(dims)
+
+compute_labels(ϵ::Vector{Float64}) = L"\epsilon = " .* string.(ϵ)
 
 function serialize_to_file(filename::AbstractString, experiment::Experiment) 
 

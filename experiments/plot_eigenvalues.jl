@@ -1,4 +1,4 @@
-export compute_eigdist, plot_dist_comparison, plot_laplace
+export compute_eigdist, plot_dist_comparison, plot_laplace, plot_perturbed_distribution
 
 compute_eigdist(D::EigValDist, T::Type{<:EVC}) = [ possiblesums(D.eigenvalues, d, T()) for d ∈ D.dims ]
 
@@ -45,9 +45,17 @@ function plot_dist_comparison(T::Type{<:EVC}, dims = [3, 5, 7], n = 20)
 
     plot(plt1, plt2, layout = (1,2))
 
-    
-
 end
+
+function plot_perturbed_distribution(eigenvalues, perturbations::Vector{Float64}, d::Int, alpha::Float64)
+
+    new_eigenvalues = [ possible_sums(eigenvalues, d, ϵ) for ϵ in perturbations ]
+    labels          = compute_labels(perturbations)
+
+    histogram(new_eigenvalues, label = permutedims(labels), fillalpha = alpha)
+    xlabel!(L"$\mathbb{R}$")
+end
+
 
 function plot_laplace(T::Type{<:EVC}, dims = [5, 7, 9], n = 15)
 

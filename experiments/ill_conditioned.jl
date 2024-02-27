@@ -42,8 +42,8 @@ function run_experiments!(condexp::ConditionExperiment, tol::T = 1e-9) where T
 
         A = KronMat{condexp.experiment.instance}(
             condexp.experiment.dims[i],
-            condexp.experiment.matrix_size,
-            condexp.experiment.matrix_class,
+            condexp.experiment.matrixsize,
+            condexp.experiment.matrixclass,
             condexp.matrix_id
         )
 

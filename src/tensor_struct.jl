@@ -170,21 +170,21 @@ mutable struct KroneckerMatrix{matT, U} <: AbstractKroneckerMatrix{matT}
     M          ::CoeffMat{matT} # We only store the d matrices explicitly in a vector.
     matrixclass::Type{<:MatrixGallery}
 
-    function KroneckerMatrix{U}(Aₛ::CoeffMat{matT}) where {matT, U<:Instance}
+    function KroneckerMatrix{U}(Aₛ::CoeffMat{matT}) where {matT, U<:Instance} # Constructor with coefficient matrices
 
         new{matT, U}(Aₛ, MatrixGallery)
 
     end
 
-    function KroneckerMatrix{U}(Aₛ::CoeffMat{matT}, class::Type{<:MatrixGallery}) where {matT, U<:Instance}
+    function KroneckerMatrix{U}(Aₛ::CoeffMat{matT}, class::Type{<:MatrixGallery}) where {matT, U<:Instance} # Constructor with coefficient matrices and matrix class
 
         new{matT, U}(Aₛ, class)
 
     end
 
-    function KroneckerMatrix{U}(Aₛ::CoeffMat) where {U}
+    function KroneckerMatrix{U}(A::matT, d::Int) where {matT <: AbstractMatrix, U <: Instance} 
 
-        new{eltype(Aₛ), U}(Aₛ, MatrixGallery)
+        KroneckerMatrix{U}([A for _ in 1:d]) # Calls constructor above.
 
     end
 

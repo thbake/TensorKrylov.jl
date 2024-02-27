@@ -31,6 +31,31 @@ mutable struct EigValDist{T}
 
 end
 
+function possible_sums(eigenvalues, d::Int, ϵ::Float64)
+
+    result          = perturb_eigenvalues(eigenvalues, d, ϵ)
+    tmp             = [ row for row in eachrow(result) ]
+
+    return reshape(sum.(collect(Iterators.product(tmp...))), length(eigenvalues)^d)
+
+end
+
+function perturb_eigenvalues(eigenvalues, d::Int, ϵ::Float64)
+
+    n = length(eigenvalues)
+
+    result = zeros(d, n)
+
+    for s in 1:d
+
+        result[s, :] = (s * ϵ) .+ eigenvalues
+
+    end
+
+    return result
+
+end
+
 function perturb_matrix!(A::KronMat, ϵ::Float64)
 
     d = length(A)
@@ -56,7 +81,7 @@ function run_experiments!(distexp::EigValDist{T}, ϵ::T = 0.0, tol = 1e-9) where
         A = KronMat{distexp.experiment.instance}(
             distexp.experiment.dims[i],
             distexp.eigenvalues,
-            distexp.experiment.matrix_class
+            distexp.experiment.matrixclass
         )
 
         perturb_matrix!(A, ϵ)

@@ -56,8 +56,8 @@ function run_experiments!(rhsexp::RHSExperiment, tol::T = 1e-9) where T
 
         A = KronMat{rhsexp.experiment.instance}(
             rhsexp.experiment.dims[i],
-            rhsexp.experiment.matrix_size,
-            rhsexp.experiment.matrix_class
+            rhsexp.experiment.matrixsize,
+            rhsexp.experiment.matrixclass
         )
 
         system = TensorizedSystem{rhsexp.experiment.instance}(A, rhsexp.experiment.rhs_vec[i])

@@ -187,7 +187,7 @@ function tensorkrylov!(
         columns                      = kth_columns(tensor_decomp.V, k)
 
         update_rhs!(b_minors, columns, b, k) # b̃ = Vᵀb
-        update_data!(spectraldata, d, A.matrix_class())
+        update_data!(spectraldata, d, A.matrixclass())
         update_data!(approxdata, spectraldata)
 
         y  = solve_compressed_system(H_minors, b_minors, approxdata, spectraldata.λ_min[k]) # Hy = b̃ 

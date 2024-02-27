@@ -224,7 +224,7 @@ function tensor_krylov_exact(A::KronMat, b::KronProd{T}, nmax::Int, orthonormali
         H_minors, V_minors, b_minors = compute_minors(tensor_decomp, b̃, n, k)
         columns                      = kth_columns(tensor_decomp.V, k) 
         update_rhs!(b_minors, columns, b, k) # Update compressed right-hand side b̃ = Vᵀb
-        update_data!(spectraldata, d, A.matrix_class())
+        update_data!(spectraldata, d, A.matrixclass())
         update_data!(approxdata, spectraldata)
 
         y  = solvecompressed(H_minors, b_minors)
