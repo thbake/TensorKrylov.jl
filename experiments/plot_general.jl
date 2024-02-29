@@ -74,12 +74,15 @@ struct ProjResidualPlot <: CustomPlot
 end
 
 # Define Plot Recipe for displaying experiments
-@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot; n::Int, ylow = 1e-6, point_sep = 1, legendpos = :topright) # Here n is a kw-arg
-    x, y, z = plotattributes[:x], plotattributes[:y], plotattributes[:z]
+@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot; n::Int, ybounds = (1e-6, 1e+1), point_sep = 1, legendpos = :topright) # Here n is a kw-arg
+
+    x, y, z     = plotattributes[:x], plotattributes[:y], plotattributes[:z]
+    ylow, yhigh = ybounds
+
     xlabel     --> L"k"
     ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
     xlims      --> (1, n + 1)
-    ylims      --> (ylow, 1e+1)
+    ylims      --> (ylow, yhigh)
     yscale     --> :log10
     yticks     --> 10.0 .^collect(-8:1:2)
     labels     --> permutedims(z)
@@ -147,14 +150,20 @@ end
 end
 @shorthands(proj)
 
-function minresnorm(experiment::Experiment)
+function resnormbounds(experiment::Experiment)
 
-    residuals     = get_relative_residuals(experiment)
-    min_residuals = minimum.(residuals)
-    smallestvalue = minimum(min_residuals)
-    order         = Int(floor(log10(smallestvalue)))
+    residuals      = get_relative_residuals(experiment)
 
-    return 10.0^(order)
+    min_residuals  = minimum.(residuals)
+    smallest_value = minimum(min_residuals)
+
+    max_residuals  = maximum.(residuals)
+    largest_value  = maximum(max_residuals)
+
+    min_order      = Int(floor(log10(smallest_value)))
+    max_order      = Int(floor(log10(largest_value)))
+
+    return 10.0^min_order, 10.0^max_order
 end
 
 function plot_experiment(
@@ -167,9 +176,9 @@ function plot_experiment(
     x        = get_iterations(experiment)
     labels   = compute_labels(experiment)  # Add labels
     res_plot = custom_plot(experiment.conv_vector)
-    ylow     = minresnorm(experiment)
+    ybounds  = resnormbounds(experiment)
     n        = get_max_iteration(experiment)
 
-    relativeresidual(x, res_plot, labels, n = experiment.matrixsize, ylow = ylow, point_sep = point_sep, legendpos = legendpos)
+    relativeresidual(x, res_plot, labels, n = experiment.matrixsize, ybounds = ybounds, point_sep = point_sep, legendpos = legendpos)
 
 end

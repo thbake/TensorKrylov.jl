@@ -1,6 +1,6 @@
 using Random 
 export EigValDist
-export clusterone, clusterzero, eigenvalue_experiment
+export clusterone, clusterzero, eigenvalue_experiment, uniform_experiment
 
 Random.seed!(1234)
 
@@ -84,7 +84,11 @@ function run_experiments!(distexp::EigValDist{T}, ϵ::T = 0.0, tol = 1e-9) where
             distexp.experiment.matrixclass
         )
 
-        perturb_matrix!(A, ϵ)
+        if ϵ == 0.0
+
+            perturb_matrix!(A, ϵ)
+
+        end
 
         system = TensorizedSystem{distexp.experiment.instance}(A, distexp.experiment.rhs_vec[i])
         
@@ -99,6 +103,7 @@ function run_experiments!(distexp::EigValDist{T}, ϵ::T = 0.0, tol = 1e-9) where
     end
 
 end
+
 
 function clusterzero(n::Int)
 
@@ -143,3 +148,55 @@ function eigenvalue_experiment(n::Int, b, ϵ::T = 0.0, tol::T = 1e-9) where T
 
 end
 
+function uniform_eigenvalues(n::Int, d::Int, interval)
+
+    eigenvalues = collect(LinRange(interval[1], interval[2], n))
+    stepsize    = eigenvalues[2] - eigenvalues[1]
+
+    A = KronMat{SymInstance}(d, eigenvalues, EigValMat)
+
+    for s in 1:d
+
+        A[s] = diagm( (s * stepsize * inv(d)) .+ eigenvalues )
+
+    end
+
+    return A
+
+end
+
+function run_experiments!(distexp::EigValDist{T}, interval::Tuple, tol = 1e-9) where T
+
+    println("Performing eigenvalue experiments")
+
+    for i in eachindex(distexp.experiment.dims)
+
+        println("d = " * string(distexp.experiment.dims[i]))
+        
+        A = uniform_eigenvalues(distexp.experiment.matrixsize, distexp.experiment.dims[i], interval)
+
+        system = TensorizedSystem{distexp.experiment.instance}(A, distexp.experiment.rhs_vec[i])
+
+        distexp.experiment.conv_vector[i] = solve_tensorized_system(
+            system,
+            distexp.experiment.nmax,
+            distexp.experiment.orth_method,
+            tol
+        )
+
+    end
+
+end
+
+function uniform_experiment(n::Int, b, interval, tol::T = 1e-9) where T
+
+    dims = [5, 10, 50, 100]
+    nmax = n 
+
+    distuniform = EigValDist{T}(dims, zeros(n), nmax, b)
+
+    run_experiments!(distuniform, interval, tol)
+
+    return distuniform
+
+end

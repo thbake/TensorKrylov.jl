@@ -1,5 +1,5 @@
 export Experiment
-export serialize_to_file, deserialize_from_file, get_iterations
+export serialize_to_file, deserialize_from_file, get_iterations, get_relative_residuals
 export ConvData, ConvVec, rhsVec, TDecomp
 
 # Aliases
