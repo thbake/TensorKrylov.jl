@@ -33,7 +33,7 @@ function run_experiments!(experiment::Experiment, parameter::T, tol::T = 1e-9) w
 
     println("Performing reproduction experiments")
 
-    Aₛ = parameterize(parameter, experiment.instance()) # Initialize coefficient matrix
+    Aₛ = sparse(parameterize(parameter, experiment.instance())) # Initialize coefficient matrix
 
     for i in 1:length(experiment)
 

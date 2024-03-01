@@ -334,7 +334,7 @@ end
 
 extreme_eigvals(data::SpectralData, d::Int, ::Laplace)   = analytic_eigenvalues(data.A[1,1], d, size(data.A, 1), data.k)
 
-extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]))
+extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals(Matrix(@view data.A[1:data.k, 1:data.k])))
 
 extreme_eigvals(data::SpectralData, d::Int, ::EigValMat) = getextreme(d, @view diag(data.A)[1:data.k])
 
