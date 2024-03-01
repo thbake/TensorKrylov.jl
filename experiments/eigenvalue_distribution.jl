@@ -188,9 +188,8 @@ function run_experiments!(distexp::EigValDist{T}, interval::Tuple, tol = 1e-9) w
 
 end
 
-function uniform_experiment(n::Int, b, interval, tol::T = 1e-9) where T
+function uniform_experiment(dims::Vector{Int}, n::Int, b, interval, tol::T = 1e-9) where T
 
-    dims = [5, 10, 50, 100]
     nmax = n 
 
     distuniform = EigValDist{T}(dims, zeros(n), nmax, b)

@@ -74,17 +74,18 @@ struct ProjResidualPlot <: CustomPlot
 end
 
 # Define Plot Recipe for displaying experiments
-@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot; n::Int, ybounds = (1e-6, 1e+1), point_sep = 1, legendpos = :topright) # Here n is a kw-arg
+@recipe function f(::Type{Val{:relativeresidual}}, plt::AbstractPlot; n::Int, ybounds = (1e-6, 1e+1), ticksep = 1,  point_sep = 1, legendpos = :topright) # Here n is a kw-arg
 
     x, y, z     = plotattributes[:x], plotattributes[:y], plotattributes[:z]
     ylow, yhigh = ybounds
+    orderlow, orderhigh = Int(floor(log10(ylow))), Int(floor(log10(yhigh)))
 
     xlabel     --> L"k"
     ylabel     --> L"$\frac{||r_\mathfrak{K}||_2}{||b||_2}$"
     xlims      --> (1, n + 1)
     ylims      --> (ylow, yhigh)
     yscale     --> :log10
-    yticks     --> 10.0 .^collect(-8:1:2)
+    yticks     --> 10.0 .^collect(orderlow:ticksep:orderhigh + 1)
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
@@ -163,14 +164,15 @@ function resnormbounds(experiment::Experiment)
     min_order      = Int(floor(log10(smallest_value)))
     max_order      = Int(floor(log10(largest_value)))
 
-    return 10.0^min_order, 10.0^max_order
+    return 10.0^min_order, 10.0^(max_order + 1)
 end
 
 function plot_experiment(
     experiment ::Experiment,
     custom_plot::Type{<:CustomPlot}, 
     point_sep::Int = 1,
-    legendpos = :topright
+    legendpos = :topright;
+    ticksep   = 1
     ) 
 
     x        = get_iterations(experiment)
@@ -179,6 +181,6 @@ function plot_experiment(
     ybounds  = resnormbounds(experiment)
     n        = get_max_iteration(experiment)
 
-    relativeresidual(x, res_plot, labels, n = experiment.matrixsize, ybounds = ybounds, point_sep = point_sep, legendpos = legendpos)
+    relativeresidual(x, res_plot, labels, n = experiment.matrixsize, ybounds = ybounds, point_sep = point_sep, legendpos = legendpos, ticksep = ticksep)
 
 end

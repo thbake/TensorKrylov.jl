@@ -244,20 +244,21 @@ function laplace_eigenspace(n::Int)
     return V
 end
 
-function laplace_eigenvalue(n::Int, k::Int, j::Int)
+function laplace_eigenvalue(alpha, n::Int, k::Int, j::Int)
 
     h = inv(n + 1)
 
-    λⱼ = 4 * inv(h^2) * sin(j * π * inv( 2(k + 1) ) )^2
+    #λⱼ = 4 * inv(h^2) * sin(j * π * inv( 2(k + 1) ) )^2
+    λⱼ = inv(h^2) * alpha - (inv(h^2) * 2 * cos(j * π * inv( (k + 1) ) ))
 
     return λⱼ
 
 end 
 
-function analytic_eigenvalues(d::Int, n::Int, k::Int)
+function analytic_eigenvalues(alpha, d::Int, n::Int, k::Int)
 
-    λ_min = laplace_eigenvalue(n, k, 1) * d
-    λ_max = laplace_eigenvalue(n, k, k) * d
+    λ_min = laplace_eigenvalue(alpha, n, k, 1) * d
+    λ_max = laplace_eigenvalue(alpha, n, k, k) * d
 
     return λ_min, λ_max
 
@@ -331,7 +332,7 @@ function extreme_eigenvals(data::SpectralData, d::Int) # Default
     
 end
 
-extreme_eigvals(data::SpectralData, d::Int, ::Laplace)   = analytic_eigenvalues(d, size(data.A, 1), data.k)
+extreme_eigvals(data::SpectralData, d::Int, ::Laplace)   = analytic_eigenvalues(data.A[1,1], d, size(data.A, 1), data.k)
 
 extreme_eigvals(data::SpectralData, d::Int, ::RandSPD)   = getextreme(d, eigvals(@view data.A[1:data.k, 1:data.k]))
 
