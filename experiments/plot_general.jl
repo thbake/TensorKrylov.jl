@@ -89,8 +89,8 @@ end
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
-    marker     --> :circle
-    markersize --> 3
+    marker     --> [:diamond :hexagon :circle :ltriangle]
+    markersize --> 2.5
     legend     --> legendpos
 
     point_sep_array = getstride(x, point_sep)

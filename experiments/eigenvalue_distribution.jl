@@ -1,6 +1,8 @@
 using Random 
 export EigValDist
-export clusterone, clusterzero, eigenvalue_experiment, uniform_experiment
+export clusterone, clusterzero, eigenvalue_experiment, 
+       explicit_uniform_eigenvalues, possible_sums, uniform_eigenvalues, 
+       uniform_experiment, uniform_kroneckersum
 
 Random.seed!(1234)
 
@@ -148,20 +150,50 @@ function eigenvalue_experiment(n::Int, b, ϵ::T = 0.0, tol::T = 1e-9) where T
 
 end
 
-function uniform_eigenvalues(n::Int, d::Int, interval)
 
-    eigenvalues = collect(LinRange(interval[1], interval[2], n))
+generate_uniform(n::Int, interval) = collect(LinRange(interval[1], interval[2], n))
+
+function uniform_kroneckersum(n::Int, d::Int, interval)
+
+    eigenvalues = generate_uniform(n, interval)
     stepsize    = eigenvalues[2] - eigenvalues[1]
 
     A = KronMat{SymInstance}(d, eigenvalues, EigValMat)
 
     for s in 1:d
 
-        A[s] = diagm( (s * stepsize * inv(d)) .+ eigenvalues )
+        A[s] = diagm( ((s - 1) * stepsize * inv(d)) .+ eigenvalues )
 
     end
 
     return A
+
+end
+
+function uniform_eigenvalues(n::Int, d::Int, interval)
+
+    M = zeros(d, n)
+
+    eigenvalues = generate_uniform(n, interval)
+    stepsize    = eigenvalues[2] - eigenvalues[1]
+
+    for s in 1:d
+
+        M[s, :] = ((s - 1) * stepsize * inv(d)) .+ eigenvalues 
+
+    end
+
+    return M
+
+end
+        
+function explicit_uniform_eigenvalues(n::Int, d::Int, interval)
+
+    M = uniform_eigenvalues(n, d, interval)
+
+    tmp = [ row for row in eachrow(M) ]
+
+    return reshape(sum.(collect(Iterators.product(tmp...))), n^d)
 
 end
 
@@ -199,3 +231,5 @@ function uniform_experiment(dims::Vector{Int}, n::Int, b, interval, tol::T = 1e-
     return distuniform
 
 end
+
+#function 
