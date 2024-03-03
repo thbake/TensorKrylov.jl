@@ -205,7 +205,7 @@ function run_experiments!(distexp::EigValDist{T}, interval::Tuple, tol = 1e-9) w
 
         println("d = " * string(distexp.experiment.dims[i]))
         
-        A = uniform_eigenvalues(distexp.experiment.matrixsize, distexp.experiment.dims[i], interval)
+        A = uniform_kroneckersum(distexp.experiment.matrixsize, distexp.experiment.dims[i], interval)
 
         system = TensorizedSystem{distexp.experiment.instance}(A, distexp.experiment.rhs_vec[i])
 
