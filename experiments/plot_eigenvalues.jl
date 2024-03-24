@@ -11,7 +11,7 @@ function plot_eigdist(distributions, labels)
     rev_dist = reverse(distributions)
     rev_lab  = permutedims(reverse(labels))
 
-    histogram(rev_dist, label = rev_lab)
+    histogram(rev_dist, label = rev_lab, normalize = :density)
     xlabel!(L"$\mathbb{R}$")
 
 end

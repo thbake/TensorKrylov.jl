@@ -89,7 +89,8 @@ end
     labels     --> permutedims(z)
     ls         --> :solid
     lw         --> 1.5
-    marker     --> [:diamond :hexagon :circle :ltriangle]
+    #marker     --> [:diamond :hexagon :circle :ltriangle]
+    marker     --> :circle
     markersize --> 2.5
     legend     --> legendpos
 
