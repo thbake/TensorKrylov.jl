@@ -3,7 +3,7 @@ using TensorKrylov: compressed_residual, compute_lower_outer!,
                     compute_lower_triangles!, cp_tensor_coefficients,
                     maskprod, matrix_exponential_vector!, matrix_vector, MVnorm, 
                     squared_tensor_entries, tensorinnerprod 
-using TensorKrylov: compute_minors, exponential_sum_parameters!, exponentiate,  
+using TensorKrylov: compute_minors, exponential_sum_parameters!,
                     initialize_compressed_rhs, normalize!, update_data!, 
                     update_rhs!
 
@@ -90,8 +90,9 @@ function error_tensorinnerprod(
     b::KronProd{T},
     solution::Vector{T}) where T
 
+    b_norm          = kronprodnorm(b)
     b_explicit      = kron(b...)
-    approxinnerprod = tensorinnerprod(Z, x, b)
+    approxinnerprod = tensorinnerprod(Z, x, b_norm)
     exactinnerprod  = dot(solution, b_explicit) # Compute <Mx, b>₂
     relative_error  = abs(exactinnerprod - approxinnerprod) / exactinnerprod 
 
@@ -108,8 +109,9 @@ function error_compressed_residualnorm(
     x       ::KruskalTensor{T}) where {T}
 
     # Explicit compressed residual norm
+    b_norm               = kronprodnorm(b)
     exp_comp_res_norm    = norm(kron(b...) - solution)^2
-    approx_comp_res_norm = compressed_residual(lowerX, Λ, M, x, b)
+    approx_comp_res_norm = compressed_residual(lowerX, Λ, M, x, b, b_norm)
     relative_error       = (exp_comp_res_norm - approx_comp_res_norm) * inv(exp_comp_res_norm)
 
     return relative_error

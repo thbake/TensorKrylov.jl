@@ -1,19 +1,19 @@
 using TensorKrylov, Test
 using Kronecker, LinearAlgebra
 
-@testset "Computation of matrix exponentials" begin
-
-    n = 200
-
-    A = SymTridiagonal(2ones(n), -ones(n-1))
-
-    γ = rand()
-    exact_exp  = exp(γ .* Matrix(A))
-    approx_exp = exponentiate(A, γ)
-
-    @test exact_exp ≈ approx_exp
-
-end
+#@testset "Computation of matrix exponentials" begin
+#
+#    n = 200
+#
+#    A = SymTridiagonal(2ones(n), -ones(n-1))
+#
+#    γ = rand()
+#    exact_exp  = exp(γ .* Matrix(A))
+#    approx_exp = exponentiate(A, γ)
+#
+#    @test exact_exp ≈ approx_exp
+#
+#end
 
 #@testset "Monotonic decrease of residual and error in A-norm" begin
 #
@@ -40,7 +40,7 @@ end
     spd_system      = TensorizedSystem{SymInstance}(A, b)
     nmax            = 199
     convergencedata = solve_tensorized_system(spd_system, nmax, TensorLanczosReorth)
-    #display(convergencedata)
+    display(convergencedata)
 
 end
 

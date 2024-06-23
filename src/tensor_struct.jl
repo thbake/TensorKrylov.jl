@@ -1,8 +1,8 @@
-using MatrixDepot
+#using MatrixDepot
 
 export KroneckerMatrix, KruskalTensor
-export ConvDiff, EigValMat, Laplace, LaplaceDense, MatrixGallery, RandSPD,
-       MatrixDep
+export ConvDiff, EigValMat, Laplace, LaplaceDense, MatrixGallery, RandSPD
+       #MatrixDep
 
 export Instance, SymInstance, NonSymInstance
 
@@ -22,28 +22,28 @@ struct ConvDiff     <: MatrixGallery end
 struct EigValMat    <: MatrixGallery end
 struct RandSPD      <: MatrixGallery end
 
-struct MatrixDep{T}  <: MatrixGallery 
-
-    matrix_id::String
-    n        ::Int
-    M        ::Matrix{T}
-
-    function MatrixDep()
-
-        new{Float64}("", 1, zeros(1,1))
-
-    end
-
-    function MatrixDep(matrix_id::String, n::Int)
-
-        M = matrixdepot(matrix_id, n)
-
-        T = eltype(M)
-
-        new{T}(matrix_id, n, M)
-
-    end
-end
+#struct MatrixDep{T}  <: MatrixGallery 
+#
+#    matrix_id::String
+#    n        ::Int
+#    M        ::Matrix{T}
+#
+#    function MatrixDep()
+#
+#        new{Float64}("", 1, zeros(1,1))
+#
+#    end
+#
+#    function MatrixDep(matrix_id::String, n::Int)
+#
+#        M = matrixdepot(matrix_id, n)
+#
+#        T = eltype(M)
+#
+#        new{T}(matrix_id, n, M)
+#
+#    end
+#end
 
 function assemble_matrix(n::Int, ::Type{LaplaceDense}) 
 
@@ -78,7 +78,7 @@ function assemble_matrix(n::Int, ::Type{RandSPD})
 
 end
 
-assemble_matrix(n::Int, ::Type{MatrixDep}, name::String) = matrixdepot(name, n)
+#assemble_matrix(n::Int, ::Type{MatrixDep}, name::String) = matrixdepot(name, n)
 
 abstract type Instance end
 struct SymInstance    <: Instance end
@@ -211,15 +211,15 @@ mutable struct KroneckerMatrix{matT, U} <: AbstractKroneckerMatrix{matT}
 
     end
 
-    function KroneckerMatrix{U}(
-        d::Int, n   ::Int,
-        class::Type{MatrixDep}, matrix_id::String) where {U<:Instance}
+    #function KroneckerMatrix{U}(
+    #    d::Int, n   ::Int,
+    #    class::Type{MatrixDep}, matrix_id::String) where {U<:Instance}
 
-        A = assemble_matrix(n, class, matrix_id)
+    #    A = assemble_matrix(n, class, matrix_id)
 
-        KroneckerMatrix{U}( [ A for _ in 1:d ], class)
+    #    KroneckerMatrix{U}( [ A for _ in 1:d ], class)
 
-    end
+    #end
 
     function KroneckerMatrix{U}(d::Int, eigenvalues, class::Type{EigValMat}) where {U<:Instance}
 
@@ -296,7 +296,7 @@ mutable struct KruskalTensor{T}
     
     function KruskalTensor{T}(lambda::Vector{T}, M::Matrix{T}) where T 
 
-        KruskalTensor{T}(lambda, collect(M))
+        KruskalTensor{T}(lambda, collect([M]))
 
     end
 

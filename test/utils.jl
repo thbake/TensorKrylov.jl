@@ -75,7 +75,7 @@ end
 
         for k = 1:rank
 
-            matrix_exponential_vector!(y, H, b, 1.0, k) 
+            matrix_exponential_vector!(y, H, b, 1.0, k, MatrixGallery) 
 
         end
 
@@ -117,6 +117,7 @@ end
         # Generate right-hand side
         b = [ rand(n) for _ in 1:d ]
 
+        normalize!(b)
 
         # If factor matrices in CP-decomposition are close to being orthogonal the dot product computation is very ill-conditioned.
         @test error_tensorinnerprod(Z, x, b, solution) < 1e-14
