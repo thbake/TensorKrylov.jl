@@ -3,7 +3,7 @@ using TensorKrylov: compressed_residual, compute_lower_outer!,
                     compute_lower_triangles!, cp_tensor_coefficients,
                     maskprod, matrix_exponential_vector!, matrix_vector, MVnorm, 
                     squared_tensor_entries, tensorinnerprod 
-using TensorKrylov: compute_minors, exponential_sum_parameters!, exponentiate,  
+using TensorKrylov: compute_minors, exponential_sum_parameters!,   
                     initialize_compressed_rhs, normalize!, update_data!, 
                     update_rhs!
 
