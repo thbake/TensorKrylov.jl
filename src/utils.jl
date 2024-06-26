@@ -329,22 +329,22 @@ function evalinnerprod(y::KruskalTensor, bY::KronProd{T}, bZ::KronProd{T}, i::In
 
 end
 
-function tensorinnerprod(Ax::FMatrices{T}, x::KruskalTensor{T}, y::KronProd{T}) where T
+function tensorinnerprod(Z::FMatrices{T}, y::KruskalTensor{T}, b_norm::T) where T
 
-    d   = ndims(x)
-    t   = ncomponents(x)
+    d   = ndims(y)
+    t   = ncomponents(y)
 
-    yX  = [ zeros(t) for _ in 1:d ]
-    yAx = [ zeros(t) for _ in 1:d ]
+    bY = [ zeros(t) for _ in 1:d ]
+    bZ = [ zeros(t) for _ in 1:d ]
 
     for s in 1:d
 
-        yX[s]  = BLAS.gemv!('T', 1.0, x.fmat[s], y[s], 0.0,  yX[s])
-        yAx[s] = BLAS.gemv!('T', 1.0, Ax[s],     y[s], 0.0, yAx[s])
+        bY[s] = y.fmat[s][1, :] # First row vector contains first entries
+        bZ[s] = Z[s][1, :]
 
     end
 
-    Ax_y = 0.0
+    Ax_b = 0.0
 
     mask = falses(d)
     
@@ -354,7 +354,7 @@ function tensorinnerprod(Ax::FMatrices{T}, x::KruskalTensor{T}, y::KronProd{T}) 
 
         for i in 1:t
 
-            Ax_y += @inline evalinnerprod(x, yX, yAx, i, mask)
+            Ax_b += @inline evalinnerprod(y, bY, bZ, i, mask)
 
         end
 
@@ -362,8 +362,9 @@ function tensorinnerprod(Ax::FMatrices{T}, x::KruskalTensor{T}, y::KronProd{T}) 
     end
 
     #@assert Ax_y >= 0.0
+    Ax_b = Ax_b * b_norm
 
-    return Ax_y
+    return Ax_b
 
 end
 
@@ -372,7 +373,8 @@ function compressed_residual(
     Λ ::AbstractMatrix,
     H ::KronMat,
     y ::KruskalTensor,
-    b) 
+    b̃,
+    b_norm)
 
     # We know that 
     
@@ -385,8 +387,9 @@ function compressed_residual(
     Z = matrix_vector(H, y)
 
     Hy_norm = MVnorm(y, Λ, Ly, Z) # First we compute ||Hy||²
-    Hy_b    = tensorinnerprod(Z, y, b)           # <Hy, b>₂
-    b_norm  = kronproddot(b)                     # squared 2-norm of b
+    #Hy_b    = tensorinnerprod(Z, y, b)           # <Hy, b>₂
+    Hy_b    = tensorinnerprod(Z, y, b_norm)           # <Hy, b>₂
+    b_norm  = kronproddot(b̃)                     # squared 2-norm of b
     r_comp  = Hy_norm - 2* Hy_b + b_norm
 
     r_comp < 0.0 ? throw( CompressedNormBreakdown{eltype(Λ)}(r_comp) ) : return r_comp
@@ -401,7 +404,8 @@ function residualnorm!(
     y                  ::KruskalTensor,
     𝔎                  ::Vector{Int},
     subdiagonal_entries::Vector,
-    b) 
+    b̃,
+    b_norm) 
     
     # Compute squared norm of the residual according to Lemma 3.4 of paper.
     
@@ -432,7 +436,7 @@ function residualnorm!(
 
     end
 
-    r_comp = compressed_residual(Ly, Λ, H, y, b) # Compute squared compressed residual norm
+    r_comp = compressed_residual(Ly, Λ, H, y, b̃, b_norm) # Compute squared compressed residual norm
 
     return r_comp, sqrt(res_norm + r_comp)
 

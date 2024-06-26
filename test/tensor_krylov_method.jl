@@ -40,7 +40,7 @@ using Kronecker, LinearAlgebra
     spd_system      = TensorizedSystem{SymInstance}(A, b)
     nmax            = 199
     convergencedata = solve_tensorized_system(spd_system, nmax, TensorLanczosReorth)
-    #display(convergencedata)
+    display(convergencedata)
 
 end
 
